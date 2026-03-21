@@ -85,7 +85,6 @@ const isValid = computed(() => {
    Submit
 ===================== */
 const submitForm = async () => {
-  console.log('test')
   if (!isValid.value) {
     alert('Please fill all required fields')
     return
@@ -135,7 +134,7 @@ const submitForm = async () => {
 
 <template>
   <div class="modal app-modal-backdrop">
-    <div class="modal-content modal-form modal-md">
+    <div class="modal-content modal-form modal-md medicine-form-panel">
       <h2>{{ medicineToEdit ? 'Edit Medicine' : 'Add Medicine' }}</h2>
 
       <label>Brand Name</label>
@@ -154,7 +153,7 @@ const submitForm = async () => {
 
       <h3>Inventory</h3>
 
-      <p v-if="medicineToEdit">
+      <p v-if="medicineToEdit" class="stock-note">
         Current Stock: <strong>{{ totalStock }}</strong>
       </p>
 
@@ -175,74 +174,100 @@ const submitForm = async () => {
 </template>
 
 <style scoped>
-
-/* =========================
-   MODAL BACKDROP
-========================= */
-/* =========================
-   MODAL CONTENT
-========================= */
 .modal-content {
   max-width: 460px;
   min-height: fit-content;
   max-height: none;
 }
 
-/* =========================
-   HEADINGS
-========================= */
 .modal-content h2,
 .modal-content h3 {
-  color: #111;
+  color: var(--modal-surface-text);
   margin-bottom: 6px;
 }
 
-/* =========================
-   LABELS
-========================= */
 label {
   font-weight: 600;
-  color: #333;
+  color: color-mix(in srgb, var(--modal-surface-text) 82%, transparent);
   font-size: 16px;
 }
 
-/* =========================
-   INPUTS (ANDROID SAFE)
-========================= */
 input {
   font-size: 16px; /* prevents zoom on Android */
 }
 
-/* =========================
-   TEXT / DIVIDER
-========================= */
 p {
-  color: #333;
+  color: color-mix(in srgb, var(--modal-surface-text) 76%, transparent);
   font-size: 14px;
+}
+
+.stock-note {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--modal-surface-text) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--modal-surface-text) 12%, transparent);
+}
+
+.stock-note strong {
+  color: var(--modal-surface-text);
 }
 
 hr {
   margin: 12px 0;
   border: none;
-  border-top: 1px solid #ddd;
+  border-top: 1px solid color-mix(in srgb, var(--modal-surface-text) 16%, transparent);
 }
 
-/* =========================
-   ACTION BUTTONS
-========================= */
-/* Make buttons sticky on small screens */
 @media (max-height: 600px) {
   .actions {
     position: sticky;
     bottom: 0;
-    background: #fff;
+    background: var(--modal-surface-bg);
     padding-top: 12px;
+    padding-bottom: 4px;
   }
 }
 
 .actions button {
   flex: 1;
   font-size: 16px;
+}
+
+body.dark-mode .medicine-form-panel {
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.42);
+}
+
+body.dark-mode .medicine-form-panel h2,
+body.dark-mode .medicine-form-panel h3 {
+  color: #f8fafc;
+}
+
+body.dark-mode .medicine-form-panel label {
+  color: #d7e1ea;
+}
+
+body.dark-mode .medicine-form-panel p {
+  color: #c2ced9;
+}
+
+body.dark-mode .medicine-form-panel .stock-note {
+  background: rgba(148, 163, 184, 0.08);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+body.dark-mode .medicine-form-panel .stock-note strong {
+  color: #f8fafc;
+}
+
+body.dark-mode .medicine-form-panel hr {
+  border-top-color: rgba(148, 163, 184, 0.22);
+}
+
+@media (max-width: 768px) {
+  .medicine-form-panel {
+    max-width: 100%;
+  }
 }
 
 
