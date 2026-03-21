@@ -432,6 +432,24 @@ body.dark-mode .medicines-page { background-color: #121212; color: #eee; }
 
 .items-per-page { display: flex; align-items: center; gap: 4px; }
 
+  /* Style the items-per-page select to match modal inputs and buttons */
+  .top-bar select {
+    min-height: 36px;
+    padding: 6px 10px;
+    margin: 0;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+    background-color: #fff;
+    color: #222;
+  }
+
+  body.dark-mode .top-bar select {
+    background-color: #1e1e1e;
+    border-color: #333;
+    color: #eee;
+  }
+
 .actions-td button { padding: 6px 10px; }
 
 .pagination { margin-top: 12px; display: flex; justify-content: center; gap: 6px; }
@@ -451,6 +469,7 @@ body.dark-mode .med-generic { color: #aaa; }
 @media (max-width: 768px) {
   .top-bar { flex-direction: column; }
   .top-bar > button,
+  .top-bar > select,
   .top-bar > :deep(.date-icon-btn) { width: 100%; }
 }
 
