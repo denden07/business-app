@@ -264,17 +264,17 @@ const closeSaleModal = () => {
         </template>
       </VueDatePicker>
 
-      <select v-if="activeTab === 'points'" v-model="filterType">
+      <select v-if="activeTab === 'points'" v-model="filterType" class="select-field">
         <option value="all">All Types</option>
         <option value="sale">Sale</option>
         <option value="manual">Manual</option>
       </select>
 
-      <select v-model="sortOrder">
+      <select v-model="sortOrder" class="select-field">
         <option value="desc">Newest</option>
         <option value="asc">Oldest</option>
       </select>
-      <select v-model.number="itemsPerPage">
+      <select v-model.number="itemsPerPage" class="select-field">
         <option v-for="o in itemsPerPageOptions" :key="o" :value="o">
           {{ o }}
         </option>
@@ -538,6 +538,19 @@ body.dark-mode .modal {
 :deep(.dp__main) {
   display: inline-flex;
   width: auto;
+}
+
+@media (max-width: 768px) {
+  .top-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .top-bar > .select-field,
+  .top-bar > button,
+  .top-bar > :deep(.dp__main) {
+    width: 100%;
+  }
 }
 .date-clear {
   position: absolute;

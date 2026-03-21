@@ -77,12 +77,23 @@ input[type="tel"] {
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
 }
 
+.select-field,
 select {
+  appearance: none;
+  -webkit-appearance: none;
   min-height: 44px;
-  padding: 8px 12px;
+  padding: 8px 38px 8px 12px;
   border-radius: 8px;
   border: 1px solid var(--field-border);
   background-color: var(--field-bg);
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 2px),
+    calc(100% - 12px) calc(50% - 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
   color: var(--field-text);
   font-family: inherit;
   font-size: 15px;
@@ -151,10 +162,12 @@ body.dark-mode .modal-stack label {
 .modal-form .input,
 .modal-form input,
 .modal-form select,
+.modal-form .select-field,
 .modal-form textarea,
 .modal-stack .input,
 .modal-stack input,
 .modal-stack select,
+.modal-stack .select-field,
 .modal-stack textarea {
   width: 100%;
   box-sizing: border-box;
@@ -175,6 +188,7 @@ input[type="tel"]::placeholder {
 }
 
 .input:focus,
+.select-field:focus,
 .form-control:focus,
 textarea:focus,
 select:focus,

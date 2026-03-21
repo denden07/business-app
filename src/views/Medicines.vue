@@ -162,7 +162,7 @@ const restoreMedicine = async med => {
       <SearchInput v-model="searchKeyword" placeholder="Search medicine..." />
 
       <!-- FILTER -->
-      <select v-model="filterMode">
+      <select v-model="filterMode" class="select-field">
         <option value="active">Active</option>
         <option value="archived">Archived</option>
         <option value="all">All</option>
@@ -172,7 +172,7 @@ const restoreMedicine = async med => {
 
       <div class="items-per-page">
         <label>Items:</label>
-        <select v-model.number="itemsPerPage">
+        <select v-model.number="itemsPerPage" class="select-field">
           <option v-for="opt in itemsPerPageOptions" :key="opt" :value="opt">
             {{ opt }}
           </option>
@@ -336,8 +336,18 @@ body.dark-mode .pagination button.active {
     align-items: stretch !important;
   }
 
-  .top-bar > button {
+  .top-bar > button,
+  .top-bar > select,
+  .items-per-page {
     width: 100% !important;
+  }
+
+  .items-per-page {
+    justify-content: space-between !important;
+  }
+
+  .items-per-page > .select-field {
+    flex: 1;
   }
 
   .pagination {

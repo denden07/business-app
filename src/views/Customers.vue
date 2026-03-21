@@ -258,19 +258,19 @@ function goToTransactionHistory(customerId) {
       <div class="top-bar">
         <SearchInput v-model="search" placeholder="Search name / phone / email" :inputClass="'input'" />
 
-        <select v-model.number="perPage" class="input per-page">
+        <select v-model.number="perPage" class="select-field per-page">
           <option :value="5">5</option>
           <option :value="10">10</option>
           <option :value="20">20</option>
         </select>
 
-        <select v-model="sortBy" class="input">
+        <select v-model="sortBy" class="select-field">
         <option value="id">Newest</option>
         <option value="name">Name</option>
         <option value="points">Points</option>
         </select>
 
-        <select v-model="sortOrder" class="input">
+        <select v-model="sortOrder" class="select-field">
           <option value="desc">Desc</option>
           <option value="asc">Asc</option>
         </select>
@@ -437,6 +437,12 @@ body.dark-mode .modal {
   .top-bar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .top-bar > .select-field,
+  .top-bar > button,
+  .top-bar > :deep(.search-input) {
+    width: 100%;
   }
 
   .top-bar-actions {

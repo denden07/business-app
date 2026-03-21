@@ -290,7 +290,7 @@ const exportCSV = async () => {
         </template>
       </VueDatePicker>
 
-      <select v-model.number="itemsPerPage">
+      <select v-model.number="itemsPerPage" class="select-field">
         <option v-for="o in itemsPerPageOptions" :key="o" :value="o">{{ o }}</option>
       </select>
 
