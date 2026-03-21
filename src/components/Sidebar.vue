@@ -40,6 +40,7 @@ const menuItems = [
   { name: 'Home', path: '/', icon: '🏠' },
   { name: 'Medicines', path: '/medicines', icon: '💊' },
   { name: 'Sales', path: '/sales', icon: '💰' },
+  { name: 'Drafts', path: '/drafts', icon: '📝' },
   { name: 'Customers', path: '/customers', icon: '🧑‍🤝‍🧑' },
   { name: 'Analytics', path: '/analytics', icon: '📊' },
   { name: 'Settings', path: '/settings', icon: '⚙️' },

@@ -1,7 +1,7 @@
 import { openDB } from 'idb';
 
 export const DB_NAME = 'pharmacy_pos_db';
-export const DB_VERSION = 15; // 🔼 bump version
+export const DB_VERSION = 16; // 🔼 bump version
 
 export const dbPromise = openDB(DB_NAME, DB_VERSION, {
   upgrade(db, oldVersion, newVersion, transaction) {
@@ -156,6 +156,14 @@ export const dbPromise = openDB(DB_NAME, DB_VERSION, {
       if (!store.indexNames.contains('visible')) {
         store.createIndex('visible', 'visible');
       }
+    }
+
+    /* =========================
+       DRAFT SALES
+    ========================== */
+    if (!db.objectStoreNames.contains('draft_sales')) {
+      const store = db.createObjectStore('draft_sales', { keyPath: 'id', autoIncrement: true });
+      store.createIndex('created_at', 'created_at');
     }
   }
 });

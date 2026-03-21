@@ -1,11 +1,14 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import SearchInput from '../components/SearchInput.vue'
 import { useStore } from 'vuex'
+import { useRouter, useRoute } from 'vue-router'
 import Swal from 'sweetalert2'
 import { dbPromise } from '../db'
 
 const store = useStore()
+const router = useRouter()
+const route = useRoute()
 
 // ======================
 // POS STATE
@@ -34,6 +37,83 @@ const pointsConfirmed = ref(false)
 // ======================
 const showSpecialDiscountModal = ref(false)
 const specialDiscount = ref(0)
+
+// ======================
+// DRAFT SALES
+// ======================
+const activeDraftId = ref(null) // id of the draft currently loaded into the cart
+
+const saveSaleAsDraft = async () => {
+  if (!cart.value.length) {
+    Swal.fire({ icon: 'warning', title: 'Cart is empty', text: 'Add items before saving as draft.', timer: 1500, showConfirmButton: false })
+    return
+  }
+  const { value: name } = await Swal.fire({
+    title: 'Save as Draft',
+    input: 'text',
+    inputPlaceholder: 'e.g. Patient name / Notes',
+    inputLabel: 'Label (optional)',
+    showCancelButton: true,
+    confirmButtonText: 'Save Draft'
+  })
+  if (name === undefined) return
+
+  await store.dispatch('drafts/save', {
+    name: name || `Draft ${new Date().toLocaleTimeString()}`,
+    snapshot: {
+      cart: JSON.parse(JSON.stringify(cart.value)),
+      medicinesMap: JSON.parse(JSON.stringify(medicinesMap.value)),
+      customer: selectedCustomer.value ? JSON.parse(JSON.stringify(selectedCustomer.value)) : null,
+      professionalFee: professionalFee.value,
+      pointsConfirmed: pointsConfirmed.value,
+      redeemMultiplier: redeemMultiplier.value,
+      customerPoints: customerPoints.value,
+      specialDiscount: specialDiscount.value,
+      paymentMethod: paymentMethod.value
+    }
+  })
+
+  // If this was a resumed draft, remove the original now that we've re-saved it
+  if (activeDraftId.value !== null) {
+    await store.dispatch('drafts/remove', activeDraftId.value)
+    activeDraftId.value = null
+  }
+
+  cart.value = []
+  professionalFee.value = 0
+  moneyGiven.value = 0
+  selectedCustomer.value = null
+  pointsConfirmed.value = false
+  redeemMultiplier.value = 1
+  specialDiscount.value = 0
+  customerPoints.value = 0
+  paymentMethod.value = 'cash'
+
+  Swal.fire({ icon: 'success', title: 'Saved as draft!', timer: 1200, showConfirmButton: false })
+}
+
+const resumeDraft = (draft) => {
+  cart.value = draft.cart
+  Object.assign(medicinesMap.value, draft.medicinesMap || {})
+  selectedCustomer.value = draft.customer || null
+  professionalFee.value = draft.professionalFee || 0
+  pointsConfirmed.value = draft.pointsConfirmed || false
+  redeemMultiplier.value = draft.redeemMultiplier || 1
+  customerPoints.value = draft.customerPoints || 0
+  specialDiscount.value = draft.specialDiscount || 0
+  paymentMethod.value = draft.paymentMethod || 'cash'
+  moneyGiven.value = 0
+  activeDraftId.value = draft.id
+}
+
+onMounted(async () => {
+  await store.dispatch('drafts/load')
+  const draftId = Number(route.query.draft)
+  if (draftId) {
+    const draft = store.state.drafts.drafts.find(d => d.id === draftId)
+    if (draft) resumeDraft(draft)
+  }
+})
 
 // ======================
 // CUSTOMER MODAL
@@ -297,12 +377,18 @@ const checkout = async () => {
       text: 'Please add items before saving the sale.'
     })
 
-  if ((moneyGiven.value || 0) < grandTotal.value)
-    return Swal.fire({
+  if ((moneyGiven.value || 0) < grandTotal.value) {
+    const { isConfirmed } = await Swal.fire({
       icon: 'warning',
       title: 'Insufficient payment',
-      text: 'Customer money is less than total.'
+      text: 'No money given or amount is less than total. Save this sale as a draft instead?',
+      showCancelButton: true,
+      confirmButtonText: 'Save as Draft',
+      cancelButtonText: 'Back to Cart'
     })
+    if (isConfirmed) await saveSaleAsDraft()
+    return
+  }
 
   // Check stock and warn for all items exceeding available quantity
   const stockWarnings = []
@@ -451,6 +537,12 @@ const checkout = async () => {
     pointsConfirmed.value = false
     specialDiscount.value = 0
 
+    // If this sale came from a draft, delete it now that it's complete
+    if (activeDraftId.value !== null) {
+      await store.dispatch('drafts/remove', activeDraftId.value)
+      activeDraftId.value = null
+    }
+
   } catch (err) {
     console.error(err)
     Swal.fire({ icon: 'error', title: 'Checkout Failed', text: err.message || 'Something went wrong.' })
@@ -539,7 +631,7 @@ const getStockIndicator = (med) => {
 
 <template>
 <div class="home-view">
-  <h1 style="font-size: 32px;">Calculator</h1>
+ <h1>Calculator</h1>
 
   <!-- SEARCH BAR + CUSTOMER + REDEEM (ALL INLINE) -->
   <div class="top-controls">
@@ -890,6 +982,7 @@ const getStockIndicator = (med) => {
   box-sizing: border-box;
   padding: 12px 0; /* keep existing spacing from app */
 }
+
 
 /* Make main content stretch to fill remaining space under the top controls */
 .home-view > .pos-layout {

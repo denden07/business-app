@@ -10,6 +10,7 @@ import Customers from '../views/Customers.vue'
 import Analytics from '../views/Analytics.vue'
 import TransactionHistory from '../views/TransactionHistory.vue'
 import Settings from '../views/Settings.vue'
+import Drafts from '../views/Drafts.vue'
 
 let allRoutes = [
   { path: '/', name: 'Home', component: Home },
@@ -19,6 +20,7 @@ let allRoutes = [
   { path: '/customers', name: 'Customers', component: Customers },
   { path: '/analytics', name: 'Analytics', component: Analytics },
   { path: '/settings', name: 'Settings', component: Settings },
+  { path: '/drafts', name: 'Drafts', component: Drafts },
   {
     path: '/customers/:id/transactions',
     name: 'TransactionHistory',
