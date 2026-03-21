@@ -432,24 +432,6 @@ body.dark-mode .medicines-page { background-color: #121212; color: #eee; }
 
 .items-per-page { display: flex; align-items: center; gap: 4px; }
 
-  /* Style the items-per-page select to match modal inputs and buttons */
-  .top-bar select {
-    min-height: 36px;
-    padding: 6px 10px;
-    margin: 0;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-    font-size: 14px;
-    background-color: #fff;
-    color: #222;
-  }
-
-  body.dark-mode .top-bar select {
-    background-color: #1e1e1e;
-    border-color: #333;
-    color: #eee;
-  }
-
 .actions-td button { padding: 6px 10px; }
 
 .pagination { margin-top: 12px; display: flex; justify-content: center; gap: 6px; }
@@ -471,28 +453,6 @@ body.dark-mode .med-generic { color: #aaa; }
   .top-bar > button,
   .top-bar > select,
   .top-bar > :deep(.date-icon-btn) { width: 100%; }
-}
-
-/* Modal input styling */
-.modal input[type="number"],
-.modal input[type="date"],
-.modal input[type="text"] {
-  min-height: 36px;
-  padding: 6px 10px;
-  margin: 4px 0;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  font-size: 14px;
-  background-color: #fff;
-  color: #222;
-}
-
-body.dark-mode .modal input[type="number"],
-body.dark-mode .modal input[type="date"],
-body.dark-mode .modal input[type="text"] {
-  background-color: #1e1e1e;
-  border-color: #333;
-  color: #eee;
 }
 
 .sale-header {

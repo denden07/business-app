@@ -239,17 +239,7 @@ label {
    INPUTS (ANDROID SAFE)
 ========================= */
 input {
-  padding: 12px;
   font-size: 16px; /* prevents zoom on Android */
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  background: #fff;
-  color: #222;
-}
-
-input:focus {
-  outline: none;
-  border-color: #1abc9c;
 }
 
 /* =========================

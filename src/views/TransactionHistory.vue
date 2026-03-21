@@ -456,23 +456,6 @@ body.dark-mode .medicines-page {
   margin-bottom: 12px;
 }
 
-.top-bar input,
-.top-bar select {
-  min-height: 40px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  background: #fff;
-  color: #222;
-}
-
-body.dark-mode .top-bar input,
-body.dark-mode .top-bar select {
-  background: #1c1c1c;
-  border-color: #333;
-  color: #eee;
-}
-
 /* ======================
    POINT COLORS
 ====================== */

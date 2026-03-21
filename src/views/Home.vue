@@ -1096,14 +1096,7 @@ const getStockIndicator = (med) => {
 ========================= */
 .input.pos-medicine-search {
   width: 70%;
-  height: 44px;
-  padding: 0 12px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  font-size: 15px;
-  background: #fff;
-  color: #222;
-  display:block;
+  display: block;
 }
 .btn.select-customer {
   background: #3498db;
@@ -1439,14 +1432,6 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
   flex-direction: column;
   gap: 10px;
 }
-.modal input {
-  height: 36px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  padding: 0 10px;
-  background: #fff;
-  color: #222;
-}
 .customer-list {
   max-height: 220px;
   overflow-y: auto;
@@ -1520,13 +1505,6 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
 .modal .input,
 .modal input {
   width: 100%;
-  height: 44px;
-  border-radius: 10px;
-  border: 1px solid #ccc;
-  padding: 0 14px;
-  font-size: 15px;
-  background: #fff;
-  color: #222;
   box-sizing: border-box;
 }
 

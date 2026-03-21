@@ -391,43 +391,6 @@ function goToTransactionHistory(customerId) {
 }
 
 /* ======================
-   INPUTS (GLOBAL)
-====================== */
-.input,
-select,
-input {
-  height: 44px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  background-color: #fff;
-  color: #222;
-  font-size: 15px;
-}
-
-input::placeholder {
-  color: #888;
-}
-
-input:focus,
-select:focus {
-  outline: none;
-  border-color: #1abc9c;
-  box-shadow: 0 0 0 2px rgba(26, 188, 156, 0.2);
-}
-
-body.dark-mode input,
-body.dark-mode select {
-  background-color: #1c1c1c;
-  border-color: #333;
-  color: #eee;
-}
-
-body.dark-mode input::placeholder {
-  color: #aaa;
-}
-
-/* ======================
    PAGINATION
 ====================== */
 .pagination {

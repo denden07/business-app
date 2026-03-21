@@ -18,6 +18,12 @@
   --btn-text-light: #fff;
   --btn-text-dark: #222;
   --btn-border-light: #d0d7de;
+  --field-bg: #fff;
+  --field-border: #ccc;
+  --field-text: #222;
+  --field-placeholder: #888;
+  --field-focus-border: #1abc9c;
+  --field-focus-ring: rgba(26, 188, 156, 0.2);
 }
 
 body.dark-mode {
@@ -37,6 +43,89 @@ body.dark-mode {
   --btn-neutral-hover: #3f3f3f;
   --btn-text-dark: #eee;
   --btn-border-light: #3a3a3a;
+  --field-bg: #1c1c1c;
+  --field-border: #333;
+  --field-text: #eee;
+  --field-placeholder: #aaa;
+  --field-focus-border: #1abc9c;
+  --field-focus-ring: rgba(26, 188, 156, 0.25);
+}
+
+.input,
+.form-control,
+textarea,
+input:not([type]),
+input[type="text"],
+input[type="search"],
+input[type="number"],
+input[type="date"],
+input[type="email"],
+input[type="password"],
+input[type="tel"] {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--field-border);
+  background-color: var(--field-bg);
+  color: var(--field-text);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.2;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+select {
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--field-border);
+  background-color: var(--field-bg);
+  color: var(--field-text);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.2;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+textarea {
+  min-height: 96px;
+  padding-top: 10px;
+  resize: vertical;
+}
+
+.input::placeholder,
+.form-control::placeholder,
+textarea::placeholder,
+input:not([type])::placeholder,
+input[type="text"]::placeholder,
+input[type="search"]::placeholder,
+input[type="number"]::placeholder,
+input[type="date"]::placeholder,
+input[type="email"]::placeholder,
+input[type="password"]::placeholder,
+input[type="tel"]::placeholder {
+  color: var(--field-placeholder);
+}
+
+.input:focus,
+.form-control:focus,
+textarea:focus,
+select:focus,
+input:not([type]):focus,
+input[type="text"]:focus,
+input[type="search"]:focus,
+input[type="number"]:focus,
+input[type="date"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="tel"]:focus {
+  outline: none;
+  border-color: var(--field-focus-border);
+  box-shadow: 0 0 0 2px var(--field-focus-ring);
 }
 
 button,

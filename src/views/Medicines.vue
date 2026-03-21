@@ -290,48 +290,6 @@ body.dark-mode .medicines-page {
   margin-bottom: 12px !important;
 }
 
-/* INPUT */
-.top-bar input {
-  appearance: none !important;
-  -webkit-appearance: none !important;
-  flex: 1 !important;
-  min-width: 150px !important;
-  min-height: 40px !important;
-  padding: 8px 12px !important;
-  border-radius: 8px !important;
-  border: 1px solid #ccc !important;
-  background-color: #fff !important;
-  color: #222 !important;
-  font-size: 16px !important;
-}
-
-body.dark-mode .top-bar input {
-  background-color: #1c1c1c !important;
-  border-color: #333 !important;
-  color: #eee !important;
-}
-
-.top-bar input:focus {
-  border-color: #1abc9c !important;
-}
-
-/* SELECT */
-.top-bar select {
-  min-height: 40px !important;
-  padding: 8px 12px !important;
-  border-radius: 8px !important;
-  border: 1px solid #ccc !important;
-  background-color: #fff !important;
-  color: #222 !important;
-  font-size: 16px !important;
-}
-
-body.dark-mode .top-bar select {
-  background-color: #1c1c1c !important;
-  border-color: #333 !important;
-  color: #eee !important;
-}
-
 .items-per-page {
   display: flex !important;
   align-items: center !important;

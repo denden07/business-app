@@ -4,7 +4,7 @@
       :placeholder="placeholder"
       :value="modelValue"
       @input="$emit('update:modelValue', $event.target.value)"
-      :class="inputClass"
+      :class="['input', inputClass]"
     />
     <button
       v-if="clearable && modelValue"
@@ -19,8 +19,6 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-
 const props = defineProps({
   modelValue: { type: [String, Number], default: '' },
   placeholder: { type: String, default: 'Search...' },
@@ -46,25 +44,11 @@ const emits = defineEmits(['update:modelValue'])
 
 .search-input input {
   width: 100%; /* default inline width */
-  padding: 8px 12px; /* match app input spacing */
   padding-right: 34px; /* allow space for clear button */
-  box-sizing: border-box;
-  height: 44px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  background-color: #fff;
-  color: #222;
-  font-size: 15px;
 }
 
 .search-input.full input {
   width: 100%;
-}
-
-body.dark-mode .search-input input {
-  background-color: #1c1c1c;
-  border-color: #333;
-  color: #eee;
 }
 
 .clear-btn {
