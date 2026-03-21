@@ -19,6 +19,7 @@ const restoreInput = ref(null)
 const appNameLimit = 40
 const appName = ref('Pharmacy POS')
 const appNameStatus = ref('')
+const isDarkMode = ref(localStorage.getItem('darkMode') === 'true')
 
 function clampAppName(value) {
   return String(value || '').slice(0, appNameLimit)
@@ -59,6 +60,16 @@ async function saveAppName() {
     console.error('Failed to save app name', err)
     appNameStatus.value = 'Failed to save app name: ' + err.message
   }
+}
+
+function applyTheme(value) {
+  isDarkMode.value = value
+  document.body.classList.toggle('dark-mode', value)
+  localStorage.setItem('darkMode', value)
+}
+
+function toggleNightMode() {
+  applyTheme(!isDarkMode.value)
 }
 
 /* ======================
@@ -332,6 +343,7 @@ async function savePageVisibility() {
 onMounted(async () => {
   await checkPinOnEntry()
   if (pinUnlocked.value) {
+    applyTheme(isDarkMode.value)
     pinIsSet.value = !!(await getPin())
     await loadAppName()
     await loadPageVisibility()
@@ -342,9 +354,24 @@ onMounted(async () => {
 <template>
   <div v-if="pinUnlocked" class="settings-grid">
     <div class="left-col">
-      <div class="card">
-        <h1>Branding</h1>
-        <p class="muted">Customize the app name shown in the sidebar menu.</p>
+      <div class="settings-hero card card-hero">
+        <div class="section-heading">
+          <span class="section-icon">⚙️</span>
+          <div>
+            <h1>Settings</h1>
+            <p class="muted">Manage branding, appearance, data safety, and access controls from one place.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-section">
+        <div class="section-heading">
+          <span class="section-icon">🏷️</span>
+          <div>
+            <h2>Branding</h2>
+            <p class="muted">Customize the app name shown in the sidebar menu.</p>
+          </div>
+        </div>
 
         <div class="branding-form">
           <label for="app-name">Application Name</label>
@@ -361,8 +388,35 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div class="card">
-        <h1>Database Management</h1>
+      <div class="card card-section">
+        <div class="section-heading">
+          <span class="section-icon">🌓</span>
+          <div>
+            <h2>Appearance</h2>
+            <p class="muted">Switch between light mode and dark mode for the app interface.</p>
+          </div>
+        </div>
+
+        <div class="theme-row">
+          <div class="theme-copy">
+            <strong>{{ isDarkMode ? 'Dark Mode' : 'Light Mode' }}</strong>
+            <span>{{ isDarkMode ? 'Dark theme is currently enabled.' : 'Light theme is currently enabled.' }}</span>
+          </div>
+
+          <button class="secondary" @click="toggleNightMode">
+            {{ isDarkMode ? 'Switch To Light Mode' : 'Switch To Dark Mode' }}
+          </button>
+        </div>
+      </div>
+
+      <div class="card card-section card-emphasis">
+        <div class="section-heading">
+          <span class="section-icon">🗄️</span>
+          <div>
+            <h2>Database Management</h2>
+            <p class="muted">Backup or restore your local data safely.</p>
+          </div>
+        </div>
         <p class="note">
           💡 <b>Tip:</b> Keep your backups in a safe place (Google Drive, Email) to prevent data loss.
         </p>
@@ -392,13 +446,18 @@ onMounted(async () => {
         </p>
       </div>
 
-      <div class="card" style="margin-top:12px">
+      <div class="card card-section">
         <PageVisibilitySettings :pages="pagesList" />
       </div>
 
-      <div class="card" style="margin-top:12px">
-        <h2>🔒 Security</h2>
-        <p class="muted">Set a PIN to protect Settings access and prevent unauthorized changes.</p>
+      <div class="card card-section">
+        <div class="section-heading">
+          <span class="section-icon">🔒</span>
+          <div>
+            <h2>Security</h2>
+            <p class="muted">Set a PIN to protect Settings access and prevent unauthorized changes.</p>
+          </div>
+        </div>
         <div class="pin-section">
           <div class="pin-status-row">
             <span class="pin-label">PIN status:</span>
@@ -426,11 +485,93 @@ onMounted(async () => {
 
 <style scoped>
 /* layout */
-.settings-grid { display: flex; gap: 18px; padding: 20px }
-.left-col { flex: 2 }
+.settings-grid {
+  display: flex;
+  gap: 20px;
+  padding: 24px;
+  max-width: 1120px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+.left-col {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
 .right-col { flex: 1 }
-.card { background:#fff; padding: 16px; border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,0.06) }
-body.dark-mode .card { background: #1e1e1e; color: #eee; }
+.card {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
+}
+body.dark-mode .card {
+  background: linear-gradient(180deg, #36404a 0%, #313b45 100%);
+  color: #eee;
+  border-color: #536170;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+}
+
+.card-hero {
+  padding: 22px;
+}
+
+.card-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.card-emphasis {
+  border-color: rgba(26, 188, 156, 0.18);
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.section-heading h1,
+.section-heading h2,
+.section-heading h3 {
+  margin: 0;
+  color: #0f172a;
+}
+
+.section-heading h1 {
+  font-size: 30px;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.section-heading h2 {
+  font-size: 21px;
+  line-height: 1.15;
+  margin-bottom: 4px;
+}
+
+.section-icon {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(26, 188, 156, 0.16), rgba(52, 152, 219, 0.18));
+  font-size: 22px;
+  flex-shrink: 0;
+}
+body.dark-mode .section-heading h1,
+body.dark-mode .section-heading h2,
+body.dark-mode .section-heading h3 {
+  color: #f8fafc;
+}
+body.dark-mode .section-icon {
+  background: linear-gradient(135deg, rgba(71, 215, 181, 0.18), rgba(125, 211, 252, 0.18));
+}
 
 /* reuse some existing styles */
 .muted { color: #666; }
@@ -439,14 +580,61 @@ body.dark-mode .card { background: #1e1e1e; color: #eee; }
 .text-limiter { align-self: flex-end; font-size: 12px; color: #6b7280; }
 .text-limiter.warning { color: #d97706; font-weight: 600; }
 .branding-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-.note { background-color: #e3f2fd; border-left: 4px solid #2196f3; padding: 12px; margin-bottom: 12px; font-size: 0.9rem }
+.theme-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+.theme-copy { display: flex; flex-direction: column; gap: 4px; }
+.theme-copy strong { color: #1f2937; }
+.theme-copy span { color: #6b7280; font-size: 14px; }
+.note {
+  background: linear-gradient(180deg, #eef7ff 0%, #e6f3ff 100%);
+  border: 1px solid rgba(33, 150, 243, 0.18);
+  border-left: 4px solid #2196f3;
+  padding: 14px;
+  margin-bottom: 4px;
+  border-radius: 14px;
+  font-size: 0.95rem;
+}
 .actions { display:flex; flex-direction:column; gap:12px }
-.restore-section { display:flex; flex-direction:column; gap:10px; padding-top:10px; border-top:1px solid #eee }
+.restore-section {
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  padding-top:12px;
+  border-top:1px solid #e5e7eb;
+}
 .file-label { display:flex; flex-direction:column; gap:6px; font-weight:600 }
 .file-label input[type="file"] { width: 100% }
-.progress-container { margin-top: 12px; background:#eee; border-radius:10px; height:20px; position:relative }
-.progress-bar { background:#2ecc71; height:100%; transition: width 0.3s }
-.status { margin-top:12px; font-style:italic; color:#666 }
+.progress-container {
+  margin-top: 8px;
+  background:#e5e7eb;
+  border-radius:999px;
+  height:12px;
+  position:relative;
+  overflow: hidden;
+}
+.progress-bar {
+  background: linear-gradient(90deg, #1abc9c, #3498db);
+  height:100%;
+  transition: width 0.3s;
+}
+.progress-text {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+.status { margin-top:8px; font-style:italic; color:#666 }
+.status.error { color: #c0392b; }
 
 /* PIN management */
 .pin-section { margin-top: 12px; display: flex; flex-direction: column; gap: 14px; }
@@ -455,12 +643,52 @@ body.dark-mode .card { background: #1e1e1e; color: #eee; }
 body.dark-mode .muted,
 body.dark-mode .branding-form label,
 body.dark-mode .pin-label { color: #bbb; }
+body.dark-mode .theme-row {
+  background: rgba(148, 163, 184, 0.08);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+body.dark-mode .theme-copy strong { color: #f8fafc; }
+body.dark-mode .theme-copy span { color: #cbd5e1; }
 body.dark-mode .text-limiter { color: #94a3b8; }
 body.dark-mode .text-limiter.warning { color: #fbbf24; }
+body.dark-mode .note {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.16) 0%, rgba(37, 99, 235, 0.12) 100%);
+  border-color: rgba(96, 165, 250, 0.22);
+}
+body.dark-mode .restore-section { border-top-color: #4b5563; }
+body.dark-mode .progress-container { background: #4b5563; }
+body.dark-mode .progress-text { color: #cbd5e1; }
 .pin-badge { font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 20px; }
 .pin-active { background: #d4f5ec; color: #1a8a6e; }
 .pin-inactive { background: #f0f0f0; color: #888; }
 body.dark-mode .pin-active { background: #1a3a2e; color: #1abc9c; }
 body.dark-mode .pin-inactive { background: #2a2a2a; color: #888; }
 .pin-btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+@media (max-width: 768px) {
+  .settings-grid {
+    padding: 16px;
+  }
+
+  .section-heading {
+    gap: 12px;
+  }
+
+  .section-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    font-size: 20px;
+  }
+
+  .section-heading h1 {
+    font-size: 26px;
+  }
+
+  .theme-row,
+  .pin-status-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
 </style>

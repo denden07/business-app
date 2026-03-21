@@ -28,13 +28,6 @@ const navigateTo = (path) => {
   isOpen.value = false
 }
 
-// Toggle dark mode
-const toggleNightMode = () => {
-  isDarkMode.value = !isDarkMode.value
-  document.body.classList.toggle('dark-mode', isDarkMode.value)
-  localStorage.setItem('darkMode', isDarkMode.value)
-}
-
 // Menu
 const menuItems = [
   { name: 'Home', path: '/', icon: '🏠' },
@@ -125,11 +118,6 @@ const visibleMenu = () => {
         </button>
       </li>
     </ul>
-
-    <button class="night-mode-btn" @click="toggleNightMode">
-      <span class="icon">🌙</span>
-      <span>Night Mode</span>
-    </button>
   </nav>
 </template>
 
@@ -265,36 +253,6 @@ const visibleMenu = () => {
   background: #1abc9c;
   color: #fff;
   font-weight: 600;
-}
-
-/* Night Mode Button */
-.night-mode-btn {
-  background: #34495e;
-  border: none;
-  color: #fff;
-  padding: 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  font-size: 15px;
-  width: 100%;
-  margin-top: 16px;
-  transition: background 0.2s;
-}
-
-.night-mode-btn:hover {
-  background: #3b4c60;
-}
-
-body.dark-mode .night-mode-btn {
-  background: #ffc107;
-  color: #000;
-}
-
-body.dark-mode .night-mode-btn:hover {
-  background: #ffb300;
 }
 
 /* Icon */

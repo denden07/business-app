@@ -23,7 +23,7 @@
 .table-wrap table {
   width: 100%;
   border-collapse: collapse;
-  background: #fff;
+  background: #fbfcfd;
   white-space: nowrap;
 }
 
@@ -50,9 +50,10 @@
   font-size: 16px;
   color: #333;
 }
+.table-wrap tbody tr:nth-child(even) td { background: #f3f6f9; }
 .table-wrap tbody td:last-child { border-right: none; }
 .table-wrap tbody tr:last-child td { border-bottom: none; }
-.table-wrap tbody tr:hover td { background: #f5fef9; }
+.table-wrap tbody tr:hover td { background: #e9f4ef; }
 
 /* ── Sticky actions column ────────────────────── */
 .table-wrap .col-actions {
@@ -67,10 +68,11 @@
   z-index: 10;
 }
 .table-wrap tbody tr .col-actions {
-  background: #fff;
+  background: #fbfcfd;
   box-shadow: -3px 0 8px rgba(0,0,0,.05);
 }
-.table-wrap tbody tr:hover .col-actions { background: #f5fef9; }
+.table-wrap tbody tr:nth-child(even) .col-actions { background: #f3f6f9; }
+.table-wrap tbody tr:hover .col-actions { background: #e9f4ef; }
 
 .table-wrap .col-actions-menu-only {
   width: 52px;
