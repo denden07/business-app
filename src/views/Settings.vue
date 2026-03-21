@@ -251,6 +251,7 @@ const pagesList = ref([
   { name: 'Sales', label: 'Sales' },
   { name: 'Customers', label: 'Customers' },
   { name: 'Analytics', label: 'Analytics' },
+  { name: 'About', label: 'About' },
 ])
 
 async function backupDB() {

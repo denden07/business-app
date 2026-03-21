@@ -9,6 +9,7 @@ import Inventory from '../views/Inventory.vue'
 import Sales from '../views/Sales.vue'
 import Customers from '../views/Customers.vue'
 import Analytics from '../views/Analytics.vue'
+import About from '../views/About.vue'
 import TransactionHistory from '../views/TransactionHistory.vue'
 import Settings from '../views/Settings.vue'
 import Drafts from '../views/Drafts.vue'
@@ -21,6 +22,7 @@ let allRoutes = [
   { path: '/sales', name: 'Sales', component: Sales },
   { path: '/customers', name: 'Customers', component: Customers },
   { path: '/analytics', name: 'Analytics', component: Analytics },
+  { path: '/about', name: 'About', component: About },
   { path: '/settings', name: 'Settings', component: Settings },
   { path: '/drafts', name: 'Drafts', component: Drafts },
   {

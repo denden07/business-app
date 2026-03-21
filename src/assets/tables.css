@@ -89,7 +89,7 @@
 }
 
 /* ── Actions td flex layout ───────────────────── */
-.table-wrap .actions-td { display: flex; gap: 6px; align-items: center; }
+.table-wrap .actions-td { display: flex; gap: 6px; align-items: center; justify-content: center;}
 
 /* ── th row: "Actions" text + gear icon ──────── */
 .th-actions-head {

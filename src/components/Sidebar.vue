@@ -36,10 +36,14 @@ const menuItems = [
   { name: 'Drafts', path: '/drafts', icon: '📝' },
   { name: 'Customers', path: '/customers', icon: '🧑‍🤝‍🧑' },
   { name: 'Analytics', path: '/analytics', icon: '📊' },
+  { name: 'About', path: '/about', icon: 'ℹ️' },
   { name: 'Settings', path: '/settings', icon: '⚙️' },
 ]
 
-const isActive = (path) => route.path === path
+const isActive = (path) => {
+  if (path === '/') return route.path === '/'
+  return route.path === path || route.path.startsWith(`${path}/`)
+}
 
 const pageVisibility = ref(null)
 const appName = ref('Pharmacy POS')
