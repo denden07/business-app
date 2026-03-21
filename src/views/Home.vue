@@ -1196,10 +1196,6 @@ tbody td {
 }
 tbody tr:hover td { background: #f5fef9; }
 tbody tr:last-child td { border-bottom: none; }
-body.dark-mode table { background: #1e1e1e; }
-body.dark-mode thead th { background: #162520; color: #1abc9c; border-bottom-color: #2a4a3a; }
-body.dark-mode tbody td { border-bottom-color: #252525; color: #ddd; }
-body.dark-mode tbody tr:hover td { background: #1e2e25; }
 
 /* Totals below table */
 .cart-totals {
@@ -1434,39 +1430,6 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
 .med-name { font-size: 20px;}
 .med-name-table { font-weight:700; }
 .med-generic { font-size:16px; color:#888; }
-
-/* =========================
-   DARK MODE
-========================= */
-.dark .search-bar input,
-.dark .cart-wrapper,
-.dark .right-panel,
-.dark .modal {
-  background: #1e1e1e;
-  color: #f1f1f1;
-  border-color: #333;
-}
-.dark .right-panel input,
-.dark .qty-wrapper input,
-.dark .modal input {
-  background: #333;
-  color: #f1f1f1;
-  border-color: #555;
-}
-.dark .num-btn,
-.dark .qty-wrapper button,
-.dark .price-cell .mini.regular,
-.dark .price-cell .mini.discounted {
-  background: #4da3ff;
-}
-.dark .price-cell .mini.activePrice {
-  background: #2ecc71;
-  border-color: #fff;
-}
-.dark .dropdown-item:hover,
-.dark .customer-row:hover {
-  background: #222;
-}
 
 /* =========================
    CUSTOMER MODAL FIX

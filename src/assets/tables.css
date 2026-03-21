@@ -19,11 +19,6 @@
   padding-bottom: 210px;
 }
 
-body.dark-mode .table-wrap {
-  border-color: #2a2a2a;
-  box-shadow: 0 2px 12px rgba(0,0,0,.3);
-}
-
 /* ── Table base ───────────────────────────────── */
 .table-wrap table {
   width: 100%;
@@ -31,7 +26,6 @@ body.dark-mode .table-wrap {
   background: #fff;
   white-space: nowrap;
 }
-body.dark-mode .table-wrap table { background: #181818; }
 
 /* ── Header cells ─────────────────────────────── */
 .table-wrap thead th {
@@ -47,12 +41,6 @@ body.dark-mode .table-wrap table { background: #181818; }
   white-space: nowrap;
 }
 .table-wrap thead th:last-child { border-right: none; }
-body.dark-mode .table-wrap thead th {
-  background: #162520;
-  color: #1abc9c;
-  border-bottom-color: #2a4a3a;
-  border-right-color: #2a4a3a;
-}
 
 /* ── Body cells ───────────────────────────────── */
 .table-wrap tbody td {
@@ -63,14 +51,8 @@ body.dark-mode .table-wrap thead th {
   color: #333;
 }
 .table-wrap tbody td:last-child { border-right: none; }
-body.dark-mode .table-wrap tbody td {
-  border-bottom-color: #252525;
-  border-right-color: #252525;
-  color: #ddd;
-}
 .table-wrap tbody tr:last-child td { border-bottom: none; }
 .table-wrap tbody tr:hover td { background: #f5fef9; }
-body.dark-mode .table-wrap tbody tr:hover td { background: #1e2e25; }
 
 /* ── Sticky actions column ────────────────────── */
 .table-wrap .col-actions {
@@ -84,14 +66,11 @@ body.dark-mode .table-wrap tbody tr:hover td { background: #1e2e25; }
   box-shadow: -3px 0 8px rgba(0,0,0,.07);
   z-index: 10;
 }
-body.dark-mode .table-wrap thead .col-actions { background: #162520; }
 .table-wrap tbody tr .col-actions {
   background: #fff;
   box-shadow: -3px 0 8px rgba(0,0,0,.05);
 }
-body.dark-mode .table-wrap tbody tr .col-actions { background: #181818; }
 .table-wrap tbody tr:hover .col-actions { background: #f5fef9; }
-body.dark-mode .table-wrap tbody tr:hover .col-actions { background: #1e2e25; }
 
 .table-wrap .col-actions-menu-only {
   width: 52px;
@@ -130,7 +109,6 @@ body.dark-mode .table-wrap tbody tr:hover .col-actions { background: #1e2e25; }
   opacity: 1;
   background: rgba(0,0,0,.09);
 }
-body.dark-mode .col-icon-btn:hover { background: rgba(255,255,255,.14); }
 
 /* ── Column visibility dropdown ───────────────── */
 .col-toggle-wrap { position: relative; }
@@ -147,7 +125,6 @@ body.dark-mode .col-icon-btn:hover { background: rgba(255,255,255,.14); }
   padding: 6px 0;
   min-width: 175px;
 }
-body.dark-mode .col-menu { background: #222; border-color: #333; }
 .col-menu-title {
   padding: 8px 16px 4px;
   font-size: 11px;
@@ -156,7 +133,6 @@ body.dark-mode .col-menu { background: #222; border-color: #333; }
   letter-spacing: .5px;
   color: #1a8a6e;
 }
-body.dark-mode .col-menu-title { color: #1abc9c; }
 .col-menu label {
   display: flex;
   align-items: center;
@@ -170,8 +146,6 @@ body.dark-mode .col-menu-title { color: #1abc9c; }
   letter-spacing: 0;
 }
 .col-menu label:hover { background: #f5fef9; }
-body.dark-mode .col-menu label { color: #ddd; }
-body.dark-mode .col-menu label:hover { background: #1e2e25; }
 .col-menu input[type="checkbox"] {
   accent-color: #1abc9c;
   width: 15px;

@@ -426,7 +426,6 @@ const exportCSV = async () => {
 <style scoped>
 /* Reuse previous styles + voided status */
 .medicines-page { margin: auto; padding: 20px; overflow-x: hidden; }
-body.dark-mode .medicines-page { background-color: #121212; color: #eee; }
 
 .actions-td button { padding: 6px 10px; }
 

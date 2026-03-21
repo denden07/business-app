@@ -569,11 +569,6 @@ body.dark-mode .summary-value {
   color: #f8fafc;
 }
 
-body.dark-mode .medicines-page {
-  background-color: #121212;
-  color: #eee;
-}
-
 /* ======================
    TABS
 ====================== */

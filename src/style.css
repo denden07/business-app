@@ -39,15 +39,6 @@ body {
 }
 
 
-body.dark-mode {
-  --bg-color: #1e1e1e;
-  --text-color: #eee;
-  --card-bg: #2c2c2c;
-  --modal-bg: #2c2c2c;
-  --button-bg: #16a085;
-  --button-text: #fff;
-}
-
 body {
   background-color: var(--bg-color);
   color: var(--text-color);
@@ -114,7 +105,3 @@ input[type="date"]::-moz-calendar-picker-indicator {
   cursor: pointer;
 }
 
-/* Optional: make sure input text is visible in dark mode */
-body.dark-mode input[type="date"] {
-  color: #eee;
-}

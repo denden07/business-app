@@ -26,34 +26,6 @@
   --field-focus-ring: rgba(26, 188, 156, 0.2);
 }
 
-body.dark-mode {
-  --btn-primary-bg: #16a085;
-  --btn-primary-hover: #1abc9c;
-  --btn-secondary-bg: #4b5563;
-  --btn-secondary-hover: #606b7a;
-  --btn-danger-bg: #c0392b;
-  --btn-danger-hover: #a93226;
-  --btn-warning-bg: #d68910;
-  --btn-warning-hover: #b9770e;
-  --btn-info-bg: #2980b9;
-  --btn-info-hover: #3498db;
-  --btn-success-bg: #218838;
-  --btn-success-hover: #28a745;
-  --btn-neutral-bg: #333;
-  --btn-neutral-hover: #3f3f3f;
-  --btn-text-dark: #eee;
-  --btn-border-light: #3a3a3a;
-  --field-bg: #1c1c1c;
-  --field-border: #333;
-  --field-text: #eee;
-  --field-placeholder: #aaa;
-  --field-focus-border: #1abc9c;
-  --field-focus-ring: rgba(26, 188, 156, 0.25);
-  --modal-surface-bg: #1e1e1e;
-  --modal-surface-text: #eee;
-  --modal-border: #333;
-}
-
 :root {
   --modal-surface-bg: #fff;
   --modal-surface-text: #222;
@@ -150,10 +122,6 @@ body.dark-mode {
 .app-modal-actions > button,
 .modal-actions > button {
   min-width: 120px;
-}
-
-body.dark-mode .section-header {
-  background: #2a2a2a;
 }
 
 @media (max-width: 768px) {
@@ -286,11 +254,6 @@ textarea {
   font-size: 13px;
   font-weight: 600;
   color: #444;
-}
-
-body.dark-mode .modal-form label,
-body.dark-mode .modal-stack label {
-  color: #ddd;
 }
 
 .modal-form .input,
@@ -577,10 +540,6 @@ button:disabled,
   color: #666;
 }
 
-body.dark-mode .sale-meta {
-  color: #aaa;
-}
-
 .badge {
   padding: 6px 10px;
   border-radius: 8px;
@@ -655,21 +614,6 @@ body.dark-mode .sale-meta {
 }
 
 .date-icon-btn.active {
-  border-color: #1abc9c;
-  color: #1abc9c;
-}
-
-body.dark-mode .date-icon-btn {
-  background: #1c1c1c;
-  border-color: #333;
-  color: #ccc;
-}
-
-body.dark-mode .date-icon-btn:hover {
-  background: #1c1c1c;
-}
-
-body.dark-mode .date-icon-btn.active {
   border-color: #1abc9c;
   color: #1abc9c;
 }

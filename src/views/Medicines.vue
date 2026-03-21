@@ -274,11 +274,6 @@ const restoreMedicine = async med => {
 }
 
 /* Dark mode support */
-body.dark-mode .medicines-page {
-  background-color: #121212 !important;
-  color: #eee !important;
-}
-
 /* ===========================
    ACTION BUTTONS
 =========================== */

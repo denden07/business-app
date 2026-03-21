@@ -103,7 +103,6 @@ const deleteDraft = async (draft) => {
 
 <style scoped>
 .medicines-page { margin: auto; padding: 20px; overflow-x: hidden; }
-body.dark-mode .medicines-page { background-color: #121212; color: #eee; }
 
 h1 { margin-bottom: 16px; }
 
