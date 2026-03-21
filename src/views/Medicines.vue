@@ -280,23 +280,6 @@ body.dark-mode .medicines-page {
 }
 
 /* ===========================
-   TOP BAR
-=========================== */
-.top-bar {
-  display: flex !important;
-  flex-wrap: wrap !important;
-  gap: 10px !important;
-  align-items: center !important;
-  margin-bottom: 12px !important;
-}
-
-.items-per-page {
-  display: flex !important;
-  align-items: center !important;
-  gap: 4px !important;
-}
-
-/* ===========================
    ACTION BUTTONS
 =========================== */
 .actions-td button {
@@ -308,21 +291,6 @@ body.dark-mode .medicines-page {
    MOBILE FIXES
 =========================== */
 @media (max-width: 768px) {
-  .top-bar {
-    flex-direction: column !important;
-    align-items: stretch !important;
-  }
-
-  .top-bar > button,
-  .top-bar > select,
-  .items-per-page {
-    width: 100% !important;
-  }
-
-  .items-per-page {
-    justify-content: space-between !important;
-  }
-
   .items-per-page > .select-field {
     flex: 1;
   }

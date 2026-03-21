@@ -428,10 +428,6 @@ const exportCSV = async () => {
 .medicines-page { margin: auto; padding: 20px; overflow-x: hidden; }
 body.dark-mode .medicines-page { background-color: #121212; color: #eee; }
 
-.top-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
-
-.items-per-page { display: flex; align-items: center; gap: 4px; }
-
 .actions-td button { padding: 6px 10px; }
 
 .status-ok { color: #1abc9c; font-weight: 600; }
@@ -442,9 +438,6 @@ body.dark-mode .medicines-page { background-color: #121212; color: #eee; }
 body.dark-mode .med-generic { color: #aaa; }
 
 @media (max-width: 768px) {
-  .top-bar { flex-direction: column; }
-  .top-bar > button,
-  .top-bar > select,
   .top-bar > :deep(.date-icon-btn) { width: 100%; }
 }
 

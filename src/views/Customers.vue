@@ -367,30 +367,6 @@ function goToTransactionHistory(customerId) {
 }
 
 /* ======================
-   TOP BAR
-====================== */
-.top-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.top-bar h1 {
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.top-bar-actions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-/* ======================
    MODAL
 ====================== */
 /* STACK INPUTS */
@@ -403,22 +379,6 @@ function goToTransactionHistory(customerId) {
    MOBILE
 ====================== */
 @media (max-width: 768px) {
-  .top-bar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .top-bar > .select-field,
-  .top-bar > button,
-  .top-bar > :deep(.search-input) {
-    width: 100%;
-  }
-
-  .top-bar-actions {
-    flex-direction: column;
-  }
-
-  .top-bar-actions > button,
   .modal-actions > button {
     width: 100%;
   }

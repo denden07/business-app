@@ -584,17 +584,6 @@ body.dark-mode .medicines-page {
 }
 
 /* ======================
-   TOP BAR
-====================== */
-.top-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 12px;
-  align-items: center;
-}
-
-/* ======================
    POINT COLORS
 ====================== */
 .points-plus {
@@ -701,16 +690,6 @@ body.dark-mode .sale-meta {
     text-align: left;
   }
 
-  .top-bar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .top-bar > .select-field,
-  .top-bar > button,
-  .top-bar > :deep(.dp__main) {
-    width: 100%;
-  }
 }
 .date-clear {
   position: absolute;

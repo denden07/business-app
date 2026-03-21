@@ -551,9 +551,47 @@ button:disabled,
   padding: 6px 8px;
 }
 
+.top-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.items-per-page {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 @media (max-width: 768px) {
   .pagination {
     gap: 4px;
+  }
+
+  .top-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .top-bar > button,
+  .top-bar > select,
+  .top-bar > .select-field,
+  .top-bar > .items-per-page,
+  .top-bar > .search-input,
+  .top-bar > .dp__main {
+    width: 100%;
+  }
+
+  .items-per-page {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .items-per-page > .select-field,
+  .items-per-page > select {
+    flex: 1;
   }
 }
 

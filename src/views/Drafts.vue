@@ -107,8 +107,6 @@ body.dark-mode .medicines-page { background-color: #121212; color: #eee; }
 
 h1 { margin-bottom: 16px; }
 
-.top-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
-
 .empty-state {
   margin-top: 40px;
   text-align: center;
@@ -119,8 +117,6 @@ h1 { margin-bottom: 16px; }
 .actions-td { display: flex; gap: 8px; }
 
 @media (max-width: 768px) {
-  .top-bar { flex-direction: column; }
-  .top-bar > button { width: 100%; }
   .actions-td { flex-direction: column; }
 }
 </style>
