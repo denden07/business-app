@@ -1,10 +1,14 @@
 <script setup>
-import { ref, computed, onMounted, watch, toRaw } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import SearchInput from '../components/SearchInput.vue'
 import Swal from 'sweetalert2'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
 import { downloadCSV } from '../utils/exportCsv'
 import Pagination from '../components/Pagination.vue'
+import { VueDatePicker } from '@vuepic/vue-datepicker'
+import '@vuepic/vue-datepicker/dist/main.css'
+import { format } from 'date-fns'
 
 
 
@@ -27,11 +31,43 @@ const toggleSort = (field) => {
 }
 
 /* ======================
+   COLUMN VISIBILITY
+====================== */
+const _salesDefaultCols = { id: true, purchased_date: true, total_amount: true, discount: true, professional_fee: true, final_total: true, payment_method: true, status: true }
+const colMenuOpen = ref(false)
+const visibleCols = ref({ ..._salesDefaultCols, ...JSON.parse(localStorage.getItem('col-vis-sales') || '{}') })
+watch(visibleCols, v => localStorage.setItem('col-vis-sales', JSON.stringify(v)), { deep: true })
+const allCols = [
+  { key: 'id', label: 'Sale #' },
+  { key: 'purchased_date', label: 'Purchased Date' },
+  { key: 'total_amount', label: 'Subtotal' },
+  { key: 'discount', label: 'Discount' },
+  { key: 'professional_fee', label: 'Prof Fee' },
+  { key: 'final_total', label: 'Total' },
+  { key: 'payment_method', label: 'Payment' },
+  { key: 'status', label: 'Status' },
+]
+const visibleColumnCount = computed(() => allCols.filter(col => visibleCols.value[col.key]).length + 1)
+const toggleCol = (key) => { visibleCols.value[key] = !visibleCols.value[key] }
+
+/* ======================
    FILTERS & PAGINATION
 ====================== */
 const searchKeyword = ref('')
 const startDate = ref('')
 const endDate = ref('')
+const dateRange = ref(null)
+const isDark = ref(localStorage.getItem('darkMode') === 'true')
+
+watch(dateRange, (range) => {
+  if (range && range[0] && range[1]) {
+    startDate.value = format(range[0], 'yyyy-MM-dd')
+    endDate.value = format(range[1], 'yyyy-MM-dd')
+  } else {
+    startDate.value = ''
+    endDate.value = ''
+  }
+})
 
 // const currentPage = ref(1)
 // const itemsPerPage = ref(10)
@@ -41,68 +77,11 @@ const itemsPerPageOptions = [5, 10, 20, 50]
    MODALS
 ====================== */
 const showView = ref(false)
-const showEdit = ref(false)
-const modalMode = ref('edit') // 'edit' or 'add'
-
-/* ======================
-   SALE DATA
-====================== */
-// const selectedSale = ref(null)
-
-// const editSale = ref(null)
-// const editItems = ref([])
 
 const fmt = (v) => {
   const n = Number(v)
   return isNaN(n) ? '0.00' : n.toFixed(2)
 }
-
-
-
-// Compute change based on current total
-const changeDue = computed(() => {
-  const total = editGrandTotal.value || 0
-  const given = Number(editSale.value?.money_given || 0)  // <- use editSale.money_given
-  return Math.max(given - total, 0)
-})
-/* ======================
-   CUSTOMER SEARCH
-====================== */
-const customerKeyword = ref('')
-const customerResults = ref([])
-const selectedCustomer = ref(null)
-
-// Watch keyword and filter dynamically
-watch(customerKeyword, (val) => {
-  if (!val) {
-    customerResults.value = []
-    return
-  }
-
-  const keyword = val.toLowerCase()
-  const allCustomers = store.state.customers.customers || []
-
-  // filter only those whose name includes the keyword
-  customerResults.value = allCustomers.filter(c =>
-    c.name.toLowerCase().includes(keyword)
-  )
-})
-
-
-// Select a customer from search results
-const selectCustomer = (c) => {
-  selectedCustomer.value = c
-  if (editSale.value) editSale.value.customer_id = c.id
-  customerResults.value = []
-  customerKeyword.value = ''
-}
-
-// Clear selected customer
-const clearCustomer = () => {
-  selectedCustomer.value = null
-  if (editSale.value) editSale.value.customer_id = null
-}
-
 /* ======================
    LOAD SALES & CUSTOMERS
 ====================== */
@@ -122,220 +101,6 @@ onMounted(() => {
    loadSales();
 })
 
-
-
-const viewSale = async (sale) => {
-  saleItems.value = await store.dispatch('sales/viewSale', sale.id)
-  selectedSale.value = sale
-  showView.value = true
-}
-
-/* ======================
-   OPEN EDIT / ADD MODAL
-====================== */
-// const openEdit = async (sale) => {
-//   modalMode.value = 'edit'
-
-//   try {
-//     // 1️⃣ Get sale items
-//     const items = await store.dispatch('sales/viewSale', sale.id)
-//     if (!items || !Array.isArray(items)) {
-//       Swal.fire('Error', 'No sale items found', 'error')
-//       return
-//     }
-
-//     // 2️⃣ Get all medicines to map their current prices
-//     const allMedicines = store.state.medicines.medicines || []
-//     const medsMap = Object.fromEntries(allMedicines.map(m => [m.id, m]))
-
-//     // 3️⃣ Set editSale
-//     editSale.value = { ...sale }
-
-//     // 4️⃣ Map items with regular & discounted price tracking
-//     editItems.value = items.map(i => {
-//       const med = medsMap[i.medicine_id] || {}
-//       const regular = Number(med.price1) ?? i.price_at_sale ?? 0
-//       const discounted = Number(med.price2) ?? i.price_at_sale ?? 0
-
-//       return {
-//         id: i.id,
-//         medicine_id: i.medicine_id,
-//         medicine_name: i.medicine_name || med.name || 'Unknown',
-//         generic_name: i.generic_name || med.generic_name || '',
-//         qty: i.quantity ?? 1,
-
-//         // price at time of sale
-//         price: i.price_at_sale ?? regular,
-
-//         // snapshot of medicine prices at that time
-//         regular_price: regular,
-//         discounted_price: discounted,
-
-//         // detect which was used in the sale
-//         price_mode: i.price_type ?? 'regular'
-//       }
-//     })
-
-//     // 5️⃣ Set customer
-//     selectedCustomer.value = customers.value.find(c => c.id === sale.customer_id) || null
-//     customerKeyword.value = ''
-
-//     // 6️⃣ Show modal
-//     showEdit.value = true
-
-//   } catch (err) {
-//     console.error(err)
-//     Swal.fire('Error', 'Failed to open edit modal: ' + err.message, 'error')
-//   }
-// }
-
-// const openAddSale = () => {
-//   modalMode.value = 'add'
-//   editSale.value = {
-//     customer_id: null,
-//     purchased_date: '',
-//     professional_fee: 0,
-//     discount: 0
-//   }
-//   editItems.value = []
-//   selectedCustomer.value = null
-//   customerKeyword.value = ''
-//   showEdit.value = true
-// }
-
-/* ======================
-   MEDICINE SEARCH
-====================== */
-const medKeyword = ref('')
-const medResults = ref([])
-
-watch(medKeyword, (val) => {
-  if (!val) {
-    medResults.value = []
-    return
-  }
-
-  const keyword = val.toLowerCase()
-  medResults.value = allMedicines.value.filter(m =>
-    m.name.toLowerCase().includes(keyword) || 
-    (m.generic_name && m.generic_name.toLowerCase().includes(keyword))
-  )
-})
-
-
-const addMedicine = (med) => {
-  const existing = editItems.value.find(i => i.medicine_id === med.id)
-  const regular = Number(med.price1) || 0
-  const discount = Number(med.price2) || regular
-  if (existing) existing.qty += 1
-  else editItems.value.push({
-    medicine_id: med.id,
-    medicine_name: med.name,
-    generic_name: med.generic_name,
-    qty: 1,
-    price: regular,
-    regular_price: regular,
-    discounted_price: discount,
-    price_mode: 'regular'
-  })
-  medKeyword.value = ''
-  medResults.value = []
-}
-
-const removeItem = (index) => editItems.value.splice(index, 1)
-
-/* ======================
-   PRICE MODE
-====================== */
-const setRegular = (item) => { item.price = Number(item.regular_price); item.price_mode = 'regular' }
-const setDiscount = (item) => { item.price = Number(item.discounted_price); item.price_mode = 'discounted' }
-const manualPrice = (item) => { item.price_mode = 'manual' }
-
-/* ======================
-   TOTALS
-====================== */
-const editSubTotal = computed(() =>
-  editItems.value.reduce((sum, i) => sum + i.qty * i.price, 0)
-)
-const editGrandTotal = computed(() =>
-  Math.max(editSubTotal.value + Number(editSale.value?.professional_fee || 0) - Number(editSale.value?.discount || 0), 0)
-)
-
-/* ======================
-   SAVE SALE / EDIT
-====================== */
-// const saveModalSale = async () => {
-//   if (!editItems.value.length) {
-//     Swal.fire('Error', 'No items in the sale', 'error')
-//     return
-//   }
-
-//   // Use money from editSale.money_given
-//   const money = parseFloat(editSale.value?.money_given)
-//   if (isNaN(money)) {
-//     Swal.fire('Error', 'Invalid amount for Money Given', 'error')
-//     return
-//   }
-
-//   const total = parseFloat(editGrandTotal.value.toFixed(2))
-
-//   if (money < total) {
-//     Swal.fire(
-//       'Error',
-//       `Money given (₱${money.toFixed(2)}) is less than total (₱${total.toFixed(2)})`,
-//       'error'
-//     )
-//     return
-//   }
-
-//   const change = money - total
-
-//   const confirm = await Swal.fire({
-//     title: modalMode.value === 'edit' ? 'Save changes?' : 'Save this sale?',
-//     icon: 'question',
-//     showCancelButton: true,
-//     confirmButtonText: 'Save'
-//   })
-//   if (!confirm.isConfirmed) return
-
-//   const saleData = structuredClone(toRaw(editSale.value))
-//   const itemsData = structuredClone(editItems.value.map(i => toRaw(i)))
-
-//   try {
-//     if (modalMode.value === 'edit') {
-//       await store.dispatch('sales/saveEdit', {
-//         sale: { 
-//           ...saleData,
-//           total_amount: editSubTotal.value,
-//           final_total: editGrandTotal.value,
-//           money_given: money,
-//           change: change
-//         },
-//         items: itemsData
-//       })
-//       Swal.fire({ icon: 'success', title: 'Sale updated', timer: 1200, showConfirmButton: false })
-//     } else {
-//       await store.dispatch('sales/saveSale', {
-//         cart: itemsData.map(i => ({ ...i })),
-//         customer_id: editSale.value.customer_id,
-//         subTotal: editSubTotal.value,
-//         professionalFee: Number(editSale.value.professional_fee || 0),
-//         discount: Number(editSale.value.discount || 0),
-//         finalTotal: editGrandTotal.value,
-//         purchased_date: editSale.value.purchased_date || null,
-//         money_given: money,
-//         change: change
-//       })
-//       Swal.fire({ icon: 'success', title: 'Sale added', timer: 1200, showConfirmButton: false })
-//     }
-
-//     showEdit.value = false
-//     store.dispatch('sales/loadSales')
-//   } catch (err) {
-//     console.error(err)
-//     Swal.fire('Error', err.message || 'Failed to save sale', 'error')
-//   }
-// }
 
 
 /* ======================
@@ -438,9 +203,6 @@ const sales = computed(() => {
   })
 })
 
-console.log(sales)
-
-
 const goToHome = () => {
   router.push({ name: 'Home' })
 }
@@ -507,19 +269,29 @@ const exportCSV = async () => {
 
     <!-- TOP BAR -->
     <div class="top-bar">
-      <input v-model="searchKeyword" placeholder="Search sale #..." />
+      <SearchInput v-model="searchKeyword" placeholder="Search sale #..." />
 
-      <label>
-        From
-        <input type="date" v-model="startDate" />
-      </label>
+      <VueDatePicker
+        v-model="dateRange"
+        range
+        :enable-time-picker="false"
+        :dark="isDark"
+        auto-apply
+        teleport
+      >
+        <template #trigger>
+          <button type="button" class="date-icon-btn" :class="{ active: dateRange }" :title="dateRange ? 'Date filter active' : 'Filter by date range'">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.5" fill="none" />
+              <path d="M3 10h18" stroke="currentColor" stroke-width="1.5" />
+              <path d="M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+            <span v-if="dateRange" class="date-clear" @click.stop="dateRange = null" title="Clear date filter">×</span>
+          </button>
+        </template>
+      </VueDatePicker>
 
-      <label>
-        To
-        <input type="date" v-model="endDate" />
-      </label>
-
-      <select v-model.number="itemsPerPage">
+      <select v-model.number="itemsPerPage" class="select-field">
         <option v-for="o in itemsPerPageOptions" :key="o" :value="o">{{ o }}</option>
       </select>
 
@@ -534,49 +306,65 @@ const exportCSV = async () => {
 
 
     <!-- TABLE -->
+    <div class="table-wrap" :class="{ 'table-wrap-menu-open': colMenuOpen }">
     <table>
       <thead>
         <tr>
-          <th>Sale #</th>
-          <th>Purchased Date</th>
-          <th>Subtotal</th>
-          <th>Discount</th>
-          <th>Prof Fee</th>
-          <th>Total</th>
-          <th @click="toggleSort('payment_method')" style="cursor: pointer; user-select: none;">
+          <th v-if="visibleCols.id">Sale #</th>
+          <th v-if="visibleCols.purchased_date">Purchased Date</th>
+          <th v-if="visibleCols.total_amount">Subtotal</th>
+          <th v-if="visibleCols.discount">Discount</th>
+          <th v-if="visibleCols.professional_fee">Prof Fee</th>
+          <th v-if="visibleCols.final_total">Total</th>
+          <th v-if="visibleCols.payment_method" @click="toggleSort('payment_method')" style="cursor: pointer; user-select: none;">
             Payment {{ sortBy === 'payment_method' ? (sortOrder === 'asc' ? '↑' : '↓') : '' }}
           </th>
-          <th @click="toggleSort('status')" style="cursor: pointer; user-select: none;">
+          <th v-if="visibleCols.status" @click="toggleSort('status')" style="cursor: pointer; user-select: none;">
             Status {{ sortBy === 'status' ? (sortOrder === 'asc' ? '↑' : '↓') : '' }}
           </th>
-          <th>Actions</th>
+          <th class="col-actions">
+            <div class="th-actions-head">
+              Actions
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="colMenuOpen = !colMenuOpen" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in allCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+          </th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="sale in sales" :key="sale.id">
-          <td>#{{ sale.id }}</td>
-          <td>{{ new Date(sale.purchased_date).toLocaleString() }}</td>
-          <td>₱{{ fmt(sale.total_amount) }}</td>
-          <td>₱{{ fmt(sale.discount) }}</td>
-          <td>₱{{ fmt(sale.professional_fee) }}</td>
-          <td><strong>₱{{ fmt(sale.final_total) }}</strong></td>
-          <td>{{ sale.payment_method || 'Cash' }}</td>
-          <td :class="sale.status === 'voided' ? 'status-voided' : 'status-ok'">{{ sale.status }}</td>
-          <td style="display: flex;gap:8px">
-            <button @click="openSaleModal(sale)">View</button>
-            <!-- <button v-if="sale.status === 'completed'" @click="openEdit(sale)">Edit</button> -->
-            <button v-if="sale.status === 'completed'" class="danger" @click="voidSale(sale)">Void</button>
+          <td v-if="visibleCols.id">#{{ sale.id }}</td>
+          <td v-if="visibleCols.purchased_date">{{ new Date(sale.purchased_date).toLocaleString() }}</td>
+          <td v-if="visibleCols.total_amount">₱{{ fmt(sale.total_amount) }}</td>
+          <td v-if="visibleCols.discount">₱{{ fmt(sale.discount) }}</td>
+          <td v-if="visibleCols.professional_fee">₱{{ fmt(sale.professional_fee) }}</td>
+          <td v-if="visibleCols.final_total"><strong>₱{{ fmt(sale.final_total) }}</strong></td>
+          <td v-if="visibleCols.payment_method">{{ sale.payment_method || 'Cash' }}</td>
+          <td v-if="visibleCols.status" :class="sale.status === 'voided' ? 'status-voided' : 'status-ok'">{{ sale.status }}</td>
+          <td class="col-actions actions-td">
+            <button class="info btn" @click="openSaleModal(sale)">View</button>
+            <button v-if="sale.status === 'completed'" class="danger btn" @click="voidSale(sale)">Void</button>
           </td>
+        </tr>
+        <tr v-if="!sales.length">
+          <td :colspan="visibleColumnCount" class="empty-state-cell">No sales found.</td>
         </tr>
       </tbody>
     </table>
+    </div>
 
     <!-- PAGINATION -->
     <Pagination v-model:page="currentPage" :total-pages="totalPages" :max-pages="5" />
 
     <!-- VIEW SALE MODAL -->
-    <div v-if="showView" class="modal-backdrop">
-      <div class="modal">
+    <div v-if="showView" class="modal-backdrop app-modal-backdrop">
+      <div class="modal app-modal-panel modal-lg">
         <div class="sale-header">
           <div>
             <h2>Sale #{{ selectedSale.id }}</h2>
@@ -599,6 +387,7 @@ const exportCSV = async () => {
           </span>
         </div>
 
+        <div class="table-wrap">
         <table>
           <thead>
             <tr>
@@ -615,8 +404,12 @@ const exportCSV = async () => {
               <td>₱{{ item.price_at_sale.toFixed(2) }}</td>
               <td>₱{{ (item.quantity * item.price_at_sale).toFixed(2) }}</td>
             </tr>
+            <tr v-if="!saleItems.length">
+              <td colspan="4" class="empty-state-cell">No sale items found.</td>
+            </tr>
           </tbody>
         </table>
+        </div>
         <div class="sale-summary">
           <div>Subtotal: ₱{{ selectedSale.total_amount.toFixed(2) }}</div>
           <div>Professional Fee: ₱{{ selectedSale.professional_fee.toFixed(2) }}</div>
@@ -629,142 +422,7 @@ const exportCSV = async () => {
           <div>Change: ₱{{ (selectedSale.change || 0).toFixed(2) }}</div>
         </div>
 
-        <button @click="closeModal">Close</button>
-      </div>
-    </div>
-
-    <!-- EDIT / ADD SALE MODAL -->
-    <div v-if="showEdit" class="modal-backdrop">
-      <div class="modal modal-wide">
-        <h2>{{ modalMode === 'edit' ? `Edit Sale #${editSale.id}` : 'Add New Sale' }}</h2>
-
-        <!-- CUSTOMER SEARCH -->
-        <div class="customer-search" style="position: relative; max-width: 300px; margin-bottom: 10px;">
-          <input
-            type="text"
-            placeholder="Search customer..."
-            v-model="customerKeyword"
-            style="width: 100%; box-sizing: border-box; padding: 6px; text-align: left;"
-          />
-
-          <!-- SEARCH RESULTS DROPDOWN -->
-          <div v-if="customerResults.length"
-              class="search-results"
-              style="position: absolute; top: 36px; left: 0; right: 0; max-height: 150px; overflow-y: auto; background: white; border: 1px solid #ccc; z-index: 10;">
-            <div v-for="c in customerResults" 
-                :key="c.id" 
-                class="search-item" 
-                @click="selectCustomer(c)"
-                style="padding: 6px; cursor: pointer;">
-              {{ c.name }}
-            </div>
-          </div>
-
-          <!-- SELECTED CUSTOMER DISPLAY -->
-          <div v-if="selectedCustomer"
-              style="margin-top: 4px; display: flex; align-items: center; gap: 6px; font-size: 14px;">
-            Selected: <strong>{{ selectedCustomer.name }}</strong>
-            <button @click="clearCustomer" style="padding: 2px 6px; font-size: 12px;">✕</button>
-          </div>
-        </div>
-
-
-<!-- MEDICINE SEARCH -->
-<div class="add-medicine" style="position: relative; max-width: 300px; margin-bottom: 10px;">
-  <input
-    type="text"
-    placeholder="Search medicine..."
-    v-model="medKeyword"
-    style="width: 100%; box-sizing: border-box; padding: 6px; text-align: left;"
-  />
-
-  <!-- SEARCH RESULTS DROPDOWN -->
-  <div v-if="medResults.length"
-       class="search-results"
-       style="position: absolute; top: 36px; left: 0; right: 0; max-height: 150px; overflow-y: auto; background: white; border: 1px solid #ccc; z-index: 10;">
-    <div v-for="med in medResults"
-         :key="med.id"
-         class="search-item"
-         @click="addMedicine(med)"
-         style="padding: 6px; cursor: pointer;">
-      <strong>{{ med.name }}</strong>
-      <div class="generic">{{ med.generic_name }}</div>
-    </div>
-  </div>
-</div>
-
-
-
-        <!-- ITEMS TABLE -->
-        <table>
-          <thead>
-            <tr>
-              <th>Medicine</th>
-              <th width="60">Qty</th>
-              <th width="220">Price</th>
-              <th width="120">Subtotal</th>
-              <th width="40"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(item, index) in editItems" :key="index">
-              <td>
-                <div>{{ item.medicine_name }}</div>
-                <div class="generic">{{ item.generic_name }}</div>
-              </td>
-              <td><input type="number" min="1" v-model.number="item.qty" style="width:60px;text-align:center;" /></td>
-              <td>
-                <div class="price-buttons">
-                  <button 
-                    class="reg"
-                    :class="{ active: item.price_mode==='regular' }"
-                    @click="setRegular(item)">
-                    REG ₱{{ item.regular_price.toFixed(2) }}
-                  </button>
-
-                  <button 
-                    class="disc"
-                    :class="{ active: item.price_mode==='discounted' }"
-                    @click="setDiscount(item)">
-                    DISC ₱{{ item.discounted_price.toFixed(2) }}
-                  </button>
-                </div>
-                <input type="number" step="0.01" v-model.number="item.price" @input="manualPrice(item)" />
-              </td>
-              <td>₱{{ (item.qty * item.price).toFixed(2) }}</td>
-              <td><button class="danger" @click="removeItem(index)">✕</button></td>
-            </tr>
-          </tbody>
-        </table>
-
-        <!-- FEES -->
-        <div class="edit-totals">
-          <label>Prof Fee <input type="number" v-model.number="editSale.professional_fee" /></label>
-          <label>Discount <input type="number" v-model.number="editSale.discount" /></label>
-        </div>
-
-        <!-- PAYMENT -->
-        <div class="payment-section" style="margin-top: 12px; display: flex; gap: 12px; align-items: center;">
-          <label>
-            Money Given
-            <input type="number" min="0" v-model.number="editSale.money_given" style="width: 120px; text-align:right;" />
-          </label>
-
-          <label>
-            Change
-            <input type="number" :value="changeDue.toFixed(2)" disabled style="width: 120px; text-align:right; background:#f5f5f5;" />
-          </label>
-        </div>
-
-
-
-        <h3>Total: ₱{{ editGrandTotal.toFixed(2) }}</h3>
-
-        <!-- ACTIONS -->
-        <div class="modal-actions">
-          <button @click="saveModalSale">{{ modalMode==='edit' ? 'Save Changes' : 'Save Sale' }}</button>
-          <button class="danger" @click="showEdit=false">Cancel</button>
-        </div>
+        <button class="secondary btn-block-mobile" @click="closeModal">Close</button>
       </div>
     </div>
 
@@ -775,31 +433,8 @@ const exportCSV = async () => {
 <style scoped>
 /* Reuse previous styles + voided status */
 .medicines-page { margin: auto; padding: 20px; overflow-x: hidden; }
-body.dark-mode .medicines-page { background-color: #121212; color: #eee; }
-
-.top-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
-.top-bar input, .top-bar select { min-height: 40px; padding: 8px 12px; border-radius: 8px; border: 1px solid #ccc; background: #fff; color: #222; font-size: 16px; }
-body.dark-mode .top-bar input, body.dark-mode .top-bar select { background-color: #1c1c1c; border-color: #333; color: #eee; }
-
-.items-per-page { display: flex; align-items: center; gap: 4px; }
-
-table { width: 100%; border-collapse: collapse; white-space: nowrap; }
-th, td { border: 1px solid #ccc; padding: 8px; }
-body.dark-mode table, body.dark-mode th, body.dark-mode td { border-color: #333; }
-
-button { min-height: 40px; padding: 8px 14px; border-radius: 8px; border: none; background-color: #1abc9c; color: #fff; cursor: pointer; }
-body.dark-mode button { background-color: #16a085; }
 
 .actions-td button { padding: 6px 10px; }
-.danger { background-color: #e74c3c; }
-
-.pagination { margin-top: 12px; display: flex; justify-content: center; gap: 6px; }
-.pagination button.active { background-color: #1abc9c; }
-
-.modal-backdrop { overflow-y:auto; position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; z-index: 2000; }
-.modal { background: #fff; padding: 20px; border-radius: 10px; width: 90%; max-width: 600px; }
-body.dark-mode .modal { background: #1e1e1e; color: #eee; }
-.close-btn { margin-top: 12px; width: 100%; }
 
 .status-ok { color: #1abc9c; font-weight: 600; }
 .status-voided { color: #e74c3c; font-weight: 700; }
@@ -809,227 +444,30 @@ body.dark-mode .modal { background: #1e1e1e; color: #eee; }
 body.dark-mode .med-generic { color: #aaa; }
 
 @media (max-width: 768px) {
-  .top-bar { flex-direction: column; }
-  button { width: 100%; }
+  .top-bar > :deep(.date-icon-btn) { width: 100%; }
 }
 
-.modal-wide {
-  max-width: 900px;
+/* Make the datepicker root shrink-wrap its trigger so it sits inline */
+:deep(.dp__main) {
+  display: inline-flex;
+  width: auto;
 }
 
-.add-medicine {
-  margin-bottom: 12px;
-  position: relative;
-}
-
-.search-results {
+.date-clear {
   position: absolute;
-  z-index: 10;
-  background: #fff;
-  border: 1px solid #ccc;
-  width: 100%;
-  max-height: 200px;
-  overflow-y: auto;
-  border-radius: 8px;
-}
-
-body.dark-mode .search-results {
-  background: #1e1e1e;
-  border-color: #333;
-}
-
-.search-item {
-  padding: 10px;
-  cursor: pointer;
-}
-
-.search-item:hover {
-  background: #f0f0f0;
-}
-
-body.dark-mode .search-item:hover {
-  background: #2a2a2a;
-}
-
-.price-buttons {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 4px;
-}
-
-.price-buttons button {
-  padding: 4px 8px;
-  font-size: 13px;
-}
-
-.price-buttons button.active {
-  background: #1abc9c;
-}
-
-.edit-totals {
-  display: flex;
-  gap: 12px;
-  margin: 12px 0;
-}
-.price-btn {
-  padding: 6px 10px;
-  border-radius: 6px;
-  border: 2px solid transparent; /* 👈 default */
-  color: #fff;
-  cursor: pointer;
-  opacity: 0.6;
-  transition: border-color 0.15s ease, opacity 0.15s ease;
-}
-
-/* ACTIVE STATE → BORDER ONLY */
-.price-btn.active {
-  opacity: 1;
-  font-weight: 600;
-  border-color: #000; /* default for light mode */
-}
-
-/* REGULAR */
-.price-btn.reg {
-  background-color: #1abc9c;
-}
-
-/* DISCOUNT */
-.price-btn.disc {
-  background-color: #3498db;
-}
-
-/* DARK MODE BORDER */
-body.dark-mode .price-btn.active {
-  border-color: #fff;
-}
-
-/* Modal input styling */
-.modal input[type="number"],
-.modal input[type="date"],
-.modal input[type="text"] {
-  min-height: 36px;
-  padding: 6px 10px;
-  margin: 4px 0;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  font-size: 14px;
-  background-color: #fff;
-  color: #222;
-}
-
-body.dark-mode .modal input[type="number"],
-body.dark-mode .modal input[type="date"],
-body.dark-mode .modal input[type="text"] {
-  background-color: #1e1e1e;
-  border-color: #333;
-  color: #eee;
-}
-
-.customer-search {
-  position: relative;
-  margin-bottom: 10px;
-}
-.customer-search input {
-  width: 100%;
-  padding: 6px 10px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-}
-
-.qty-input {
-  width: 60px; /* smaller width */
-  text-align: center;
-}
-
-.price-buttons {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 4px;
-}
-
-.price-buttons button {
-  flex: 1;
-  padding: 4px 6px;
-  font-size: 12px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  background: #f3f3f3;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-/* REGULAR */
-.price-buttons button.reg {
-  border-color: #3498db;
-  color: #3498db;
-}
-
-/* DISCOUNT */
-.price-buttons button.disc {
-  border-color: #27ae60;
-  color: #27ae60;
-}
-
-/* HOVER */
-.price-buttons button:hover {
-  background: #eaeaea;
-}
-
-/* ACTIVE STATE */
-.price-buttons button.active {
-  color: #fff;
-  font-weight: bold;
-}
-
-.price-buttons button.reg.active {
-  background: #3498db;
-  border-color: #3498db;
-}
-
-.price-buttons button.disc.active {
-  background: #27ae60;
-  border-color: #27ae60;
-}
-
-.sale-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.sale-meta {
-  font-size: 13px;
-  color: #666;
-}
-
-body.dark-mode .sale-meta {
-  color: #aaa;
-}
-
-.badge {
-  padding: 6px 10px;
-  border-radius: 8px;
-  font-weight: 700;
-  font-size: 12px;
-}
-
-.badge-ok {
-  background: #1abc9c;
-  color: white;
-}
-
-.badge-voided {
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
   background: #e74c3c;
-  color: white;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  font-style: normal;
+  cursor: pointer;
 }
-
-.sale-summary hr {
-  margin: 8px 0;
-  border: none;
-  border-top: 1px dashed #ccc;
-}
-
-
+.date-clear:hover { background: #c0392b; }
 
 </style>

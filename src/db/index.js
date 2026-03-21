@@ -1,7 +1,7 @@
 import { openDB } from 'idb';
 
 export const DB_NAME = 'pharmacy_pos_db';
-export const DB_VERSION = 14; // 🔼 bump version
+export const DB_VERSION = 18; // 🔼 bump version
 
 export const dbPromise = openDB(DB_NAME, DB_VERSION, {
   upgrade(db, oldVersion, newVersion, transaction) {
@@ -70,6 +70,7 @@ export const dbPromise = openDB(DB_NAME, DB_VERSION, {
       const store = db.createObjectStore('sales', { keyPath: 'id', autoIncrement: true });
       store.createIndex('date', 'date');
       store.createIndex('customer_id', 'customer_id');
+      store.createIndex('customer_purchased_date', ['customer_id', 'purchased_date']);
       store.createIndex('total_amount', 'total_amount');
       store.createIndex('final_total', 'final_total');
       store.createIndex('professional_fee', 'professional_fee');
@@ -80,19 +81,23 @@ export const dbPromise = openDB(DB_NAME, DB_VERSION, {
       // 🔹 NEW
       store.createIndex('points_used', 'points_used');
       store.createIndex('points_discount', 'points_discount');
-    } 
-    else if (oldVersion < 12) {
+    } else {
       const store = transaction.objectStore('sales');
-      if (!store.indexNames.contains('professional_fee')) store.createIndex('professional_fee', 'professional_fee');
-      if (!store.indexNames.contains('discount')) store.createIndex('discount', 'discount');
-      if (!store.indexNames.contains('money_given')) store.createIndex('money_given', 'money_given');
-      if (!store.indexNames.contains('change')) store.createIndex('change', 'change');
+      if (oldVersion < 12) {
+        if (!store.indexNames.contains('professional_fee')) store.createIndex('professional_fee', 'professional_fee');
+        if (!store.indexNames.contains('discount')) store.createIndex('discount', 'discount');
+        if (!store.indexNames.contains('money_given')) store.createIndex('money_given', 'money_given');
+        if (!store.indexNames.contains('change')) store.createIndex('change', 'change');
 
-      // 🔹 NEW SAFE INDEX ADD
-      if (!store.indexNames.contains('points_used')) store.createIndex('points_used', 'points_used');
-      if (!store.indexNames.contains('points_discount')) store.createIndex('points_discount', 'points_discount');
-      if (!store.indexNames.contains('purchased_date')) {
-        store.createIndex('purchased_date', 'purchased_date')
+        // 🔹 NEW SAFE INDEX ADD
+        if (!store.indexNames.contains('points_used')) store.createIndex('points_used', 'points_used');
+        if (!store.indexNames.contains('points_discount')) store.createIndex('points_discount', 'points_discount');
+        if (!store.indexNames.contains('purchased_date')) {
+          store.createIndex('purchased_date', 'purchased_date')
+        }
+      }
+      if (oldVersion < 18 && !store.indexNames.contains('customer_purchased_date')) {
+        store.createIndex('customer_purchased_date', ['customer_id', 'purchased_date'])
       }
     }
 
@@ -126,14 +131,17 @@ export const dbPromise = openDB(DB_NAME, DB_VERSION, {
     if (!db.objectStoreNames.contains('points_history')) {
       const store = db.createObjectStore('points_history', { keyPath: 'id', autoIncrement: true });
       store.createIndex('customer_id', 'customer_id');
+      store.createIndex('customer_date', ['customer_id', 'date']);
       store.createIndex('date', 'date');
       store.createIndex('type', 'type');
       store.createIndex('related_sale_id', 'related_sale_id');
-    } 
-    else if (oldVersion < 12) {
+    } else {
       const store = transaction.objectStore('points_history');
-      if (!store.indexNames.contains('related_sale_id')) {
+      if (oldVersion < 12 && !store.indexNames.contains('related_sale_id')) {
         store.createIndex('related_sale_id', 'related_sale_id');
+      }
+      if (oldVersion < 18 && !store.indexNames.contains('customer_date')) {
+        store.createIndex('customer_date', ['customer_id', 'date']);
       }
     }
 
@@ -142,6 +150,36 @@ export const dbPromise = openDB(DB_NAME, DB_VERSION, {
     ========================== */
     if (!db.objectStoreNames.contains('yearly_points')) {
       db.createObjectStore('yearly_points', { keyPath: ['customer_id', 'year'] });
+    }
+
+    /* =========================
+       APP PAGES (visibility settings)
+    ========================== */
+    if (!db.objectStoreNames.contains('pages')) {
+      const store = db.createObjectStore('pages', { keyPath: 'name' });
+      // store documents like { name: 'Analytics', visible: true }
+      store.createIndex('visible', 'visible');
+    } else if (oldVersion < 15) {
+      const store = transaction.objectStore('pages');
+      if (!store.indexNames.contains('visible')) {
+        store.createIndex('visible', 'visible');
+      }
+    }
+
+    /* =========================
+       APP SETTINGS (key-value store)
+    ========================== */
+    if (!db.objectStoreNames.contains('app_settings')) {
+      db.createObjectStore('app_settings', { keyPath: 'key' })
+      // stores documents like { key: 'settings-pin', value: '1234' }
+    }
+
+    /* =========================
+       DRAFT SALES
+    ========================== */
+    if (!db.objectStoreNames.contains('draft_sales')) {
+      const store = db.createObjectStore('draft_sales', { keyPath: 'id', autoIncrement: true });
+      store.createIndex('created_at', 'created_at');
     }
   }
 });

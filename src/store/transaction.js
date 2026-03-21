@@ -5,7 +5,9 @@ export default {
 
   state: {
     pointsHistory: [],
-    sales: []
+    sales: [],
+    pointsTotal: 0,
+    salesTotal: 0
   },
 
   mutations: {
@@ -14,52 +16,108 @@ export default {
     },
     SET_SALES(state, data) {
       state.sales = data
+    },
+    SET_POINTS_TOTAL(state, total) {
+      state.pointsTotal = total
+    },
+    SET_SALES_TOTAL(state, total) {
+      state.salesTotal = total
     }
   },
 
   actions: {
     /* =========================
-       LOAD POINTS HISTORY
+       LOAD POINTS HISTORY PAGE
     ========================== */
-    async loadPointsHistory({ commit }, customerId = null) {
+    async loadPointsHistoryPage(
+      { commit },
+      { customerId = null, page = 1, perPage = 10, startDate = '', endDate = '', filterType = 'all', sortOrder = 'desc' } = {}
+    ) {
       const db = await dbPromise
-      let data = []
+      const source = customerId
+        ? db.transaction('points_history').store.index('customer_date')
+        : db.transaction('points_history').store.index('date')
+      const direction = sortOrder === 'asc' ? 'next' : 'prev'
+      const range = customerId
+        ? buildCustomerDateRange(customerId, startDate, endDate)
+        : buildDateRange(startDate, endDate)
 
-      if (customerId) {
-        const index = db.transaction('points_history')
-          .store
-          .index('customer_id')
-
-        data = await index.getAll(customerId)
+      let total = 0
+      if (filterType === 'all') {
+        total = await source.count(range)
       } else {
-        data = await db.getAll('points_history')
+        let countCursor = await source.openCursor(range, direction)
+        while (countCursor) {
+          if (countCursor.value.type === filterType) {
+            total += 1
+          }
+          countCursor = await countCursor.continue()
+        }
       }
 
-      data.sort((a, b) => new Date(b.date) - new Date(a.date))
-      commit('SET_POINTS_HISTORY', data)
-      return data
+      const offset = (page - 1) * perPage
+      const rows = []
+      let matched = 0
+      let cursor = await source.openCursor(range, direction)
+      while (cursor) {
+        const row = cursor.value
+        if (filterType !== 'all' && row.type !== filterType) {
+          cursor = await cursor.continue()
+          continue
+        }
+        if (matched >= offset && rows.length < perPage) {
+          rows.push(row)
+        }
+        matched += 1
+        if (rows.length >= perPage) {
+          break
+        }
+        cursor = await cursor.continue()
+      }
+
+      commit('SET_POINTS_HISTORY', rows)
+      commit('SET_POINTS_TOTAL', total)
+      return rows
     },
 
     /* =========================
-       LOAD SALES
+       LOAD SALES PAGE
     ========================== */
-    async loadSales({ commit }, customerId = null) {
+    async loadSalesPage(
+      { commit },
+      { customerId = null, page = 1, perPage = 10, startDate = '', endDate = '', sortOrder = 'desc' } = {}
+    ) {
       const db = await dbPromise
-      let data = []
+      const source = customerId
+        ? db.transaction('sales').store.index('customer_purchased_date')
+        : db.transaction('sales').store.index('purchased_date')
+      const direction = sortOrder === 'asc' ? 'next' : 'prev'
+      const range = customerId
+        ? buildCustomerDateRange(customerId, startDate, endDate)
+        : buildDateRange(startDate, endDate)
 
-      if (customerId) {
-        const index = db.transaction('sales')
-          .store
-          .index('customer_id')
+      const total = await source.count(range)
+      const offset = (page - 1) * perPage
+      const rows = []
+      let skipped = 0
+      let cursor = await source.openCursor(range, direction)
 
-        data = await index.getAll(customerId)
-      } else {
-        data = await db.getAll('sales')
+      while (cursor) {
+        if (skipped < offset) {
+          skipped += 1
+          cursor = await cursor.continue()
+          continue
+        }
+        rows.push(cursor.value)
+        if (rows.length >= perPage) {
+          break
+        }
+        cursor = await cursor.continue()
       }
 
-      data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      commit('SET_SALES', data)
-      return data
+      commit('SET_SALES', rows)
+      commit('SET_SALES_TOTAL', total)
+      return rows
     },
 
     /* =========================
@@ -78,8 +136,6 @@ export default {
         notes: 'Auto from sale',
         date: new Date().toISOString()
       })
-
-      await dispatch('loadPointsHistory', payload.customer_id)
     }
   },
 
@@ -88,4 +144,33 @@ export default {
       return state.pointsHistory.reduce((sum, p) => sum + p.points, 0)
     }
   }
+}
+
+function buildDateRange(startDate, endDate) {
+  if (startDate && endDate) {
+    return IDBKeyRange.bound(`${startDate}T00:00:00`, `${endDate}T23:59:59`)
+  }
+  if (startDate) {
+    return IDBKeyRange.lowerBound(`${startDate}T00:00:00`)
+  }
+  if (endDate) {
+    return IDBKeyRange.upperBound(`${endDate}T23:59:59`)
+  }
+  return null
+}
+
+function buildCustomerDateRange(customerId, startDate, endDate) {
+  if (startDate && endDate) {
+    return IDBKeyRange.bound(
+      [customerId, `${startDate}T00:00:00`],
+      [customerId, `${endDate}T23:59:59`]
+    )
+  }
+  if (startDate) {
+    return IDBKeyRange.lowerBound([customerId, `${startDate}T00:00:00`])
+  }
+  if (endDate) {
+    return IDBKeyRange.upperBound([customerId, `${endDate}T23:59:59`])
+  }
+  return IDBKeyRange.bound([customerId, ''], [customerId, '\uffff'])
 }

@@ -15,6 +15,7 @@
       :key="p"
       @click="setPage(p)"
       :class="{ active: page === p }"
+      :aria-current="page === p ? 'page' : null"
     >
       {{ p }}
     </button>
@@ -66,14 +67,3 @@ function setPage(p) {
 }
 </script>
 
-<style scoped>
-.pagination button.active {
-  background-color: #1abc9c;
-  color: #fff;
-}
-
-.pagination span {
-  display: inline-block;
-  padding: 6px 8px;
-}
-</style>

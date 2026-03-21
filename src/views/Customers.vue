@@ -1,5 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, reactive } from 'vue'
+import { useRoute } from 'vue-router'
+import SearchInput from '../components/SearchInput.vue'
 import { useStore } from 'vuex'
 import Swal from 'sweetalert2'
 import { useRouter } from 'vue-router'
@@ -11,11 +13,27 @@ const store = useStore()
    STATE
 ====================== */
 const page = ref(1)
+const route = useRoute()
 const perPage = ref(10)
 
 const search = ref('')
 const sortBy = ref('id')    // created_at | name
 const sortOrder = ref('desc')        // asc | desc
+
+/* ======================
+   COLUMN VISIBILITY
+====================== */
+const _custDefaultCols = { name: true, address: true, points: true }
+const colMenuOpen = ref(false)
+const visibleCols = ref({ ..._custDefaultCols, ...JSON.parse(localStorage.getItem('col-vis-customers') || '{}') })
+watch(visibleCols, v => localStorage.setItem('col-vis-customers', JSON.stringify(v)), { deep: true })
+const allCols = [
+  { key: 'name', label: 'Name' },
+  { key: 'address', label: 'Address' },
+  { key: 'points', label: 'Points' },
+]
+const visibleColumnCount = computed(() => allCols.filter(col => visibleCols.value[col.key]).length + 1)
+const toggleCol = (key) => { visibleCols.value[key] = !visibleCols.value[key] }
 
 const modal = ref(null)
 const pointsModal = ref(null)
@@ -101,22 +119,48 @@ function openEdit(c) {
 
 function close() {
   modal.value.close()
+  // reset form when modal closes
+  form.value = { id: null, name: '', phone: '', email: '', address: '' }
 }
 
 /* ======================
    SAVE CUSTOMER
 ====================== */
 async function save() {
-  if (!form.value.name) return
-
-  if (form.value.id) {
-    await store.dispatch('customers/editCustomer', form.value)
-  } else {
-    await store.dispatch('customers/addCustomer', form.value)
+  if (!form.value.name) {
+    await Swal.fire({
+      icon: 'warning',
+      title: 'Name is required',
+      text: 'Please enter a customer name before saving.'
+    })
+    return
   }
 
-  close()
-  await load()
+  try {
+    const isEditing = !!form.value.id
+
+    if (isEditing) {
+      await store.dispatch('customers/editCustomer', form.value)
+    } else {
+      await store.dispatch('customers/addCustomer', form.value)
+    }
+
+    close()
+    await load()
+    await Swal.fire({
+      icon: 'success',
+      title: isEditing ? 'Customer updated' : 'Customer added',
+      timer: 1200,
+      showConfirmButton: false
+    })
+  } catch (err) {
+    console.error('Failed to save customer', err)
+    await Swal.fire({
+      icon: 'error',
+      title: 'Save failed',
+      text: err.message || 'Unable to save the customer.'
+    })
+  }
 }
 
 /* ======================
@@ -134,8 +178,23 @@ async function remove(c) {
 
   if (!ok.isConfirmed) return
 
-  await store.dispatch('customers/deleteCustomer', c)
-  await load()
+  try {
+    await store.dispatch('customers/deleteCustomer', c)
+    await load()
+    await Swal.fire({
+      icon: 'success',
+      title: 'Customer deleted',
+      timer: 1200,
+      showConfirmButton: false
+    })
+  } catch (err) {
+    console.error('Failed to delete customer', err)
+    await Swal.fire({
+      icon: 'error',
+      title: 'Delete failed',
+      text: err.message || 'Unable to delete this customer.'
+    })
+  }
 }
 
 /* ======================
@@ -150,10 +209,21 @@ function openPointsModal(c) {
 
 function closePointsModal() {
   pointsModal.value.close()
+  // reset points form
+  pointsForm.customer_id = null
+  pointsForm.points = 0
+  pointsForm.note = ''
 }
 
 async function savePointsAdjustment() {
-  if (!pointsForm.points) return
+  if (!pointsForm.points) {
+    await Swal.fire({
+      icon: 'warning',
+      title: 'No points entered',
+      text: 'Enter points to add or deduct before saving.'
+    })
+    return
+  }
   closePointsModal()
   const confirm = await Swal.fire({
     title: 'Confirm points adjustment?',
@@ -165,32 +235,73 @@ async function savePointsAdjustment() {
 
   if (!confirm.isConfirmed) return
 
-  await store.dispatch('customers/addManualPoints', {
-    customer_id: pointsForm.customer_id,
-    points: pointsForm.points,
-    note: pointsForm.note
-  })
+  try {
+    await store.dispatch('customers/addManualPoints', {
+      customer_id: pointsForm.customer_id,
+      points: pointsForm.points,
+      note: pointsForm.note
+    })
 
-  Swal.fire({
-    icon: 'success',
-    title: 'Points updated',
-    timer: 1200,
-    showConfirmButton: false
-  })
-
-  closePointsModal()
-  await load()
+    await load()
+    await Swal.fire({
+      icon: 'success',
+      title: 'Points updated',
+      timer: 1200,
+      showConfirmButton: false
+    })
+    closePointsModal()
+  } catch (err) {
+    console.error('Failed to update points', err)
+    await Swal.fire({
+      icon: 'error',
+      title: 'Update failed',
+      text: err.message || 'Unable to update customer points.'
+    })
+  }
 }
 
 /* ======================
    INIT
 ====================== */
-onMounted(load)
+onMounted(() => {
+  const q = route.query
+  const qPage = Number(q.page || 0)
+  if (qPage && qPage > 0) page.value = qPage
+  if (q.search !== undefined) search.value = q.search
+  const qPer = Number(q.perPage || 0)
+  if (qPer && qPer > 0) perPage.value = qPer
+  if (q.sortBy) sortBy.value = q.sortBy
+  if (q.sortOrder) sortOrder.value = q.sortOrder
+  load()
+  // ensure native dialog close resets forms if user dismisses via ESC/outside click
+  if (modal.value) {
+    modal.value.addEventListener('close', () => {
+      form.value = { id: null, name: '', phone: '', email: '', address: '' }
+    })
+  }
+  if (pointsModal.value) {
+    pointsModal.value.addEventListener('close', () => {
+      pointsForm.customer_id = null
+      pointsForm.points = 0
+      pointsForm.note = ''
+    })
+  }
+})
 
 const router = useRouter()
 
 function goToTransactionHistory(customerId) {
-  router.push({ name: 'TransactionHistory', params: { id: customerId } })
+  router.push({
+    name: 'TransactionHistory',
+    params: { id: customerId },
+    query: {
+      page: page.value,
+      search: search.value || undefined,
+      perPage: perPage.value,
+      sortBy: sortBy.value,
+      sortOrder: sortOrder.value
+    }
+  })
 }
 </script>
 
@@ -199,57 +310,65 @@ function goToTransactionHistory(customerId) {
     <h1>Customers</h1>
 
     <!-- Top bar -->
-    <div class="top-bar">
-      <div class="top-bar-actions">
-        <input v-model="search" placeholder="Search name / phone / email" class="input" />
+      <div class="top-bar">
+        <SearchInput v-model="search" placeholder="Search name / phone / email" :inputClass="'input'" />
 
-        <select v-model.number="perPage" class="input per-page">
+        <select v-model.number="perPage" class="select-field per-page">
           <option :value="5">5</option>
           <option :value="10">10</option>
           <option :value="20">20</option>
         </select>
 
-        <select v-model="sortBy" class="input">
+        <select v-model="sortBy" class="select-field">
         <option value="id">Newest</option>
         <option value="name">Name</option>
         <option value="points">Points</option>
         </select>
 
-        <select v-model="sortOrder" class="input">
+        <select v-model="sortOrder" class="select-field">
           <option value="desc">Desc</option>
           <option value="asc">Asc</option>
         </select>
 
         <button @click="openAdd">Add Customer</button>
       </div>
-    </div>
 
     <!-- Table -->
-    <div class="table-wrap">
+    <div class="table-wrap" :class="{ 'table-wrap-menu-open': colMenuOpen }">
       <table class="table w-full">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Address</th>
-            <th>Points</th>
-            <th class="w-48">Actions</th>
+            <th v-if="visibleCols.name">Name</th>
+            <th v-if="visibleCols.address">Address</th>
+            <th v-if="visibleCols.points">Points</th>
+            <th class="col-actions">
+              <div class="th-actions-head">
+                Actions
+                <div class="col-toggle-wrap">
+                  <button class="col-icon-btn" @click.stop="colMenuOpen = !colMenuOpen" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                  <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                  <div v-if="colMenuOpen" class="col-menu">
+                    <div class="col-menu-title">Columns</div>
+                    <label v-for="col in allCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                  </div>
+                </div>
+              </div>
+            </th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="c in paginated" :key="c.id"   @click="goToTransactionHistory(c.id)"
-  style="cursor: pointer;">
-            <td>{{ c.name }}</td>
-            <td>{{ c.address || '-' }}</td>
-            <td class="font-semibold">{{ c.points }}</td>
-            <td class="flex gap-1" style="
-                    display: flex;
-                    justify-content: center;
-                    gap: 8px;
-                ">
-              <button class="btn-sm" @click.stop="openEdit(c)">Edit</button>
-              <button class="btn-sm danger" @click.stop="remove(c)">Delete</button>
-              <button class="secondary" @click.stop="openPointsModal(c)">Adjust Points</button>
+          <tr v-for="c in paginated" :key="c.id" @click="goToTransactionHistory(c.id)" style="cursor: pointer;">
+            <td v-if="visibleCols.name">{{ c.name }}</td>
+            <td v-if="visibleCols.address">{{ c.address || '-' }}</td>
+            <td v-if="visibleCols.points">{{ c.points }}</td>
+            <td class="col-actions actions-td">
+              <button class="warning btn" @click.stop="openEdit(c)">Edit</button>
+              <button class="danger btn" @click.stop="remove(c)">Delete</button>
+              <button class="secondary btn" @click.stop="openPointsModal(c)">Adjust Points</button>
             </td>
+          </tr>
+          <tr v-if="!paginated.length">
+            <td :colspan="visibleColumnCount" class="empty-state-cell">No customers found.</td>
           </tr>
         </tbody>
       </table>
@@ -259,7 +378,7 @@ function goToTransactionHistory(customerId) {
     <Pagination v-model:page="page" :total-pages="totalPages" :max-pages="5" />
 
     <!-- CUSTOMER MODAL -->
-    <dialog ref="modal" class="modal">
+    <dialog ref="modal" class="modal app-modal-dialog modal-sm">
       <h3>{{ form.id ? 'Edit Customer' : 'Add Customer' }}</h3>
 
       <div class="modal-form">
@@ -270,13 +389,13 @@ function goToTransactionHistory(customerId) {
       </div>
 
       <div class="modal-actions">
-        <button class="danger" @click="close">Cancel</button>
+        <button class="secondary" @click="close">Cancel</button>
         <button @click="save">Save</button>
       </div>
     </dialog>
 
     <!-- POINTS MODAL -->
-    <dialog ref="pointsModal" class="modal">
+    <dialog ref="pointsModal" class="modal app-modal-dialog modal-sm">
       <h3>Adjust Customer Points</h3>
 
       <div class="modal-form">
@@ -289,7 +408,7 @@ function goToTransactionHistory(customerId) {
       </div>
 
       <div class="modal-actions">
-        <button class="danger" @click="closePointsModal">Cancel</button>
+        <button class="secondary" @click="closePointsModal">Cancel</button>
         <button @click="savePointsAdjustment">Save</button>
       </div>
     </dialog>
@@ -306,171 +425,19 @@ function goToTransactionHistory(customerId) {
 }
 
 /* ======================
-   TOP BAR
-====================== */
-.top-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.top-bar h1 {
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.top-bar-actions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-/* ======================
-   INPUTS (GLOBAL)
-====================== */
-.input,
-select,
-input {
-  height: 44px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  background-color: #fff;
-  color: #222;
-  font-size: 15px;
-}
-
-input::placeholder {
-  color: #888;
-}
-
-input:focus,
-select:focus {
-  outline: none;
-  border-color: #1abc9c;
-  box-shadow: 0 0 0 2px rgba(26, 188, 156, 0.2);
-}
-
-body.dark-mode input,
-body.dark-mode select {
-  background-color: #1c1c1c;
-  border-color: #333;
-  color: #eee;
-}
-
-body.dark-mode input::placeholder {
-  color: #aaa;
-}
-
-/* ======================
-   BUTTONS
-====================== */
-button {
-  height: 44px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: none;
-  background-color: #1abc9c;
-  color: #fff;
-  cursor: pointer;
-}
-
-button:disabled {
-  opacity: 0.5;
-}
-
-body.dark-mode button {
-  background-color: #16a085;
-}
-
-.danger {
-  background-color: #e74c3c;
-}
-
-/* ======================
-   TABLE
-====================== */
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th,
-td {
-  border: 1px solid #ccc;
-  padding: 8px;
-}
-
-body.dark-mode th,
-body.dark-mode td {
-  border-color: #333;
-}
-
-.actions-td {
-  display: flex;
-  gap: 6px;
-}
-
-/* ======================
-   PAGINATION
-====================== */
-.pagination {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-/* ======================
    MODAL
 ====================== */
-.modal {
-  border-radius: 12px;
-  padding: 20px;
-  width: 90%;
-  max-width: 420px;
-  background-color: #fff;
-  position: absolute;
-  z-index: 10;
-}
-
-body.dark-mode .modal {
-  background-color: #1e1e1e;
-  color: #eee;
-}
-
 /* STACK INPUTS */
 .modal-form {
-  display: flex;
-  flex-direction: column;
   gap: 12px;
   margin: 14px 0;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
 }
 
 /* ======================
    MOBILE
 ====================== */
 @media (max-width: 768px) {
-  .top-bar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .top-bar-actions {
-    flex-direction: column;
-  }
-
-  button {
+  .modal-actions > button {
     width: 100%;
   }
 }

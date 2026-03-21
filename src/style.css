@@ -1,5 +1,5 @@
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Poppins', system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
@@ -12,12 +12,15 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-    --bg-color: #f5f5f5;
+    --bg-color: #e8edf1;
   --text-color: #222;
-  --card-bg: #fff;
-  --modal-bg: #fff;
+  --card-bg: #f8fafc;
+  --modal-bg: #f8fafc;
   --button-bg: #1abc9c;
   --button-text: #fff;
+  --datepicker-range-trail-bg: #d8f5ee;
+  --datepicker-range-trail-text: #115e59;
+  --datepicker-range-trail-border: #9adfcd;
 }
 
 
@@ -39,45 +42,16 @@ body {
 }
 
 
-body.dark-mode {
-  --bg-color: #1e1e1e;
-  --text-color: #eee;
-  --card-bg: #2c2c2c;
-  --modal-bg: #2c2c2c;
-  --button-bg: #16a085;
-  --button-text: #fff;
-}
-
 body {
   background-color: var(--bg-color);
   color: var(--text-color);
   margin: 0;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   transition: background-color 0.3s, color 0.3s;
 }
 
 h1 {
   font-size: 32px;
   line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
 }
 
 .card {
@@ -95,9 +69,6 @@ button:focus-visible {
   }
   a:hover {
     color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
   }
 }
 
@@ -137,7 +108,9 @@ input[type="date"]::-moz-calendar-picker-indicator {
   cursor: pointer;
 }
 
-/* Optional: make sure input text is visible in dark mode */
-body.dark-mode input[type="date"] {
-  color: #eee;
+.dp__theme_light {
+  --dp-range-between-dates-background-color: var(--datepicker-range-trail-bg);
+  --dp-range-between-dates-text-color: var(--datepicker-range-trail-text);
+  --dp-range-between-border-color: var(--datepicker-range-trail-border);
 }
+

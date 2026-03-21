@@ -1,10 +1,20 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import SearchInput from '../components/SearchInput.vue'
 import { useStore } from 'vuex'
+import { useRouter, useRoute } from 'vue-router'
 import Swal from 'sweetalert2'
 import { dbPromise } from '../db'
+import { reduceFromSource } from '../db/query'
+import { Haptics } from '@capacitor/haptics'
+import {
+  defaultInteractionSettings,
+  loadInteractionSettings,
+} from '../utils/interactionPreferences'
 
 const store = useStore()
+const router = useRouter()
+const route = useRoute()
 
 // ======================
 // POS STATE
@@ -35,6 +45,93 @@ const showSpecialDiscountModal = ref(false)
 const specialDiscount = ref(0)
 
 // ======================
+// DRAFT SALES
+// ======================
+const activeDraftId = ref(null) // id of the draft currently loaded into the cart
+
+const saveSaleAsDraft = async () => {
+  if (!cart.value.length) {
+    Swal.fire({ icon: 'warning', title: 'Cart is empty', text: 'Add items before saving as draft.', timer: 1500, showConfirmButton: false })
+    return
+  }
+  try {
+    const { value: name } = await Swal.fire({
+      title: 'Save as Draft',
+      input: 'text',
+      inputPlaceholder: 'e.g. Patient name / Notes',
+      inputLabel: 'Label (optional)',
+      showCancelButton: true,
+      confirmButtonText: 'Save Draft'
+    })
+    if (name === undefined) return
+
+    await store.dispatch('drafts/save', {
+      name: name || `Draft ${new Date().toLocaleTimeString()}`,
+      snapshot: {
+        cart: JSON.parse(JSON.stringify(cart.value)),
+        medicinesMap: JSON.parse(JSON.stringify(medicinesMap.value)),
+        customer: selectedCustomer.value ? JSON.parse(JSON.stringify(selectedCustomer.value)) : null,
+        professionalFee: professionalFee.value,
+        pointsConfirmed: pointsConfirmed.value,
+        redeemMultiplier: redeemMultiplier.value,
+        customerPoints: customerPoints.value,
+        specialDiscount: specialDiscount.value,
+        paymentMethod: paymentMethod.value
+      }
+    })
+
+    if (activeDraftId.value !== null) {
+      await store.dispatch('drafts/remove', activeDraftId.value)
+      activeDraftId.value = null
+    }
+
+    cart.value = []
+    professionalFee.value = 0
+    moneyGiven.value = 0
+    selectedCustomer.value = null
+    pointsConfirmed.value = false
+    redeemMultiplier.value = 1
+    specialDiscount.value = 0
+    customerPoints.value = 0
+    paymentMethod.value = 'cash'
+
+    await Swal.fire({ icon: 'success', title: 'Saved as draft!', timer: 1200, showConfirmButton: false })
+  } catch (err) {
+    console.error('Failed to save draft', err)
+    await Swal.fire({
+      icon: 'error',
+      title: 'Save failed',
+      text: err.message || 'Unable to save the sale as draft.'
+    })
+  }
+}
+
+const resumeDraft = (draft) => {
+  cart.value = draft.cart
+  Object.assign(medicinesMap.value, draft.medicinesMap || {})
+  selectedCustomer.value = draft.customer || null
+  professionalFee.value = draft.professionalFee || 0
+  pointsConfirmed.value = draft.pointsConfirmed || false
+  redeemMultiplier.value = draft.redeemMultiplier || 1
+  customerPoints.value = draft.customerPoints || 0
+  specialDiscount.value = draft.specialDiscount || 0
+  paymentMethod.value = draft.paymentMethod || 'cash'
+  moneyGiven.value = 0
+  activeDraftId.value = draft.id
+}
+
+onMounted(async () => {
+  await loadFeedbackSettings()
+  const draftId = Number(route.query.draft)
+  if (draftId) {
+    const draft = await store.dispatch('drafts/getDraftById', draftId)
+    if (draft) resumeDraft(draft)
+  }
+
+  window.addEventListener('interaction-settings-changed', handleInteractionSettingsChanged)
+})
+
+// ======================
 // CUSTOMER MODAL
 // ======================
 const showNewCustomerForm = ref(false)
@@ -52,12 +149,106 @@ const setActiveInput = (item, field) => {
   focusedField.value = field
 }
 
+const getQtyInputStyle = (value) => {
+  const digits = String(Math.max(0, Number(value) || 0)).length
+  const widthCh = Math.max(2, digits) + 1.4
+
+  return {
+    width: `${widthCh}ch`,
+    minWidth: '3.4rem',
+  }
+}
+
 const paymentMethod = ref('cash') // default
+const interactionSettings = ref({ ...defaultInteractionSettings })
+let numpadAudioContext = null
+
+const handleInteractionSettingsChanged = (event) => {
+  interactionSettings.value = {
+    ...defaultInteractionSettings,
+    ...(event.detail || {}),
+  }
+}
+
+const loadFeedbackSettings = async () => {
+  try {
+    interactionSettings.value = await loadInteractionSettings()
+  } catch (err) {
+    console.error('Failed to load interaction settings', err)
+    interactionSettings.value = { ...defaultInteractionSettings }
+  }
+}
+
+const getNumpadAudioContext = () => {
+  if (typeof window === 'undefined') return null
+
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext
+  if (!AudioContextClass) return null
+
+  if (!numpadAudioContext) {
+    numpadAudioContext = new AudioContextClass()
+  }
+
+  return numpadAudioContext
+}
+
+const playNumpadTone = async (frequency = 760, duration = 0.045) => {
+  if (!interactionSettings.value.soundEnabled) return
+
+  const audioContext = getNumpadAudioContext()
+  if (!audioContext) return
+
+  try {
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume()
+    }
+
+    const oscillator = audioContext.createOscillator()
+    const gainNode = audioContext.createGain()
+    const startAt = audioContext.currentTime
+    const endAt = startAt + duration
+
+    oscillator.type = 'triangle'
+    oscillator.frequency.setValueAtTime(frequency, startAt)
+
+    gainNode.gain.setValueAtTime(0.0001, startAt)
+    gainNode.gain.exponentialRampToValueAtTime(0.028, startAt + 0.006)
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, endAt)
+
+    oscillator.connect(gainNode)
+    gainNode.connect(audioContext.destination)
+
+    oscillator.start(startAt)
+    oscillator.stop(endAt + 0.01)
+  } catch {
+    // Ignore platforms that block short synthesized UI sounds.
+  }
+}
+
+const vibrateNumpad = async () => {
+  if (!interactionSettings.value.vibrationEnabled) return
+
+  try {
+    await Haptics.selectionChanged()
+    return
+  } catch {
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate(12)
+    }
+  }
+}
+
+const triggerNumpadFeedback = (frequency, duration) => {
+  void playNumpadTone(frequency, duration)
+  void vibrateNumpad()
+}
 
 // ======================
 // NUMBER PAD
 // ======================
 const appendNumber = (num) => {
+  triggerNumpadFeedback(760, 0.045)
+
   if (!focusedField.value) return
 
   if (focusedField.value === 'qty' && focusedItem.value) {
@@ -70,6 +261,8 @@ const appendNumber = (num) => {
 }
 
 const backspace = () => {
+  triggerNumpadFeedback(620, 0.05)
+
   if (!focusedField.value) return
 
   if (focusedField.value === 'qty' && focusedItem.value) {
@@ -82,12 +275,36 @@ const backspace = () => {
 }
 
 const clearInput = () => {
+  triggerNumpadFeedback(480, 0.07)
+
   if (!focusedField.value) return
 
   if (focusedField.value === 'qty' && focusedItem.value) focusedItem.value.qty = 1
   else if (focusedField.value === 'professionalFee') professionalFee.value = 0
   else if (focusedField.value === 'moneyGiven') moneyGiven.value = 0
 }
+
+const incrementQty = (item) => {
+  triggerNumpadFeedback(760, 0.045)
+  item.qty += 1
+}
+
+const decrementQty = (item) => {
+  triggerNumpadFeedback(620, 0.05)
+  item.qty = Math.max(1, item.qty - 1)
+}
+
+const selectPaymentMethod = (method) => {
+  triggerNumpadFeedback(700, 0.04)
+  paymentMethod.value = method
+}
+
+const selectItemPriceType = (item, type) => {
+  triggerNumpadFeedback(type === 'regular' ? 720 : 680, 0.04)
+  setPriceType(item, type)
+}
+
+const SEARCH_RESULT_LIMIT = 20
 
 // ======================
 // MEDICINES SEARCH (WITH LATEST PRICE)
@@ -106,24 +323,41 @@ watch(search, async (val) => {
   }
 
   const db = await dbPromise
-  const meds = await db.getAll('medicines')
-  const batches = await db.getAll('inventory_batches')
+  const tx = db.transaction(['medicines', 'inventory_batches'], 'readonly')
+  const medsStore = tx.objectStore('medicines')
+  const batchIndex = tx.objectStore('inventory_batches').index('medicine_id')
+  const matches = []
 
-  const matches = meds.filter(m =>
-    m.name.toLowerCase().includes(q) ||
-    (m.generic_name || '').toLowerCase().includes(q)
-  )
+  let cursor = await medsStore.openCursor()
+  while (cursor) {
+    const medicine = cursor.value
+    const name = (medicine.name || '').toLowerCase()
+    const generic = (medicine.generic_name || '').toLowerCase()
+    const matchesQuery = name.startsWith(q) || generic.startsWith(q)
+
+    if (matchesQuery) {
+      if (matches.length < SEARCH_RESULT_LIMIT) {
+        matches.push({ ...medicine })
+      }
+    }
+
+    cursor = await cursor.continue()
+  }
 
   for (const m of matches) {
-    const medBatches = batches.filter(b => b.medicine_id === m.id)
-    const totalStock = medBatches.reduce((sum, b) => sum + (b.quantity || 0), 0)
+    const totalStock = await reduceFromSource(
+      batchIndex,
+      (sum, batch) => sum + Number(batch.quantity || 0),
+      0,
+      { query: m.id }
+    )
 
     m.quantity = totalStock
     m.stockIndicator = getStockIndicator({ quantity: totalStock })
     medicinesMap.value[m.id] = m
   }
 
-  // Sort: prioritize items that START with the search term
+  // Sort exact prefix matches by brand first, then generic name.
   matches.sort((a, b) => {
     const aName = a.name.toLowerCase()
     const bName = b.name.toLowerCase()
@@ -163,12 +397,25 @@ watch(customerSearch, async (val) => {
   }
 
   const db = await dbPromise
-  const customers = await db.getAll('customers')
+  const customersStore = db.transaction(['customers', 'yearly_points'], 'readonly').objectStore('customers')
+  const matches = []
 
-  const matches = customers.filter(c =>
-    c.name.toLowerCase().includes(q) ||
-    (c.phone || '').includes(q)
-  )
+  let cursor = await customersStore.openCursor()
+  while (cursor) {
+    const customer = cursor.value
+    const matchesQuery =
+      (customer.name || '').toLowerCase().startsWith(q) ||
+      (customer.phone || '').startsWith(q)
+
+    if (matchesQuery) {
+      matches.push({ ...customer })
+      if (matches.length >= SEARCH_RESULT_LIMIT) {
+        break
+      }
+    }
+
+    cursor = await cursor.continue()
+  }
 
   const year = new Date().getFullYear()
   const yearlyStore = db.transaction('yearly_points').objectStore('yearly_points')
@@ -296,12 +543,18 @@ const checkout = async () => {
       text: 'Please add items before saving the sale.'
     })
 
-  if ((moneyGiven.value || 0) < grandTotal.value)
-    return Swal.fire({
+  if ((moneyGiven.value || 0) < grandTotal.value) {
+    const { isConfirmed } = await Swal.fire({
       icon: 'warning',
       title: 'Insufficient payment',
-      text: 'Customer money is less than total.'
+      text: 'No money given or amount is less than total. Save this sale as a draft instead?',
+      showCancelButton: true,
+      confirmButtonText: 'Save as Draft',
+      cancelButtonText: 'Back to Cart'
     })
+    if (isConfirmed) await saveSaleAsDraft()
+    return
+  }
 
   // Check stock and warn for all items exceeding available quantity
   const stockWarnings = []
@@ -450,6 +703,12 @@ const checkout = async () => {
     pointsConfirmed.value = false
     specialDiscount.value = 0
 
+    // If this sale came from a draft, delete it now that it's complete
+    if (activeDraftId.value !== null) {
+      await store.dispatch('drafts/remove', activeDraftId.value)
+      activeDraftId.value = null
+    }
+
   } catch (err) {
     console.error(err)
     Swal.fire({ icon: 'error', title: 'Checkout Failed', text: err.message || 'Something went wrong.' })
@@ -500,6 +759,38 @@ const addCustomer = async () => {
   showCustomerModal.value = false
 }
 
+// Clear modal-local inputs when modals are closed
+watch(showCustomerModal, (open) => {
+  if (!open) {
+    customerSearch.value = ''
+    showNewCustomerForm.value = false
+    newCustomer.value = { name: '', phone: '', address: '' }
+    filteredCustomers.value = []
+  }
+})
+
+watch(showRedeemModal, (open) => {
+  if (!open) {
+    redeemMultiplier.value = 1
+    pointsConfirmed.value = false
+  }
+})
+
+watch(showSpecialDiscountModal, (open) => {
+  if (!open) {
+    specialDiscount.value = 0
+  }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('interaction-settings-changed', handleInteractionSettingsChanged)
+
+  if (numpadAudioContext && numpadAudioContext.state !== 'closed') {
+    numpadAudioContext.close().catch(() => {})
+  }
+  numpadAudioContext = null
+})
+
 const getStockIndicator = (med) => {
   if (!med.quantity || med.quantity <= 0) {
     return { icon: '▲!', color: 'red', text: 'Out of stock', quantity: 0 }
@@ -515,12 +806,12 @@ const getStockIndicator = (med) => {
 
 <template>
 <div class="home-view">
-  <h1 style="font-size: 32px;">Calculator</h1>
+ <h1>Calculator</h1>
 
   <!-- SEARCH BAR + CUSTOMER + REDEEM (ALL INLINE) -->
   <div class="top-controls">
   <div class="search-section">
-    <input class="input pos-medicine-search" v-model="search" placeholder="Search medicine..." />
+    <SearchInput v-model="search" placeholder="Search medicine..." :inputClass="'input pos-medicine-search'" />
     
     <!-- Dropdown -->
     <div v-if="search && filteredMedicines.length" class="dropdown">
@@ -610,16 +901,18 @@ const getStockIndicator = (med) => {
             <td>
 <div class="price-toggle">
   <button
+    class="price-option-btn"
     :class="{ active: item.priceType === 'regular', inactive: item.priceType !== 'regular' }"
-    @click="setPriceType(item, 'regular')"
+    @click="selectItemPriceType(item, 'regular')"
   >
     Reg ₱{{ medicinesMap[item.id]?.price1.toFixed(2) || '0.00' }}
   </button>
 
   <button
+    class="price-option-btn"
     v-if="medicinesMap[item.id]?.price2 && medicinesMap[item.id]?.price2 > 0"
     :class="{ active: item.priceType === 'discount', inactive: item.priceType !== 'discount' }"
-    @click="setPriceType(item, 'discount')"
+    @click="selectItemPriceType(item, 'discount')"
   >
     Dis ₱{{ medicinesMap[item.id]?.price2.toFixed(2) || '0.00' }}
   </button>
@@ -628,16 +921,17 @@ const getStockIndicator = (med) => {
             </td>
             <td>
               <div class="qty-wrapper">
-                <button @click="item.qty = Math.max(1,item.qty-1)">-</button>
+                <button class="qty-step-btn" @click="decrementQty(item)">-</button>
                 <input
                   style="font-weight: bold"
                   type="number"
                   :value="item.qty"
                   readonly
                   @click="setActiveInput(item,'qty')"
+                  :style="getQtyInputStyle(item.qty)"
                   :class="{ 'active-input': focusedField==='qty' && focusedItem===item }"
                 />
-                <button @click="item.qty += 1">+</button>
+                <button class="qty-step-btn" @click="incrementQty(item)">+</button>
               </div>
             </td>
             <td>₱{{ (item.price * item.qty).toFixed(2) }}</td>
@@ -724,15 +1018,17 @@ const getStockIndicator = (med) => {
 
     <div class="payment-toggle">
       <button
+        class="payment-option-btn"
         :class="{ active: paymentMethod === 'cash' }"
-        @click="paymentMethod = 'cash'"
+        @click="selectPaymentMethod('cash')"
       >
         Cash
       </button>
 
       <button
+        class="payment-option-btn"
         :class="{ active: paymentMethod === 'gcash' }"
-        @click="paymentMethod = 'gcash'"
+        @click="selectPaymentMethod('gcash')"
       >
         GCash
       </button>
@@ -744,15 +1040,11 @@ const getStockIndicator = (med) => {
 </div>
 
 <!-- CUSTOMER MODAL -->
-<div v-if="showCustomerModal" class="modal-backdrop">
-  <div class="modal modal-customer">
+<div v-if="showCustomerModal" class="modal-backdrop app-modal-backdrop">
+  <div class="modal app-modal-panel modal-sm modal-customer">
     <h3>Select Customer</h3>
 
-    <input
-      class="input pos-medicine-search"
-      v-model="customerSearch"
-      placeholder="Search customer..."
-    />
+    <SearchInput v-model="customerSearch" placeholder="Search customer..." wrapperClass="full" :inputClass="'input pos-medicine-search'" />
 
     <div v-if="customerSearch && filteredCustomers.length" class="customer-list">
       <div
@@ -766,14 +1058,14 @@ const getStockIndicator = (med) => {
       </div>
     </div>
 
-    <button class="btn" @click="showNewCustomerForm = !showNewCustomerForm" style="margin-top: 12px; background: #3498db; color: #fff; width: 100%; box-sizing: border-box;">
+    <button class="btn info btn-block" @click="showNewCustomerForm = !showNewCustomerForm" style="margin-top: 12px; box-sizing: border-box;">
       {{ showNewCustomerForm ? '✕ Hide New Customer' : '+ Add New Customer' }}
     </button>
 
     <div v-if="showNewCustomerForm">
       <hr/>
       <h4>Add New Customer</h4>
-      <div class="new-customer-form">
+      <div class="new-customer-form modal-form">
         <label>Name<input class="input" v-model="newCustomer.name" /></label>
         <label>Address<input class="input" v-model="newCustomer.address" /></label>
         <label>Phone<input class="input" v-model="newCustomer.phone" /></label>
@@ -788,15 +1080,15 @@ const getStockIndicator = (med) => {
 </div>
 
 <!-- REDEEM MODAL -->
-<div v-if="showRedeemModal" class="modal-backdrop">
-  <div class="modal">
+<div v-if="showRedeemModal" class="modal-backdrop app-modal-backdrop">
+  <div class="modal app-modal-panel modal-sm">
     <h3>Redeem Points</h3>
     <p>Available: <strong>{{ customerPoints }}</strong></p>
 
     <div class="qty-wrapper">
-      <button @click="redeemMultiplier = Math.max(1, redeemMultiplier - 1)">-</button>
+      <button class="qty-step-btn" @click="redeemMultiplier = Math.max(1, redeemMultiplier - 1)">-</button>
       <input type="number" :value="redeemMultiplier" readonly />
-      <button @click="redeemMultiplier += 1">+</button>
+      <button class="qty-step-btn" @click="redeemMultiplier += 1">+</button>
     </div>
 
     <p>
@@ -811,8 +1103,8 @@ const getStockIndicator = (med) => {
 </div>
 
 <!-- SPECIAL DISCOUNT MODAL -->
-<div v-if="showSpecialDiscountModal" class="modal-backdrop">
-  <div class="modal">
+<div v-if="showSpecialDiscountModal" class="modal-backdrop app-modal-backdrop">
+  <div class="modal app-modal-panel modal-sm">
     <h3>Special Discount</h3>
     
     <div v-if="pointsUsed > 0" style="padding: 10px; background: #e6f7ff; border-radius: 6px; margin-bottom: 10px;">
@@ -853,7 +1145,7 @@ const getStockIndicator = (med) => {
         @click="removeSpecialDiscount(); showSpecialDiscountModal = false"
         style="flex: 0.8;"
       >Remove</button>
-      <button class="btn" @click="showSpecialDiscountModal=false" style="background: #6c757d; color: white;">Cancel</button>
+      <button class="btn secondary" @click="showSpecialDiscountModal=false">Cancel</button>
     </div>
   </div>
 </div>
@@ -870,6 +1162,7 @@ const getStockIndicator = (med) => {
   box-sizing: border-box;
   padding: 12px 0; /* keep existing spacing from app */
 }
+
 
 /* Make main content stretch to fill remaining space under the top controls */
 .home-view > .pos-layout {
@@ -921,6 +1214,7 @@ const getStockIndicator = (med) => {
 }
 
 .search-section {
+  display: flex;
   flex: 1;
   min-width: 250px;
   position: relative;
@@ -978,23 +1272,20 @@ const getStockIndicator = (med) => {
 ========================= */
 .input.pos-medicine-search {
   width: 70%;
-  height: 44px;
-  padding: 0 12px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
+  display: block;
+  min-height: 48px;
+  border-radius: 14px;
   font-size: 15px;
-  background: #fff;
-  color: #222;
-  display:block;
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
 }
 .btn.select-customer {
-  background: #3498db;
+  background: linear-gradient(180deg, #3fa4e8 0%, #2b88cc 100%);
   color: #fff;
-  border: none;
-  border-radius: 8px;
-  height: 44px;
-  padding: 0 14px;
-  cursor: pointer;
+  border: 1px solid rgba(37, 99, 235, 0.15);
+  border-radius: 12px;
+  height: 46px;
+  padding: 0 16px;
+  box-shadow: 0 10px 20px rgba(52, 152, 219, 0.18);
   white-space: nowrap;
 }
 
@@ -1066,12 +1357,26 @@ const getStockIndicator = (med) => {
 table {
   width: 100%;
   border-collapse: collapse;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdfe 100%);
 }
-th, td {
-  padding: 8px;
-  border-bottom: 1px solid #ddd;
+thead th {
+  background: linear-gradient(180deg, #f4fbf8 0%, #ebf7f1 100%);
+  color: #166a5e;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 12px 10px;
+  border-bottom: 1px solid #d0e7de;
   text-align: center;
 }
+tbody td {
+  padding: 11px 10px;
+  border-bottom: 1px solid #e7edf2;
+  text-align: center;
+  color: #24323f;
+}
+tbody tr:nth-child(even) td { background: #f7fafc; }
+tbody tr:hover td { background: #eef8f4; }
+tbody tr:last-child td { border-bottom: none; }
 
 /* Totals below table */
 .cart-totals {
@@ -1145,14 +1450,15 @@ th, td {
   min-height: 2.2rem;
   max-height: 3.2rem;
   height: 2.6rem;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  padding: 0 10px;
+  border-radius: 12px;
+  border: 1px solid #c4d0db;
+  padding: 0 12px;
   font-size: 1.1rem;
-  background: #fff;
+  background: linear-gradient(180deg, #fbfdfe 0%, #f3f7fa 100%);
   color: #222;
   box-sizing: border-box;
-  transition: height 0.2s, font-size 0.2s;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 6px 14px rgba(15, 23, 42, 0.05);
+  transition: height 0.2s, font-size 0.2s, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .right-panel input:focus {
@@ -1190,33 +1496,10 @@ th, td {
   overflow: auto;
   /* grid-auto-rows: minmax(48px, 1fr); */
 }
-.num-btn {
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  border-radius: 8px;
-  border: none;
-  background: #3498db;
-  color: #fff;
-  font-size: clamp(14px, 2.4vw, 28px);
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
 /* Larger, full-screen friendly number pad for wide/tall screens */
 @media (min-width: 900px) and (min-height: 700px) {
   .home-view .right-panel {
     width: 320px;
-  }
-  .home-view .num-btn {
-    font-size: 20px;
-    border-radius: 10px;
   }
 }
 
@@ -1224,9 +1507,6 @@ th, td {
 @media (min-width: 1200px) {
   .home-view .right-panel {
     width: 380px;
-  }
-  .home-view .num-btn {
-    font-size: 22px;
   }
 }
 /* Very tall screens: increase right-panel and scale number pad rows to fill height */
@@ -1237,18 +1517,9 @@ th, td {
   .home-view .number-pad {
     grid-auto-rows: minmax(64px, 1fr);
   }
-  .home-view .num-btn {
-    font-size: 26px;
-  }
-}
-.num-btn:active {
-  transform: scale(0.95);
 }
 .btn.checkout {
   margin-top: 6px;
-  background: #28a745;
-  color: #fff;
-  border-radius: 8px;
   min-height: 2.1rem;
   max-height: 2.8rem;
   height: 2.4rem;
@@ -1270,29 +1541,29 @@ th, td {
   width: 50px;
   height: 36px;
   text-align: center;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  background: #fff;
-  color: #222;
+  border-radius: 10px;
+  border: 1px solid #c4d0db;
+  background: linear-gradient(180deg, #fbfdfe 0%, #f3f7fa 100%);
+  color: #0f172a;
+  -webkit-text-fill-color: #0f172a;
+  opacity: 1;
+  font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 4px 10px rgba(15, 23, 42, 0.05);
   transition: all 160ms ease-in-out;
+}
+.qty-wrapper input::-webkit-outer-spin-button,
+.qty-wrapper input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.qty-wrapper input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
 .qty-wrapper input.active-input {
   border: 2px solid #2b6cb0;
   box-shadow: 0 4px 12px rgba(43,108,176,0.15);
 }
-.qty-wrapper button {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  border: none;
-  background: #3498db;
-  color: #fff;
-  font-size: 13px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
 /* =========================
    PRICE BUTTONS
 ========================= */
@@ -1317,18 +1588,6 @@ th, td {
   border: 2px solid #000;
 }
 
-.mini.danger {
-  background: red;
-  color: #ffff;
-}
-
-
-.mini.regular {
-  background: #2980b9 !important;
-  color: #ffff !important
-}
-
-
 /* =========================
    SELECTED CUSTOMER BADGE
 ========================= */
@@ -1344,76 +1603,22 @@ th, td {
 /* =========================
    CUSTOMER MODAL
 ========================= */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.6);
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  z-index:1000;
-}
 .modal {
-  background: #fff;
-  border-radius: 12px;
-  padding: 16px;
   width: 380px;
-  max-height: 80vh;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.modal input {
-  height: 36px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  padding: 0 10px;
-  background: #fff;
-  color: #222;
 }
 .customer-list {
   max-height: 220px;
   overflow-y: auto;
-  border: 1px solid #ccc;
-  border-radius: 6px;
+  border: 1px solid #d7e1ea;
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
 }
 .customer-row {
-  padding: 8px;
+  padding: 10px 12px;
   cursor: pointer;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid #e7edf2;
 }
-.customer-row:hover { background: #f0f8ff; }
-
-/* =========================
-   DISCOUNT ADD BUTTON
-========================= */
-.discount-add-btn {
-  width: 25px;
-  height: 25px;
-  border-radius: 50%;
-  border: none;
-  background: #3498db;
-  color: #fff;
-  font-size: 12px;
-  font-weight: bold;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: all 0.2s ease;
-  line-height: 1;
-}
-
-.discount-add-btn:hover {
-  background: #2980b9;
-  transform: scale(1.15);
-}
-
-.discount-add-btn:active {
-  transform: scale(0.9);
-}
+.customer-row:hover { background: #eef8f4; }
 
 /* =========================
    MED NAMES
@@ -1421,39 +1626,6 @@ th, td {
 .med-name { font-size: 20px;}
 .med-name-table { font-weight:700; }
 .med-generic { font-size:16px; color:#888; }
-
-/* =========================
-   DARK MODE
-========================= */
-.dark .search-bar input,
-.dark .cart-wrapper,
-.dark .right-panel,
-.dark .modal {
-  background: #1e1e1e;
-  color: #f1f1f1;
-  border-color: #333;
-}
-.dark .right-panel input,
-.dark .qty-wrapper input,
-.dark .modal input {
-  background: #333;
-  color: #f1f1f1;
-  border-color: #555;
-}
-.dark .num-btn,
-.dark .qty-wrapper button,
-.dark .price-cell .mini.regular,
-.dark .price-cell .mini.discounted {
-  background: #4da3ff;
-}
-.dark .price-cell .mini.activePrice {
-  background: #2ecc71;
-  border-color: #fff;
-}
-.dark .dropdown-item:hover,
-.dark .customer-row:hover {
-  background: #222;
-}
 
 /* =========================
    CUSTOMER MODAL FIX
@@ -1465,56 +1637,21 @@ th, td {
   text-align: center;
 }
 
-.new-customer-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* Make all modal inputs equal width */
-.modal .input,
-.modal input {
-  width: 100%;
-  height: 44px;
-  border-radius: 10px;
-  border: 1px solid #ccc;
-  padding: 0 14px;
-  font-size: 15px;
-  background: #fff;
-  color: #222;
-  box-sizing: border-box;
-}
-
-/* Labels stack cleanly */
-.new-customer-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #444;
-}
-
 /* Customer search field */
 .modal .pos-medicine-search {
   width: 100%;
-  height: 44px;
+  height: 46px;
   font-size: 15px;
   padding: 0 14px;
-  border-radius: 10px;
+  border-radius: 12px;
   box-sizing: border-box;
 }
 
 /* Modal buttons aligned */
-.modal-actions {
-  display: flex;
-  gap: 10px;
-  align-items: flex-end;
-}
 .modal-actions .btn {
   flex: 1;
-  height: 44px;
-  border-radius: 10px;
+  height: 46px;
+  border-radius: 12px;
   font-size: 14px;
   font-weight: 600;
   display: flex;
@@ -1534,7 +1671,7 @@ th, td {
 }
 
 /* Prevent flex shrink in modal */
-.modal > * {
+.app-modal-panel > * {
   flex-shrink: 0;
 }
 
@@ -1545,22 +1682,16 @@ th, td {
 .price-toggle {
   display: flex;
   justify-content: center;
-  gap: 4px;
+  gap: 6px;
 }
 
-.price-toggle button.active {
-  background-color: green;
-  color: white;
-}
-
-.price-toggle button.inactive {
-  background-color: gray;
-  color: white;
-}
-
+.num-btn,
+.payment-option-btn,
+.price-option-btn,
+.qty-step-btn,
+.discount-add-btn,
 .button-remove-med {
-  padding: 2px 5px !important;
-  color: #fff !important
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.1);
 }
 
 .payment-toggle {
@@ -1571,39 +1702,17 @@ th, td {
   width: 100%;
   box-sizing: border-box;
 }
-.payment-toggle button {
-  /* Let both buttons share available width with a gap */
-  flex: 1 1 0;
-  min-width: 0; /* allow shrinking */
-  height: clamp(36px, 4.5vw, 56px) !important;
-  border-radius: 6px;
-  border: none;
-  font-weight: 700;
-  background: #ccc;
-  color: #222;
-  padding: 8px 12px;
-  font-size: clamp(14px, 2.4vw, 18px);
-  box-sizing: border-box;
-}
-.payment-toggle button.active {
-  background: #28a745;
-  color: #fff;
-}
 
 /* Make number pad buttons and payment buttons adapt on narrow screens */
 @media (max-width: 900px) {
-  .num-btn { font-size: 1.1rem; border-radius: 10px; }
   .number-pad { gap: 8px; }
-  .payment-toggle button { font-size: 0.95rem; padding: 6px 8px; height: 2rem !important; }
   .right-panel input { min-height: 2rem; max-height: 2.7rem; height: 2.2rem; font-size: 1rem; }
   .btn.checkout { min-height: 1.8rem; max-height: 2.4rem; height: 2rem; font-size: 0.95rem; }
 }
 
 @media (max-width: 480px) {
-  .num-btn { font-size: 0.95rem; border-radius: 8px; }
   .number-pad { gap: 6px; }
   .payment-toggle { gap: 4px; }
-  .payment-toggle button { font-size: 0.85rem; padding: 6px 8px; height: 1.7rem !important; }
   .right-panel input { min-height: 1.6rem; max-height: 2.2rem; height: 1.8rem; font-size: 0.95rem; }
   .btn.checkout { min-height: 1.5rem; max-height: 2rem; height: 1.7rem; font-size: 0.9rem; }
 }
@@ -1628,17 +1737,6 @@ th, td {
     overflow: visible;
   }
 
-  .num-btn {
-    font-size: clamp(14px, 2.2vw, 20px);
-    border-radius: 8px;
-  }
-
-  .payment-toggle button {
-    height: clamp(34px, 3.2vw, 44px)  !important;
-    font-size: clamp(13px, 1.8vw, 16px);
-    padding: 6px 10px;
-  }
-
   .btn.checkout {
     height: clamp(36px, 3.6vw, 44px)  !important;
     font-size: clamp(14px, 1.8vw, 16px);
@@ -1648,8 +1746,6 @@ th, td {
 /* Large screen: increase prominence of payment buttons and inputs */
 @media (min-width: 1200px) {
   .right-panel { width: 420px; }
-  .num-btn { font-size: 1.3rem; }
-  .payment-toggle button { max-width: 220px; font-size: 1.1rem; height: 2.6rem !important; }
   .right-panel input { min-height: 2.6rem; max-height: 3.6rem; height: 3rem; font-size: 1.2rem; }
   .btn.checkout { min-height: 2.2rem; max-height: 3rem; height: 2.6rem; font-size: 1.15rem; }
 }
@@ -1667,18 +1763,6 @@ th, td {
       padding: 8px 12px !important;
     }
 
-    /* Scale back numpad font so inputs are visually comparable */
-    .num-btn {
-      font-size: clamp(14px, 1.8vw, 20px) !important;
-      padding: 0 !important;
-    }
-
-
-
-    .payment-toggle button {
-      height: clamp(44px, 4.5vh, 64px) !important;
-      font-size: clamp(16px, 2.4vh, 20px) !important;
-    }
   }
 
 .dropdown-item-content {
@@ -1821,7 +1905,6 @@ th, td {
   .right-panel input { height: 2.2rem; font-size: 1.05rem; }
   .qty-wrapper input { width: 44px; height: 34px; }
   .number-pad { grid-auto-rows: 48px; }
-  .num-btn { font-size: 18px; }
   table th, table td { padding: 6px; }
   .cart-totals strong { font-size: 18px; }
 }

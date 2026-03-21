@@ -4,6 +4,8 @@ import { dbPromise } from '../db'
 import MetricCard from '../components/analytics/MetricCard.vue'
 import VueApexCharts from 'vue3-apexcharts'
 import { format } from 'date-fns'
+import { VueDatePicker } from '@vuepic/vue-datepicker'
+import '@vuepic/vue-datepicker/dist/main.css'
 
 // --------------------
 // Metrics
@@ -31,6 +33,18 @@ const isLoading = ref(false)
 const timeRange = ref('today')
 const customStart = ref(null)
 const customEnd = ref(null)
+const dateRange = ref(null)
+const isDark = ref(localStorage.getItem('darkMode') === 'true')
+
+watch(dateRange, (range) => {
+  if (range && range[0] && range[1]) {
+    customStart.value = range[0]
+    customEnd.value = range[1]
+  } else {
+    customStart.value = null
+    customEnd.value = null
+  }
+})
 
 const salesLabel = computed(() => {
   switch (timeRange.value) {
@@ -92,50 +106,58 @@ const getEndDate = () => {
 }
 
 // --------------------
-// Load Analytics
-// --------------------
-let sales = []
-let saleItems = []
-let medicinesStore = []
-
-const loadAnalytics = async () => {
-  const db = await dbPromise
-  sales = await db.getAll('sales')
-  saleItems = await db.getAll('sale_items')
-  medicinesStore = await db.getAll('medicines')
-  updateCharts()
-}
-
-// --------------------
 // Build Charts & Metrics
 // --------------------
 const updateCharts = async () => {
   isLoading.value = true
   // Simulate processing time
   await new Promise(resolve => setTimeout(resolve, 300))
+  const analyticsCardText = isDark.value ? '#f8fafc' : '#0f172a'
+  const analyticsMutedText = isDark.value ? '#cbd5e1' : '#64748b'
+  const analyticsGridColor = isDark.value ? '#475569' : '#d9e2ec'
   const startDate = getStartDate()
   const endDate = getEndDate()
+  const db = await dbPromise
+  const [sales, saleItems, medicines] = await Promise.all([
+    db.getAll('sales'),
+    db.getAll('sale_items'),
+    db.getAll('medicines')
+  ])
+  const includedSaleIds = new Set()
+  const dailySalesMap = new Map()
+  const medicinesMap = new Map(medicines.map(medicine => [medicine.id, medicine]))
 
-  // Filter sales (exclude voided sales)
-  const filteredSales = sales.filter(s => {
-    const d = new Date(s.purchased_date || s.date)
-    return d >= startDate && d <= endDate && s.status !== 'voided'
-  })
+  totalSales.value = 0
+  totalItems.value = 0
+  voidedSalesCount.value = 0
 
-  // Voided sales for metric
-  const voidedSales = sales.filter(s => {
-    const d = new Date(s.purchased_date || s.date)
-    return d >= startDate && d <= endDate && s.status === 'voided'
-  })
-  voidedSalesCount.value = voidedSales.length
+  for (const sale of sales) {
+    const saleDate = new Date(sale.purchased_date || sale.date)
+    if (saleDate < startDate || saleDate > endDate) continue
 
-  const filteredSaleItems = saleItems.filter(item => {
-    return filteredSales.some(s => String(s.id) === String(item.sale_id))
-  })
+    if (sale.status === 'voided') {
+      voidedSalesCount.value += 1
+      continue
+    }
 
-  // Metrics
-  totalSales.value = filteredSales.reduce((sum, s) => sum + Number(s.final_total || 0), 0)
-  totalItems.value = filteredSaleItems.reduce((sum, i) => sum + Number(i.quantity || 0), 0)
+    includedSaleIds.add(sale.id)
+    const saleTotal = Number(sale.final_total || 0)
+    totalSales.value += saleTotal
+
+    const dayKey = format(saleDate, 'yyyy-MM-dd')
+    dailySalesMap.set(dayKey, (dailySalesMap.get(dayKey) || 0) + saleTotal)
+  }
+
+  const medicineTotals = new Map()
+  for (const item of saleItems) {
+    if (!includedSaleIds.has(item.sale_id)) continue
+
+    totalItems.value += Number(item.quantity || 0)
+    medicineTotals.set(
+      item.medicine_id,
+      (medicineTotals.get(item.medicine_id) || 0) + Number(item.quantity || 0)
+    )
+  }
 
   // --------------------
   // Sales Trend
@@ -147,15 +169,24 @@ const updateCharts = async () => {
     d.setDate(startDate.getDate() + i)
     trendMap[format(d, 'MM/dd')] = 0
   }
-  filteredSales.forEach(sale => {
-    const date = new Date(sale.purchased_date || sale.date)
-    const label = format(date, 'MM/dd')
-    trendMap[label] += Number(sale.final_total || 0)
+  dailySalesMap.forEach((value, key) => {
+    const label = format(new Date(key), 'MM/dd')
+    if (trendMap[label] !== undefined) {
+      trendMap[label] += value
+    }
   })
   salesTrendSeries.value = [{ name: 'Sales', data: Object.values(trendMap) }]
   salesTrendOptions.value = {
-    chart: { type: 'line', height: 350 },
-    xaxis: { categories: Object.keys(trendMap) },
+    chart: { type: 'line', height: 350, foreColor: analyticsMutedText },
+    xaxis: {
+      categories: Object.keys(trendMap),
+      labels: { style: { colors: analyticsMutedText } },
+    },
+    yaxis: {
+      labels: { style: { colors: [analyticsMutedText] } },
+    },
+    grid: { borderColor: analyticsGridColor },
+    legend: { labels: { colors: analyticsCardText } },
     tooltip: { y: { formatter: val => `₱${val.toLocaleString()}` } },
     colors: [totalSales.value >= DAILY_TARGET ? '#22c55e' : '#ef4444']
   }
@@ -163,21 +194,27 @@ const updateCharts = async () => {
   // --------------------
   // Top Medicines
   // --------------------
-  const medMap = {}
-  filteredSaleItems.forEach(item => {
-    medMap[item.medicine_id] = (medMap[item.medicine_id] || 0) + Number(item.quantity || 0)
-  })
-  const topMeds = Object.entries(medMap)
-    .map(([id, qty]) => {
-      const med = medicinesStore.find(m => String(m.id) === String(id))
-      return { name: med?.name || id, value: qty }
-    })
-    .sort((a,b)=>b.value-a.value)
-    .slice(0,5)
+  const topMeds = await Promise.all(
+    Array.from(medicineTotals.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(async ([id, qty]) => {
+        const med = medicinesMap.get(id)
+        return { name: med?.name || id, value: qty }
+      })
+  )
   topMedicinesSeries.value = topMeds.map(m=>m.value)
   topMedicinesOptions.value = {
-    chart: { type: 'bar', height: 350 },
-    xaxis: { categories: topMeds.map(m=>m.name) },
+    chart: { type: 'bar', height: 350, foreColor: analyticsMutedText },
+    xaxis: {
+      categories: topMeds.map(m=>m.name),
+      labels: { style: { colors: analyticsMutedText } },
+    },
+    yaxis: {
+      labels: { style: { colors: [analyticsMutedText] } },
+    },
+    grid: { borderColor: analyticsGridColor },
+    legend: { labels: { colors: analyticsCardText } },
     tooltip: { y: { formatter: val => `${val} pcs` } }
   }
 
@@ -188,8 +225,8 @@ const updateCharts = async () => {
 
   if(timeRange.value === 'today') {
     // 1 day
-    const today = filteredSales[0] ? new Date(filteredSales[0].purchased_date || filteredSales[0].date) : new Date()
-    const total = filteredSales.reduce((sum, s)=>sum+Number(s.final_total||0),0)
+    const today = new Date(startDate)
+    const total = dailySalesMap.get(format(today, 'yyyy-MM-dd')) || 0
     heatmapSeries = [{ name: format(today,'MMM'), data:[{x: format(today,'dd'), y: total}] }]
   } else if(timeRange.value === 'week') {
     // 7 days
@@ -197,9 +234,7 @@ const updateCharts = async () => {
     for(let i=0;i<7;i++){
       const d = new Date(startDate)
       d.setDate(startDate.getDate()+i)
-      const total = filteredSales
-        .filter(s=>format(new Date(s.purchased_date||s.date),'yyyy-MM-dd') === format(d,'yyyy-MM-dd'))
-        .reduce((sum,s)=>sum+Number(s.final_total||0),0)
+      const total = dailySalesMap.get(format(d,'yyyy-MM-dd')) || 0
       heatmapSeries.push({ name: 'Week', data:[{x: format(d,'EEE'), y: total}] })
     }
   } else if(timeRange.value === 'month') {
@@ -207,9 +242,7 @@ const updateCharts = async () => {
     heatmapSeries = [{ name: format(startDate,'MMM'), data: [] }]
     for(let i=1;i<=daysInMonth;i++){
       const d = new Date(startDate.getFullYear(), startDate.getMonth(), i)
-      const total = filteredSales
-        .filter(s=>format(new Date(s.purchased_date||s.date),'yyyy-MM-dd')===format(d,'yyyy-MM-dd'))
-        .reduce((sum,s)=>sum+Number(s.final_total||0),0)
+      const total = dailySalesMap.get(format(d,'yyyy-MM-dd')) || 0
       heatmapSeries[0].data.push({x:i.toString(), y: total})
     }
   } else if(timeRange.value === 'year') {
@@ -219,9 +252,7 @@ const updateCharts = async () => {
       const monthData = { name: format(new Date(startDate.getFullYear(),m,1),'MMM'), data: [] }
       for(let d=1;d<=daysInMonth;d++){
         const dateObj = new Date(startDate.getFullYear(),m,d)
-        const total = filteredSales
-          .filter(s=>format(new Date(s.purchased_date||s.date),'yyyy-MM-dd')===format(dateObj,'yyyy-MM-dd'))
-          .reduce((sum,s)=>sum+Number(s.final_total||0),0)
+        const total = dailySalesMap.get(format(dateObj,'yyyy-MM-dd')) || 0
         monthData.data.push({ x:d.toString(), y: total })
       }
       heatmapSeries.push(monthData)
@@ -230,7 +261,7 @@ const updateCharts = async () => {
 
   calendarSeries.value = heatmapSeries
   calendarOptions.value = {
-    chart: { type:'heatmap', height: 260, toolbar:{show:true},width: '100%', // <-- makes chart width reactive
+    chart: { type:'heatmap', height: 260, foreColor: analyticsMutedText, toolbar:{show:true},width: '100%', // <-- makes chart width reactive
     toolbar: { show: false } },
     plotOptions: {
       heatmap: {
@@ -244,15 +275,17 @@ const updateCharts = async () => {
       }
     },
     dataLabels:{enabled:false},
-    xaxis:{type:'category', title:{text:'Day'}},
-    yaxis:{title:{text:'Month/Week'}} ,
+    xaxis:{type:'category', labels: { style: { colors: analyticsMutedText } }, title:{text:'Day', style: { color: analyticsMutedText }}},
+    yaxis:{labels: { style: { colors: [analyticsMutedText] } }, title:{text:'Month/Week', style: { color: analyticsMutedText }}} ,
+    grid:{ borderColor: analyticsGridColor },
+    legend: { labels: { colors: analyticsCardText } },
     tooltip:{y:{formatter: val => `₱${val.toLocaleString()}`}}
   }
   isLoading.value = false
 }
 
 watch([timeRange, customStart, customEnd], () => updateCharts())
-onMounted(loadAnalytics)
+onMounted(updateCharts)
 </script>
 
 <template>
@@ -269,26 +302,32 @@ onMounted(loadAnalytics)
 
   <!-- Time Range Buttons -->
   <div class="time-range-selector">
-    <button @click="timeRange='today'">Today</button>
-    <button @click="timeRange='week'">This Week</button>
-    <button @click="timeRange='month'">This Month</button>
-    <button @click="timeRange='year'">This Year</button>
-    <button @click="timeRange='custom'">Custom Range</button>
+    <button class="tab-button" :class="{ active: timeRange==='today' }" @click="timeRange='today'">Today</button>
+    <button class="tab-button" :class="{ active: timeRange==='week' }" @click="timeRange='week'">This Week</button>
+    <button class="tab-button" :class="{ active: timeRange==='month' }" @click="timeRange='month'">This Month</button>
+    <button class="tab-button" :class="{ active: timeRange==='year' }" @click="timeRange='year'">This Year</button>
+    <button class="tab-button" :class="{ active: timeRange==='custom' }" @click="timeRange='custom'">Custom Range</button>
     <div v-if="timeRange==='custom'" class="custom-range">
-      <input type="date" v-model="customStart"/> -
-      <input type="date" v-model="customEnd"/>
+      <VueDatePicker
+        v-model="dateRange"
+        range
+        :enable-time-picker="false"
+        placeholder="Select custom date range"
+        :dark="isDark"
+        auto-apply
+      />
     </div>
   </div>
 
   <!-- Metrics -->
-  <div class="metrics-cards top-bar">
+  <div class="metrics-cards">
     <MetricCard :title="salesLabel" :value="totalSales" type="currency" />
     <MetricCard :title="itemsLabel" :value="totalItems" type="number" />
     <MetricCard title="Voided Sales" :value="voidedSalesCount" type="number" />
   </div>
 
   <!-- Charts -->
-  <div class="charts-section top-bar">
+  <div class="charts-section">
     <div class="chart-card">
       <h2>Sales Quota Calendar (₱40,000/day)</h2>
       <VueApexCharts type="heatmap" :options="calendarOptions" :series="calendarSeries" height="260"/>
@@ -310,8 +349,11 @@ onMounted(loadAnalytics)
 
 <style scoped>
 .analytics-page {
-  margin: auto;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
   padding: 20px;
+  box-sizing: border-box;
 }
 
 /* Header */
@@ -324,44 +366,64 @@ onMounted(loadAnalytics)
 /* Time Range Selector */
 .time-range-selector {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-bottom: 16px;
 }
 
-.time-range-selector button {
-  padding: 6px 12px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  cursor: pointer;
-}
-
-.custom-range input {
-  margin-left: 4px;
+.custom-range {
+  min-width: min(100%, 320px);
+  flex: 1 1 320px;
 }
 
 /* Metrics Cards */
 .metrics-cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
   margin-bottom: 20px;
+  align-items: stretch;
 }
 
 /* Charts Section */
 .charts-section {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
 }
 
 .chart-card {
   background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  padding: 16px;
-  flex: 1 1 300px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  padding: 18px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.chart-card h2 {
+  margin: 0 0 14px;
+  font-size: 18px;
+  line-height: 1.3;
+  text-align: left;
+  color: #0f172a;
+}
+
+.chart-card :deep(.apexcharts-canvas),
+.chart-card :deep(.apexcharts-svg) {
+  max-width: 100%;
+}
+
+body.dark-mode .chart-card {
+  background-color: #1c1c1c;
+  border-color: #2e2e2e;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+}
+
+body.dark-mode .chart-card h2 {
+  color: #f8fafc;
 }
 
 /* Loading Overlay */
@@ -395,5 +457,20 @@ onMounted(loadAnalytics)
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+  .analytics-page {
+    padding: 16px;
+  }
+
+  .metrics-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .custom-range {
+    min-width: 100%;
+    flex-basis: 100%;
+  }
 }
 </style>

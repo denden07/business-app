@@ -1,6 +1,7 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { dbPromise } from '../db'
 
 const router = useRouter()
 const route = useRoute()
@@ -27,24 +28,80 @@ const navigateTo = (path) => {
   isOpen.value = false
 }
 
-// Toggle dark mode
-const toggleNightMode = () => {
-  isDarkMode.value = !isDarkMode.value
-  document.body.classList.toggle('dark-mode', isDarkMode.value)
-  localStorage.setItem('darkMode', isDarkMode.value)
-}
-
 // Menu
 const menuItems = [
   { name: 'Home', path: '/', icon: '🏠' },
   { name: 'Medicines', path: '/medicines', icon: '💊' },
   { name: 'Sales', path: '/sales', icon: '💰' },
+  { name: 'Drafts', path: '/drafts', icon: '📝' },
   { name: 'Customers', path: '/customers', icon: '🧑‍🤝‍🧑' },
   { name: 'Analytics', path: '/analytics', icon: '📊' },
+  { name: 'About', path: '/about', icon: 'ℹ️' },
   { name: 'Settings', path: '/settings', icon: '⚙️' },
 ]
 
-const isActive = (path) => route.path === path
+const isActive = (path) => {
+  if (path === '/') return route.path === '/'
+  return route.path === path || route.path.startsWith(`${path}/`)
+}
+
+const pageVisibility = ref(null)
+const appName = ref('Pharmacy POS')
+let refreshTimer = null
+
+async function loadAppName() {
+  try {
+    const db = await dbPromise
+    const row = await db.get('app_settings', 'app-name')
+    appName.value = row?.value?.trim() || 'Pharmacy POS'
+  } catch (err) {
+    console.error('Failed to load app name', err)
+    appName.value = 'Pharmacy POS'
+  }
+}
+
+async function loadVisibility() {
+  try {
+    const db = await dbPromise
+    const map = {}
+    const store = db.transaction('pages').objectStore('pages')
+    let count = 0
+    let cursor = await store.openCursor()
+    while (cursor) {
+      const row = cursor.value
+      map[row.name] = !!row.visible
+      count += 1
+      cursor = await cursor.continue()
+    }
+    // if no records, default to showing all
+    if (!count) {
+      menuItems.forEach(m => (map[m.name] = true))
+    }
+    pageVisibility.value = map
+  } catch (err) {
+    console.error('Failed to load page visibility', err)
+    pageVisibility.value = null
+  }
+}
+
+async function refreshSidebarState() {
+  await Promise.all([loadVisibility(), loadAppName()])
+}
+
+onMounted(() => {
+  refreshSidebarState()
+  // simple polling to refresh settings changed in Settings page
+  refreshTimer = setInterval(refreshSidebarState, 2500)
+})
+
+onUnmounted(() => {
+  if (refreshTimer) clearInterval(refreshTimer)
+})
+
+const visibleMenu = () => {
+  if (!pageVisibility.value) return menuItems
+  return menuItems.filter(m => pageVisibility.value[m.name] !== false)
+}
 </script>
 
 <template>
@@ -57,12 +114,12 @@ const isActive = (path) => route.path === path
   <!-- Drawer Menu -->
   <nav :class="['menu-drawer', { open: isOpen }]">
     <div class="menu-header">
-      <h2>Pharmacy POS</h2>
+      <h2 :title="appName">{{ appName }}</h2>
       <button class="close-btn" @click="toggleMenu">✕</button>
     </div>
 
     <ul class="menu-list">
-      <li v-for="item in menuItems" :key="item.path">
+      <li v-for="item in visibleMenu()" :key="item.path">
         <button
           :class="{ active: isActive(item.path) }"
           @click="navigateTo(item.path)"
@@ -72,11 +129,6 @@ const isActive = (path) => route.path === path
         </button>
       </li>
     </ul>
-
-    <button class="night-mode-btn" @click="toggleNightMode">
-      <span class="icon">🌙</span>
-      <span>Night Mode</span>
-    </button>
   </nav>
 </template>
 
@@ -131,7 +183,6 @@ const isActive = (path) => route.path === path
   z-index: 1001;
   transform: translateX(-100%);
   transition: transform 0.3s ease;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
 }
 
 .menu-drawer.open {
@@ -143,6 +194,7 @@ const isActive = (path) => route.path === path
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 20px;
   padding-bottom: 12px;
   border-bottom: 1px solid #3b4c60;
@@ -151,6 +203,11 @@ const isActive = (path) => route.path === path
 .menu-header h2 {
   margin: 0;
   font-size: 18px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .close-btn {
@@ -165,11 +222,11 @@ const isActive = (path) => route.path === path
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .close-btn:hover {
-  background: #3b4c60;
-  border-radius: 6px;
+  background: transparent;
 }
 
 /* Menu List */
@@ -177,7 +234,6 @@ const isActive = (path) => route.path === path
   list-style: none;
   padding: 0;
   margin: 0;
-  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -188,54 +244,29 @@ const isActive = (path) => route.path === path
   background: none;
   border: none;
   color: inherit;
-  padding: 12px;
+  padding: 12px 4px;
   display: flex;
   gap: 12px;
   align-items: center;
   cursor: pointer;
   border-radius: 6px;
   font-size: 15px;
-  transition: background 0.2s;
+  transition: color 0.2s, transform 0.2s;
+  box-shadow: none!important;
 }
 
 .menu-list button:hover {
-  background: #3b4c60;
+  background: transparent;
+  color: #dff7f1;
+  transform: translateX(2px);
 }
 
 .menu-list button.active {
   background: #1abc9c;
   color: #fff;
   font-weight: 600;
-}
-
-/* Night Mode Button */
-.night-mode-btn {
-  background: #34495e;
-  border: none;
-  color: #fff;
-  padding: 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  font-size: 15px;
-  width: 100%;
-  margin-top: auto;
-  transition: background 0.2s;
-}
-
-.night-mode-btn:hover {
-  background: #3b4c60;
-}
-
-body.dark-mode .night-mode-btn {
-  background: #ffc107;
-  color: #000;
-}
-
-body.dark-mode .night-mode-btn:hover {
-  background: #ffb300;
+  box-shadow: none;
+  transform: none;
 }
 
 /* Icon */

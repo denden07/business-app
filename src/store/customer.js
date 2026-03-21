@@ -1,4 +1,5 @@
 import { dbPromise } from '../db'
+import { collectFromSource } from '../db/query'
 import Swal from 'sweetalert2'
 
 export default {
@@ -40,15 +41,51 @@ async loadCustomersPage(
   const tx = db.transaction(['customers', 'yearly_points'], 'readonly')
   const store = tx.objectStore('customers')
   const yearlyStore = tx.objectStore('yearly_points')
+  const query = search.trim().toLowerCase()
+  const canUseIndexedPaging = !query && sortBy !== 'points'
 
-  let all = await store.getAll()
+  if (canUseIndexedPaging) {
+    const source = sortBy === 'name' ? store.index('name') : store
+    const direction = sortOrder === 'asc' ? 'next' : 'prev'
+    const total = await source.count()
+    const offset = (page - 1) * perPage
+    const rows = []
+    let skipped = 0
+    let cursor = await source.openCursor(null, direction)
 
-  const q = search.trim().toLowerCase()
-  if (q) {
+    while (cursor) {
+      if (skipped < offset) {
+        skipped += 1
+        cursor = await cursor.continue()
+        continue
+      }
+
+      rows.push(cursor.value)
+      if (rows.length >= perPage) {
+        break
+      }
+      cursor = await cursor.continue()
+    }
+
+    const year = new Date().getFullYear()
+    for (const customer of rows) {
+      const rec = await yearlyStore.get([customer.id, year])
+      customer.points = Number(rec?.points || 0)
+    }
+
+    commit('SET_PAGE', rows)
+    commit('SET_TOTAL', total)
+    commit('SET_LOADING', false)
+    return
+  }
+
+  let all = await collectFromSource(store)
+
+  if (query) {
     all = all.filter(c =>
-      c.name?.toLowerCase().includes(q) ||
-      (c.phone || '').toLowerCase().includes(q) ||
-      (c.email || '').toLowerCase().includes(q)
+      c.name?.toLowerCase().includes(query) ||
+      (c.phone || '').toLowerCase().includes(query) ||
+      (c.email || '').toLowerCase().includes(query)
     )
   }
 
@@ -200,12 +237,22 @@ async addManualPoints(_, { customer_id, points, note = '' }) {
     async getCustomerPointsHistory(_, customerId) {
       const db = await dbPromise
       const store = db.transaction('points_history').objectStore('points_history')
-      return store.index('customer_id').getAll(customerId)
+      return collectFromSource(store.index('customer_id'), { query: customerId })
     },
-    async searchCustomers({ state }, keyword) {
-    const db = await dbPromise
-    const all = await db.getAll('customers')
-    return all.filter(c => c.name.toLowerCase().includes(keyword.toLowerCase()))
-  }
+    async searchCustomers(_, keyword) {
+      const db = await dbPromise
+      const store = db.transaction('customers').objectStore('customers')
+      const query = keyword.toLowerCase()
+      const results = []
+      let cursor = await store.openCursor()
+      while (cursor) {
+        const customer = cursor.value
+        if ((customer.name || '').toLowerCase().includes(query)) {
+          results.push(customer)
+        }
+        cursor = await cursor.continue()
+      }
+      return results
+    }
   }
 }

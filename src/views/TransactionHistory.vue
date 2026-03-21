@@ -1,9 +1,14 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import SearchInput from '../components/SearchInput.vue'
 import Pagination from '../components/Pagination.vue'
 import { useStore } from 'vuex'
 import { dbPromise } from '../db'
+import { VueDatePicker } from '@vuepic/vue-datepicker'
+import '@vuepic/vue-datepicker/dist/main.css'
+import { format } from 'date-fns'
+import { collectFromSource } from '../db/query'
 
 const route = useRoute()
 const store = useStore()
@@ -11,34 +16,124 @@ const store = useStore()
 const router = useRouter()
 
 const customerId = Number(route.params.id)
+const customerPoints = ref(0)
 
 /* ======================
    STATE
 ====================== */
 const activeTab = ref('points')
-const searchKeyword = ref('')
+const startDate = ref('')
+const endDate = ref('')
+const dateRange = ref(null)
+const isDark = ref(localStorage.getItem('darkMode') === 'true')
+const filterType = ref('all')
 const sortOrder = ref('desc')
 const currentPage = ref(1)
 const itemsPerPage = ref(10)
 const itemsPerPageOptions = [5, 10, 20, 50]
-
+/* ======================
+   COLUMN VISIBILITY
+====================== */
+const _txDefaultCols = { pt_date: true, pt_points: true, pt_type: true, pt_description: true, pt_sale: true, pu_date: true, pu_id: true, pu_total: true, pu_status: true }
+const colMenuOpen = ref(false)
+const visibleCols = ref({ ..._txDefaultCols, ...JSON.parse(localStorage.getItem('col-vis-transaction') || '{}') })
+watch(visibleCols, v => localStorage.setItem('col-vis-transaction', JSON.stringify(v)), { deep: true })
+const ptCols = [
+  { key: 'pt_date', label: 'Date' },
+  { key: 'pt_points', label: 'Points' },
+  { key: 'pt_type', label: 'Type' },
+  { key: 'pt_description', label: 'Notes' },
+  { key: 'pt_sale', label: 'Sale #' },
+]
+const puCols = [
+  { key: 'pu_date', label: 'Date' },
+  { key: 'pu_id', label: 'Sale #' },
+  { key: 'pu_total', label: 'Total' },
+  { key: 'pu_status', label: 'Status' },
+]
+const activeCols = computed(() => activeTab.value === 'points' ? ptCols : puCols)
+const lastVisibleColumnKey = computed(() => {
+  const visibleActiveCols = activeCols.value.filter(col => visibleCols.value[col.key])
+  return visibleActiveCols.at(-1)?.key || activeCols.value.at(-1)?.key || null
+})
+const visibleColumnCount = computed(() => Math.max(1, activeCols.value.filter(col => visibleCols.value[col.key]).length))
+const toggleCol = (key) => { visibleCols.value[key] = !visibleCols.value[key] }
+const toggleColumnMenu = () => {
+  colMenuOpen.value = !colMenuOpen.value
+}
 const showSaleModal = ref(false)
 const selectedSale = ref(null)
+const saleCustomer = ref(null)
+const currentCustomer = ref(null)
 
 /* ======================
    WATCHERS
 ====================== */
-watch([activeTab, searchKeyword, sortOrder], () => {
+watch(dateRange, (range) => {
+  if (range && range[0] && range[1]) {
+    startDate.value = format(range[0], 'yyyy-MM-dd')
+    endDate.value = format(range[1], 'yyyy-MM-dd')
+  } else {
+    startDate.value = ''
+    endDate.value = ''
+  }
+})
+
+watch(activeTab, () => {
   currentPage.value = 1
+  colMenuOpen.value = false
+  loadActiveTab()
+})
+
+watch([startDate, endDate, sortOrder, itemsPerPage], () => {
+  currentPage.value = 1
+  loadActiveTab()
+})
+
+watch(filterType, () => {
+  if (activeTab.value !== 'points') return
+  currentPage.value = 1
+  loadPointsPage()
+})
+
+watch(currentPage, () => {
+  loadActiveTab()
 })
 
 /* ======================
    LOAD DATA
 ====================== */
 onMounted(async () => {
-  await store.dispatch('transaction/loadPointsHistory', customerId)
-  await store.dispatch('transaction/loadSales', customerId)
+  const db = await dbPromise
+  currentCustomer.value = await db.get('customers', customerId)
+  const year = new Date().getFullYear()
+  const yearly = await db.get('yearly_points', [customerId, year])
+  customerPoints.value = Number(yearly?.points || 0)
+  await loadActiveTab()
 })
+
+const loadPointsPage = () => store.dispatch('transaction/loadPointsHistoryPage', {
+  customerId,
+  page: currentPage.value,
+  perPage: itemsPerPage.value,
+  startDate: startDate.value,
+  endDate: endDate.value,
+  filterType: filterType.value,
+  sortOrder: sortOrder.value
+})
+
+const loadSalesPage = () => store.dispatch('transaction/loadSalesPage', {
+  customerId,
+  page: currentPage.value,
+  perPage: itemsPerPage.value,
+  startDate: startDate.value,
+  endDate: endDate.value,
+  sortOrder: sortOrder.value
+})
+
+function loadActiveTab() {
+  return activeTab.value === 'points' ? loadPointsPage() : loadSalesPage()
+}
 
 /* ======================
    VUEX SOURCES
@@ -47,56 +142,34 @@ const pointsHistory = computed(() =>
   store.state.transaction.pointsHistory
 )
 
+const pointsTotal = computed(() =>
+  store.state.transaction.pointsTotal
+)
+
 const sales = computed(() =>
   store.state.transaction.sales
+)
+
+const salesTotal = computed(() =>
+  store.state.transaction.salesTotal
 )
 
 /* ======================
    FILTERED DATA
 ====================== */
-const filteredPoints = computed(() => {
-  return pointsHistory.value
-    .filter(p =>
-      !searchKeyword.value ||
-      String(p.related_sale_id || '').includes(searchKeyword.value) ||
-      String(p.date).includes(searchKeyword.value)
-    )
-    .sort((a, b) =>
-      sortOrder.value === 'asc'
-        ? new Date(a.date) - new Date(b.date)
-        : new Date(b.date) - new Date(a.date)
-    )
-})
-
-const filteredSales = computed(() => {
-  return sales.value
-    .filter(s =>
-      !searchKeyword.value ||
-      String(s.id).includes(searchKeyword.value) ||
-      String(s.created_at).includes(searchKeyword.value)
-    )
-    .sort((a, b) =>
-      sortOrder.value === 'asc'
-        ? new Date(a.created_at) - new Date(b.created_at)
-        : new Date(b.created_at) - new Date(a.created_at)
-    )
-})
-
-/* ======================
-   PAGINATION
-====================== */
 const activeList = computed(() =>
-  activeTab.value === 'points' ? filteredPoints.value : filteredSales.value
+  activeTab.value === 'points' ? pointsHistory.value : sales.value
+)
+
+const activeTotal = computed(() =>
+  activeTab.value === 'points' ? pointsTotal.value : salesTotal.value
 )
 
 const totalPages = computed(() =>
-  Math.ceil(activeList.value.length / itemsPerPage.value)
+  Math.ceil(activeTotal.value / itemsPerPage.value)
 )
 
-const paginatedData = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage.value
-  return activeList.value.slice(start, start + itemsPerPage.value)
-})
+const paginatedData = computed(() => activeList.value)
 
 const goPage = (page) => {
   if (page >= 1 && page <= totalPages.value) {
@@ -104,12 +177,16 @@ const goPage = (page) => {
   }
 }
 
-const pageNumbers = computed(() =>
-  Array.from({ length: totalPages.value }, (_, i) => i + 1)
-)
-
 function goBack() {
-  router.push({ name: 'Customers' })
+  const q = route.query || {}
+  const payload = {}
+  if (q.page) payload.page = q.page
+  if (q.search !== undefined) payload.search = q.search
+  if (q.perPage) payload.perPage = q.perPage
+  if (q.sortBy) payload.sortBy = q.sortBy
+  if (q.sortOrder) payload.sortOrder = q.sortOrder
+
+  router.push({ name: 'Customers', query: payload })
 }
 
 /* ======================
@@ -127,12 +204,18 @@ const openSaleModal = async (sale) => {
   const itemsStore = tx.objectStore('sale_items')
   const medsStore = tx.objectStore('medicines')
 
-  const items = await itemsStore.index('sale_id').getAll(sale.id)
+  const items = await collectFromSource(itemsStore.index('sale_id'), { query: sale.id })
 
   for (const item of items) {
     const med = await medsStore.get(item.medicine_id)
     item.medicine_name = med?.name || 'Unknown'
     item.generic_name = med?.generic_name || ''
+  }
+
+  if (sale.customer_id) {
+    saleCustomer.value = await db.get('customers', sale.customer_id)
+  } else {
+    saleCustomer.value = null
   }
 
   await tx.done
@@ -148,20 +231,58 @@ const openSaleModal = async (sale) => {
 const closeSaleModal = () => {
   showSaleModal.value = false
   selectedSale.value = null
+  selectedSaleItems.value = []
+  saleCustomer.value = null
 }
+
+const saleStatusLabel = computed(() => {
+  if (!selectedSale.value) return ''
+  return selectedSale.value.status === 'voided' ? 'VOIDED' : 'COMPLETED'
+})
+
+const salePurchasedAt = computed(() => {
+  if (!selectedSale.value) return ''
+  return selectedSale.value.purchased_date || selectedSale.value.created_at || ''
+})
+
+const saleDiscountAmount = computed(() => {
+  if (!selectedSale.value) return 0
+  return Number(selectedSale.value.discount ?? selectedSale.value.points_discount ?? 0)
+})
+
+const currentCustomerPoints = computed(() => {
+  return customerPoints.value
+})
+
+const currentCustomerName = computed(() => currentCustomer.value?.name || `Customer #${customerId}`)
 </script>
 
 <template>
   <div class="medicines-page">
-    <h1>Customer Transactions</h1>
+    <div class="page-header">
+      <div>
+        <h1>Customer Transactions</h1>
+        <p class="page-subtitle">Transaction activity and points history for the selected customer.</p>
+      </div>
 
-    <div class="top-bar">
-      <button class="secondary back-btn" @click="goBack">← Back to Customers</button>
+      <button class="info back-btn" @click="goBack">← Back to Customers</button>
+    </div>
+
+    <div class="customer-summary">
+      <div class="customer-summary-card">
+        <span class="summary-label">Current Customer</span>
+        <strong class="summary-value">{{ currentCustomerName }}</strong>
+      </div>
+      <div class="customer-summary-card points-card">
+        <span class="summary-label">Available Points</span>
+        <strong class="summary-value">{{ currentCustomerPoints }}</strong>
+      </div>
     </div>
 
     <!-- TABS -->
     <div class="tabs">
       <button
+        class="tab-button"
         :class="{ active: activeTab === 'points' }"
         @click="activeTab = 'points'"
       >
@@ -169,6 +290,7 @@ const closeSaleModal = () => {
       </button>
 
       <button
+        class="tab-button"
         :class="{ active: activeTab === 'purchases' }"
         @click="activeTab = 'purchases'"
       >
@@ -178,38 +300,130 @@ const closeSaleModal = () => {
 
     <!-- TOP BAR -->
     <div class="top-bar">
-      <input v-model="searchKeyword" placeholder="Search..." />
-      <select v-model="sortOrder">
+      <VueDatePicker
+        v-model="dateRange"
+        range
+        :enable-time-picker="false"
+        :dark="isDark"
+        auto-apply
+        teleport
+      >
+        <template #trigger>
+          <button type="button" class="date-icon-btn" :class="{ active: dateRange }" :title="dateRange ? 'Date filter active' : 'Filter by date range'">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.5" fill="none" />
+              <path d="M3 10h18" stroke="currentColor" stroke-width="1.5" />
+              <path d="M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+            <span v-if="dateRange" class="date-clear" @click.stop="dateRange = null" title="Clear date filter">×</span>
+          </button>
+        </template>
+      </VueDatePicker>
+
+      <select v-if="activeTab === 'points'" v-model="filterType" class="select-field">
+        <option value="all">All Types</option>
+        <option value="sale">Sale</option>
+        <option value="manual">Manual</option>
+      </select>
+
+      <select v-model="sortOrder" class="select-field">
         <option value="desc">Newest</option>
         <option value="asc">Oldest</option>
       </select>
-      <select v-model.number="itemsPerPage">
+      <select v-model.number="itemsPerPage" class="select-field">
         <option v-for="o in itemsPerPageOptions" :key="o" :value="o">
           {{ o }}
         </option>
       </select>
+      <!-- <button class="secondary" @click="dateRange = null; filterType='all'">Clear</button> -->
     </div>
 
     <!-- POINTS HISTORY -->
-    <table v-if="activeTab === 'points'">
+    <div v-if="activeTab === 'points'" class="table-wrap" :class="{ 'table-wrap-menu-open': colMenuOpen }">
+    <table>
       <thead>
         <tr>
-          <th>Date</th>
-          <th>Points</th>
-          <th>Type</th>
-          <th>Notes</th>
-          <th>Sale #</th>
+          <th v-if="visibleCols.pt_date" :class="{ 'col-menu-anchor': lastVisibleColumnKey === 'pt_date' }">
+            <div class="th-actions-head" v-if="lastVisibleColumnKey === 'pt_date'">
+              Date
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+            <template v-else>Date</template>
+          </th>
+          <th v-if="visibleCols.pt_points" :class="{ 'col-menu-anchor': lastVisibleColumnKey === 'pt_points' }">
+            <div class="th-actions-head" v-if="lastVisibleColumnKey === 'pt_points'">
+              Points
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+            <template v-else>Points</template>
+          </th>
+          <th v-if="visibleCols.pt_type" :class="{ 'col-menu-anchor': lastVisibleColumnKey === 'pt_type' }">
+            <div class="th-actions-head" v-if="lastVisibleColumnKey === 'pt_type'">
+              Type
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+            <template v-else>Type</template>
+          </th>
+          <th v-if="visibleCols.pt_description" :class="{ 'col-menu-anchor': lastVisibleColumnKey === 'pt_description' }">
+            <div class="th-actions-head" v-if="lastVisibleColumnKey === 'pt_description'">
+              Notes
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+            <template v-else>Notes</template>
+          </th>
+          <th v-if="visibleCols.pt_sale" :class="{ 'col-menu-anchor': lastVisibleColumnKey === 'pt_sale' }">
+            <div class="th-actions-head" v-if="lastVisibleColumnKey === 'pt_sale'">
+              Sale #
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+            <template v-else>Sale #</template>
+          </th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="p in paginatedData" :key="p.id">
-          <td>{{ new Date(p.date).toLocaleString() }}</td>
-          <td :class="p.points > 0 ? 'points-plus' : 'points-minus'">
+          <td v-if="visibleCols.pt_date">{{ new Date(p.date).toLocaleString() }}</td>
+          <td v-if="visibleCols.pt_points" :class="p.points > 0 ? 'points-plus' : 'points-minus'">
             {{ p.points > 0 ? '+' : '' }}{{ p.points }}
           </td>
-          <td>{{ p.type }}</td>
-          <td>{{ p.description || '-' }}</td>
-          <td>
+          <td v-if="visibleCols.pt_type">{{ p.type }}</td>
+          <td v-if="visibleCols.pt_description">{{ p.description || '-' }}</td>
+          <td v-if="visibleCols.pt_sale">
             <span
               v-if="p.related_sale_id"
               class="sale-link"
@@ -220,17 +434,74 @@ const closeSaleModal = () => {
             <span v-else>—</span>
           </td>
         </tr>
+        <tr v-if="!paginatedData.length">
+          <td :colspan="visibleColumnCount" class="empty-state-cell">No points history found.</td>
+        </tr>
       </tbody>
     </table>
+    </div>
 
     <!-- PURCHASE HISTORY -->
-    <table v-if="activeTab === 'purchases'">
+    <div v-if="activeTab === 'purchases'" class="table-wrap" :class="{ 'table-wrap-menu-open': colMenuOpen }">
+    <table>
       <thead>
         <tr>
-          <th>Date</th>
-          <th>Sale #</th>
-          <th>Total</th>
-          <th>Status</th>
+          <th v-if="visibleCols.pu_date" :class="{ 'col-menu-anchor': lastVisibleColumnKey === 'pu_date' }">
+            <div class="th-actions-head" v-if="lastVisibleColumnKey === 'pu_date'">
+              Date
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+            <template v-else>Date</template>
+          </th>
+          <th v-if="visibleCols.pu_id" :class="{ 'col-menu-anchor': lastVisibleColumnKey === 'pu_id' }">
+            <div class="th-actions-head" v-if="lastVisibleColumnKey === 'pu_id'">
+              Sale #
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+            <template v-else>Sale #</template>
+          </th>
+          <th v-if="visibleCols.pu_total" :class="{ 'col-menu-anchor': lastVisibleColumnKey === 'pu_total' }">
+            <div class="th-actions-head" v-if="lastVisibleColumnKey === 'pu_total'">
+              Total
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+            <template v-else>Total</template>
+          </th>
+          <th v-if="visibleCols.pu_status" :class="{ 'col-menu-anchor': lastVisibleColumnKey === 'pu_status' }">
+            <div class="th-actions-head" v-if="lastVisibleColumnKey === 'pu_status'">
+              Status
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+            <template v-else>Status</template>
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -240,10 +511,10 @@ const closeSaleModal = () => {
           @click="openSaleModal(s)"
           style="cursor:pointer"
         >
-          <td>{{ new Date(s.created_at).toLocaleString() }}</td>
-          <td>#{{ s.id }}</td>
-          <td>₱{{ (s.final_total || 0).toFixed(2) }}</td>
-          <td>
+          <td v-if="visibleCols.pu_date">{{ new Date(s.created_at).toLocaleString() }}</td>
+          <td v-if="visibleCols.pu_id">#{{ s.id }}</td>
+          <td v-if="visibleCols.pu_total">₱{{ (s.final_total || 0).toFixed(2) }}</td>
+          <td v-if="visibleCols.pu_status">
             <span
               :class="{
                 'status-success': s.status === 'completed',
@@ -254,48 +525,78 @@ const closeSaleModal = () => {
             </span>
           </td>
         </tr>
+        <tr v-if="!paginatedData.length">
+          <td :colspan="visibleColumnCount" class="empty-state-cell">No purchase history found.</td>
+        </tr>
       </tbody>
     </table>
+    </div>
 
     <!-- PAGINATION -->
     <Pagination v-model:page="currentPage" :total-pages="totalPages" :max-pages="5" />
 
     <!-- SALE MODAL -->
-    <div v-if="showSaleModal" class="modal-overlay">
-      <div class="modal">
-        <h2>Sale #{{ selectedSale.id }}</h2>
-        <p>Date: {{ new Date(selectedSale.created_at).toLocaleString() }}</p>
-        <p>Status: {{ selectedSale.status || 'completed' }}</p>
+    <div v-if="showSaleModal" class="modal-overlay app-modal-backdrop">
+      <div class="modal app-modal-panel modal-lg">
+        <div class="sale-header">
+          <div>
+            <h2>Sale #{{ selectedSale.id }}</h2>
+            <div class="sale-meta">
+              {{ salePurchasedAt ? new Date(salePurchasedAt).toLocaleString() : '' }}
+            </div>
+            <div class="sale-meta">
+              Customer: {{ saleCustomer ? saleCustomer.name : 'Walk-in' }}
+            </div>
+            <div class="sale-meta">
+              Payment: {{ selectedSale.payment_method || 'Cash' }}
+            </div>
+          </div>
 
-        <hr/>
-        <table>
-          <thead>
-            <tr>
-              <th>Medicine</th>
-              <th>Price</th>
-              <th>Qty</th>
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in selectedSaleItems" :key="item.id">
-              <td>{{ item.medicine_name }} <small v-if="item.generic_name">{{ item.generic_name }}</small></td>
-              <td>₱{{ item.price_at_sale.toFixed(2) }}</td>
-              <td>{{ item.quantity }}</td>
-              <td>₱{{ (item.price_at_sale * item.quantity).toFixed(2) }}</td>
-            </tr>
-          </tbody>
-        </table>
+          <span
+            class="badge"
+            :class="selectedSale.status === 'voided' ? 'badge-voided' : 'badge-ok'"
+          >
+            {{ saleStatusLabel }}
+          </span>
+        </div>
 
-        <hr/>
-        <p>Subtotal: ₱{{ selectedSale.total_amount.toFixed(2) }}</p>
-        <p>Professional Fee: ₱{{ selectedSale.professional_fee.toFixed(2) }}</p>
-        <p>Discount (Points): -₱{{ selectedSale.points_discount?.toFixed(2) || 0 }}</p>
-        <p><strong>Final Total: ₱{{ selectedSale.final_total.toFixed(2) }}</strong></p>
-        <p>Money Given: ₱{{ selectedSale.money_given.toFixed(2) }}</p>
-        <p>Change: ₱{{ selectedSale.change.toFixed(2) }}</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Medicine</th>
+                <th>Qty</th>
+                <th>Price</th>
+                <th>Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in selectedSaleItems" :key="item.id">
+                <td>{{ item.medicine_name }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>₱{{ item.price_at_sale.toFixed(2) }}</td>
+                <td>₱{{ (item.quantity * item.price_at_sale).toFixed(2) }}</td>
+              </tr>
+              <tr v-if="!selectedSaleItems.length">
+                <td colspan="4" class="empty-state-cell">No sale items found.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-        <button @click="showSaleModal = false">Close</button>
+        <div class="sale-summary">
+          <div>Subtotal: ₱{{ Number(selectedSale.total_amount || 0).toFixed(2) }}</div>
+          <div>Professional Fee: ₱{{ Number(selectedSale.professional_fee || 0).toFixed(2) }}</div>
+          <div>Discount: ₱{{ saleDiscountAmount.toFixed(2) }}</div>
+          <div><strong>Total: ₱{{ Number(selectedSale.final_total || 0).toFixed(2) }}</strong></div>
+
+          <hr />
+
+          <div>Money Given: ₱{{ Number(selectedSale.money_given || 0).toFixed(2) }}</div>
+          <div>Change: ₱{{ Number(selectedSale.change || 0).toFixed(2) }}</div>
+        </div>
+
+        <button class="secondary btn-block-mobile" @click="closeSaleModal">Close</button>
       </div>
     </div>
 
@@ -311,11 +612,73 @@ const closeSaleModal = () => {
   margin: auto;
   padding: 20px;
   overflow-x: hidden;
+  height: 100%;
 }
 
-body.dark-mode .medicines-page {
-  background-color: #121212;
-  color: #eee;
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 28px;
+  margin-bottom: 14px;
+}
+
+.page-subtitle {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+body.dark-mode .page-subtitle {
+  color: #94a3b8;
+}
+
+.customer-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.customer-summary-card {
+  padding: 16px 18px;
+  border: 1px solid #dbe6e2;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fffc 100%);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+body.dark-mode .customer-summary-card {
+  background: linear-gradient(180deg, #162520 0%, #121b18 100%);
+  border-color: #244034;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+}
+
+.points-card {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.summary-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #1a8a6e;
+}
+
+.summary-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+body.dark-mode .summary-value {
+  color: #f8fafc;
 }
 
 /* ======================
@@ -325,90 +688,6 @@ body.dark-mode .medicines-page {
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
-}
-
-.tabs button {
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: none;
-  background: #ddd;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.tabs button.active {
-  background: #1abc9c;
-  color: #fff;
-}
-
-body.dark-mode .tabs button {
-  background: #333;
-  color: #eee;
-}
-
-body.dark-mode .tabs button.active {
-  background: #16a085;
-}
-
-/* ======================
-   TOP BAR
-====================== */
-.top-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.top-bar input,
-.top-bar select {
-  min-height: 40px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  background: #fff;
-  color: #222;
-}
-
-body.dark-mode .top-bar input,
-body.dark-mode .top-bar select {
-  background: #1c1c1c;
-  border-color: #333;
-  color: #eee;
-}
-
-/* ======================
-   TABLE
-====================== */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  white-space: nowrap;
-  background: #fff;
-}
-
-body.dark-mode table {
-  background: #181818;
-}
-
-th,
-td {
-  border: 1px solid #ccc;
-  padding: 8px;
-  text-align: left;
-}
-
-body.dark-mode th,
-body.dark-mode td {
-  border-color: #333;
-}
-
-tbody tr:hover {
-  background: #f5f5f5;
-}
-
-body.dark-mode tbody tr:hover {
-  background: #222;
 }
 
 /* ======================
@@ -438,102 +717,11 @@ body.dark-mode tbody tr:hover {
 }
 
 /* ======================
-   PAGINATION
-====================== */
-.pagination {
-  margin-top: 12px;
-  display: flex;
-  justify-content: center;
-  gap: 6px;
-}
-
-.pagination button {
-  min-height: 36px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: none;
-  background: #1abc9c;
-  color: #fff;
-  cursor: pointer;
-}
-
-.pagination button.active {
-  background: #16a085;
-}
-
-.pagination button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* ======================
    MODAL
 ====================== */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.6);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 999;
-}
-
 .modal {
-  background: #fff;
-  padding: 20px;
-  border-radius: 14px;
   min-width: 320px;
   max-width: 90vw;
-  box-shadow: 0 10px 30px rgba(0,0,0,.3);
-}
-
-body.dark-mode .modal {
-  background: #1c1c1c;
-  color: #eee;
-}
-
-/* modal content */
-.modal h2 {
-  margin-top: 0;
-  margin-bottom: 10px;
-}
-
-.modal p {
-  margin: 6px 0;
-}
-
-/* modal button */
-.modal button {
-  margin-top: 14px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: none;
-  background: #1abc9c;
-  color: #fff;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.modal button:hover {
-  background: #16a085;
-}
-
-.back-btn {
-  background: #3498db;
-  color: #fff;
-  padding: 6px 14px;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.back-btn:hover {
-  background: #2980b9;
-}
-
-body.dark-mode .back-btn {
-  background: #2980b9;
 }
 
 /* ======================
@@ -549,5 +737,43 @@ body.dark-mode .back-btn {
   font-weight: 600;
 }
 
+/* Calendar icon trigger */
+:deep(.dp__main) {
+  display: inline-flex;
+  width: auto;
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .customer-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .points-card {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+}
+.date-clear {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  background: #e74c3c;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  font-style: normal;
+  cursor: pointer;
+}
+.date-clear:hover { background: #c0392b; }
 
 </style>

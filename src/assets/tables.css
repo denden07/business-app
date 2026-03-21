@@ -1,0 +1,177 @@
+/* ================================================
+   PHARMACY POS — UNIFIED TABLE STYLES
+   Imported globally in main.js.
+   All data-tables across the app share this file.
+   ================================================ */
+
+/* ── Container ────────────────────────────────── */
+.table-wrap {
+  border-radius: 18px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.08);
+  border: 1px solid #d7e1ea;
+  margin-bottom: 4px;
+  position: relative;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+}
+
+.table-wrap.table-wrap-menu-open {
+  overflow: visible;
+  z-index: 30;
+}
+
+/* ── Table base ───────────────────────────────── */
+.table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  background: transparent;
+  white-space: nowrap;
+}
+
+/* ── Header cells ─────────────────────────────── */
+.table-wrap thead th {
+  background: linear-gradient(180deg, #f4fbf8 0%, #eaf7f1 100%);
+  color: #146c5f;
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  padding: 13px 15px;
+  border-bottom: 1px solid #d1e8df;
+  border-right: 1px solid #deeee8;
+  white-space: nowrap;
+}
+.table-wrap thead th:last-child { border-right: none; }
+
+/* ── Body cells ───────────────────────────────── */
+.table-wrap tbody td {
+  padding: 12px 15px;
+  border-bottom: 1px solid #e9eef3;
+  border-right: 1px solid #edf2f6;
+  font-size: 16px;
+  color: #24323f;
+}
+.table-wrap tbody tr:nth-child(even) td { background: #f6f9fb; }
+.table-wrap tbody td:last-child { border-right: none; }
+.table-wrap tbody tr:last-child td { border-bottom: none; }
+.table-wrap tbody tr:hover td { background: #eef8f4; }
+
+.table-wrap .empty-state-cell {
+  text-align: center;
+  color: #64748b;
+  padding: 20px 12px;
+}
+
+/* ── Sticky actions column ────────────────────── */
+.table-wrap .col-actions {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  border-right: none !important;
+}
+.table-wrap thead .col-actions {
+  background: linear-gradient(180deg, #f4fbf8 0%, #eaf7f1 100%);
+  box-shadow: -8px 0 18px rgba(15, 23, 42, .08);
+  z-index: 10;
+}
+.table-wrap tbody tr .col-actions {
+  background: #ffffff;
+  box-shadow: -8px 0 18px rgba(15, 23, 42, .05);
+}
+.table-wrap tbody tr:nth-child(even) .col-actions { background: #f6f9fb; }
+.table-wrap tbody tr:hover .col-actions { background: #eef8f4; }
+
+.table-wrap .col-actions-menu-only {
+  width: 52px;
+  min-width: 52px;
+  text-align: right;
+}
+
+/* ── Actions td flex layout ───────────────────── */
+.table-wrap .actions-td { display: flex; gap: 6px; align-items: center; justify-content: center;}
+
+/* ── th row: "Actions" text + gear icon ──────── */
+.th-actions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.table-wrap thead th.col-menu-anchor {
+  position: relative;
+  padding-right: 52px;
+}
+
+.table-wrap thead th.col-menu-anchor .col-toggle-wrap {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+}
+
+/* ── Gear icon button (inside th) ────────────── */
+.col-icon-btn {
+  background: rgba(255,255,255,.66);
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.9;
+  padding: 5px;
+  min-height: unset;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 8px;
+  flex-shrink: 0;
+  line-height: 1;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 4px 10px rgba(15, 23, 42, .06);
+}
+.col-icon-btn:hover {
+  opacity: 1;
+  background: rgba(26,188,156,.12);
+}
+
+/* ── Column visibility dropdown ───────────────── */
+.col-toggle-wrap { position: relative; }
+.col-menu-backdrop { position: fixed; inset: 0; z-index: 199; }
+.col-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 240;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+  border: 1px solid #d7e1ea;
+  border-radius: 14px;
+  box-shadow: 0 18px 34px rgba(15, 23, 42, .18);
+  padding: 8px 0;
+  min-width: 175px;
+}
+.col-menu-title {
+  padding: 10px 16px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: #1a8a6e;
+}
+.col-menu label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.col-menu label:hover { background: #eef8f4; }
+.col-menu input[type="checkbox"] {
+  accent-color: #1abc9c;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}

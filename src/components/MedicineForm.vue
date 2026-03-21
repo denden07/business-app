@@ -2,6 +2,8 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useStore } from 'vuex'
 import { dbPromise } from '../db'
+import { reduceFromSource } from '../db/query'
+import Swal from 'sweetalert2'
 
 const props = defineProps({
   medicineToEdit: {
@@ -43,10 +45,11 @@ const loadTotalStock = async (medicineId) => {
     .objectStore('inventory_batches')
     .index('medicine_id')
 
-  const batches = await index.getAll(IDBKeyRange.only(medicineId))
-  totalStock.value = batches.reduce(
-    (sum, b) => sum + Number(b.quantity || 0),
-    0
+  totalStock.value = await reduceFromSource(
+    index,
+    (sum, batch) => sum + Number(batch.quantity || 0),
+    0,
+    { query: IDBKeyRange.only(medicineId) }
   )
 }
 
@@ -85,57 +88,69 @@ const isValid = computed(() => {
    Submit
 ===================== */
 const submitForm = async () => {
-  console.log('test')
   if (!isValid.value) {
-    alert('Please fill all required fields')
+    await Swal.fire({
+      icon: 'warning',
+      title: 'Incomplete form',
+      text: 'Please fill all required fields.'
+    })
     return
   }
 
-  const medicinePayload = {
-    name: name.value.trim(),
-    generic_name: genericName.value.trim(),
-    price1: Number(price1.value),
-    price2: Number(price2.value)
-  }
+  try {
+    const medicinePayload = {
+      name: name.value.trim(),
+      generic_name: genericName.value.trim(),
+      price1: Number(price1.value),
+      price2: Number(price2.value)
+    }
 
-  let medicineId
+    let medicineId
 
-  /* ---------- SAVE MEDICINE ---------- */
-  if (props.medicineToEdit) {
-    medicineId = props.medicineToEdit.id
-    await store.dispatch('medicines/updateMedicine', {
-      id: medicineId,
-      ...medicinePayload
+    if (props.medicineToEdit) {
+      medicineId = props.medicineToEdit.id
+      await store.dispatch('medicines/updateMedicine', {
+        id: medicineId,
+        ...medicinePayload
+      })
+    } else {
+      medicineId = await store.dispatch('medicines/addMedicine', medicinePayload)
+    }
+
+    if (adjustmentQty.value !== 0) {
+      const db = await dbPromise
+      await db.add('inventory_batches', {
+        medicine_id: medicineId,
+        quantity: Number(adjustmentQty.value),
+        expiry_date: expiryDate.value || null,
+        created_at: new Date().toISOString(),
+        reason: adjustmentQty.value > 0 ? 'RESTOCK' : 'ADJUSTMENT'
+      })
+    }
+
+    await Swal.fire({
+      icon: 'success',
+      title: props.medicineToEdit ? 'Medicine updated' : 'Medicine added',
+      timer: 1200,
+      showConfirmButton: false
     })
-  } else {
-    await store.dispatch('medicines/addMedicine', medicinePayload)
 
-    // get last inserted medicine safely
-    const db = await dbPromise
-    const all = await db.getAll('medicines')
-    medicineId = all[all.length - 1].id
-  }
-
-  /* ---------- STOCK ADJUSTMENT ---------- */
-  if (adjustmentQty.value !== 0) {
-    const db = await dbPromise
-    await db.add('inventory_batches', {
-      medicine_id: medicineId,
-      quantity: Number(adjustmentQty.value), // can be + or -
-      expiry_date: expiryDate.value || null,
-      created_at: new Date().toISOString(),
-      reason: adjustmentQty.value > 0 ? 'RESTOCK' : 'ADJUSTMENT'
+    emit('saved')
+    emit('close')
+  } catch (err) {
+    console.error('Failed to save medicine', err)
+    await Swal.fire({
+      icon: 'error',
+      title: props.medicineToEdit ? 'Failed to update medicine' : 'Failed to add medicine',
+      text: err.message || 'Something went wrong while saving the medicine.'
     })
   }
-
-  emit('saved')
-  emit('close')
 }
 </script>
 
 <template>
-  <div class="modal">
-    <div class="modal-content">
+  <div class="modal app-modal-backdrop">
+    <div class="modal-content modal-form modal-md medicine-form-panel">
       <h2>{{ medicineToEdit ? 'Edit Medicine' : 'Add Medicine' }}</h2>
 
       <label>Brand Name</label>
@@ -154,7 +169,7 @@ const submitForm = async () => {
 
       <h3>Inventory</h3>
 
-      <p v-if="medicineToEdit">
+      <p v-if="medicineToEdit" class="stock-note">
         Current Stock: <strong>{{ totalStock }}</strong>
       </p>
 
@@ -164,160 +179,111 @@ const submitForm = async () => {
       <label>Expiry Date (optional)</label>
       <input v-model="expiryDate" type="date" />
 
-      <div class="actions">
-        <button :disabled="!isValid" @click="submitForm">
+      <div class="actions app-modal-actions">
+        <button class="primary" :disabled="!isValid" @click="submitForm">
           {{ medicineToEdit ? 'Save Changes' : 'Add Medicine' }}
         </button>
-        <button @click="$emit('close')">Cancel</button>
+        <button class="secondary" @click="$emit('close')">Cancel</button>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-
-/* =========================
-   MODAL BACKDROP
-========================= */
-.modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 2000;
-
-  /* IMPORTANT: allow scrolling */
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-
-  padding: 16px;
-}
-
-/* =========================
-   MODAL CONTENT
-========================= */
 .modal-content {
-  background: #ffffff;
-  color: #222;
-
-  width: 100%;
   max-width: 460px;
-
-  /* CRITICAL FOR ANDROID */
   min-height: fit-content;
   max-height: none;
-
-  margin: 0 auto; /* center horizontally */
-  border-radius: 14px;
-
-  padding: 24px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
 }
 
-/* =========================
-   HEADINGS
-========================= */
 .modal-content h2,
 .modal-content h3 {
-  color: #111;
+  color: var(--modal-surface-text);
   margin-bottom: 6px;
 }
 
-/* =========================
-   LABELS
-========================= */
 label {
   font-weight: 600;
-  color: #333;
+  color: color-mix(in srgb, var(--modal-surface-text) 82%, transparent);
   font-size: 16px;
 }
 
-/* =========================
-   INPUTS (ANDROID SAFE)
-========================= */
 input {
-  padding: 12px;
   font-size: 16px; /* prevents zoom on Android */
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  background: #fff;
-  color: #222;
 }
 
-input:focus {
-  outline: none;
-  border-color: #1abc9c;
-}
-
-/* =========================
-   TEXT / DIVIDER
-========================= */
 p {
-  color: #333;
+  color: color-mix(in srgb, var(--modal-surface-text) 76%, transparent);
   font-size: 14px;
+}
+
+.stock-note {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--modal-surface-text) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--modal-surface-text) 12%, transparent);
+}
+
+.stock-note strong {
+  color: var(--modal-surface-text);
 }
 
 hr {
   margin: 12px 0;
   border: none;
-  border-top: 1px solid #ddd;
+  border-top: 1px solid color-mix(in srgb, var(--modal-surface-text) 16%, transparent);
 }
 
-/* =========================
-   ACTION BUTTONS
-========================= */
-.actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 16px;
-}
-
-/* Make buttons sticky on small screens */
 @media (max-height: 600px) {
   .actions {
     position: sticky;
     bottom: 0;
-    background: #fff;
+    background: var(--modal-surface-bg);
     padding-top: 12px;
+    padding-bottom: 4px;
   }
 }
 
 .actions button {
   flex: 1;
-  padding: 12px;
   font-size: 16px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
 }
 
-/* Primary */
-.actions button:first-child {
-  background: #1abc9c;
-  color: #fff;
+body.dark-mode .medicine-form-panel {
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.42);
 }
 
-.actions button:first-child:hover {
-  background: #17a589;
+body.dark-mode .medicine-form-panel h2,
+body.dark-mode .medicine-form-panel h3 {
+  color: #f8fafc;
 }
 
-/* Cancel */
-.actions button:last-child {
-  background: #e0e0e0;
-  color: #333;
+body.dark-mode .medicine-form-panel label {
+  color: #d7e1ea;
 }
 
-.actions button:last-child:hover {
-  background: #cfcfcf;
+body.dark-mode .medicine-form-panel p {
+  color: #c2ced9;
 }
 
-/* Disabled */
-.actions button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+body.dark-mode .medicine-form-panel .stock-note {
+  background: rgba(148, 163, 184, 0.08);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+body.dark-mode .medicine-form-panel .stock-note strong {
+  color: #f8fafc;
+}
+
+body.dark-mode .medicine-form-panel hr {
+  border-top-color: rgba(148, 163, 184, 0.22);
+}
+
+@media (max-width: 768px) {
+  .medicine-form-panel {
+    max-width: 100%;
+  }
 }
 
 
