@@ -191,6 +191,10 @@ body.dark-mode .table-wrap tbody td {
   color: var(--table-text);
 }
 
+body.dark-mode .table-wrap .empty-state-cell {
+  color: #9fb0c2;
+}
+
 body.dark-mode .table-wrap tbody tr:nth-child(even) td {
   background: var(--table-surface-alt);
 }

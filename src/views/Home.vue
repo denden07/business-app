@@ -53,48 +53,56 @@ const saveSaleAsDraft = async () => {
     Swal.fire({ icon: 'warning', title: 'Cart is empty', text: 'Add items before saving as draft.', timer: 1500, showConfirmButton: false })
     return
   }
-  const { value: name } = await Swal.fire({
-    title: 'Save as Draft',
-    input: 'text',
-    inputPlaceholder: 'e.g. Patient name / Notes',
-    inputLabel: 'Label (optional)',
-    showCancelButton: true,
-    confirmButtonText: 'Save Draft'
-  })
-  if (name === undefined) return
+  try {
+    const { value: name } = await Swal.fire({
+      title: 'Save as Draft',
+      input: 'text',
+      inputPlaceholder: 'e.g. Patient name / Notes',
+      inputLabel: 'Label (optional)',
+      showCancelButton: true,
+      confirmButtonText: 'Save Draft'
+    })
+    if (name === undefined) return
 
-  await store.dispatch('drafts/save', {
-    name: name || `Draft ${new Date().toLocaleTimeString()}`,
-    snapshot: {
-      cart: JSON.parse(JSON.stringify(cart.value)),
-      medicinesMap: JSON.parse(JSON.stringify(medicinesMap.value)),
-      customer: selectedCustomer.value ? JSON.parse(JSON.stringify(selectedCustomer.value)) : null,
-      professionalFee: professionalFee.value,
-      pointsConfirmed: pointsConfirmed.value,
-      redeemMultiplier: redeemMultiplier.value,
-      customerPoints: customerPoints.value,
-      specialDiscount: specialDiscount.value,
-      paymentMethod: paymentMethod.value
+    await store.dispatch('drafts/save', {
+      name: name || `Draft ${new Date().toLocaleTimeString()}`,
+      snapshot: {
+        cart: JSON.parse(JSON.stringify(cart.value)),
+        medicinesMap: JSON.parse(JSON.stringify(medicinesMap.value)),
+        customer: selectedCustomer.value ? JSON.parse(JSON.stringify(selectedCustomer.value)) : null,
+        professionalFee: professionalFee.value,
+        pointsConfirmed: pointsConfirmed.value,
+        redeemMultiplier: redeemMultiplier.value,
+        customerPoints: customerPoints.value,
+        specialDiscount: specialDiscount.value,
+        paymentMethod: paymentMethod.value
+      }
+    })
+
+    if (activeDraftId.value !== null) {
+      await store.dispatch('drafts/remove', activeDraftId.value)
+      activeDraftId.value = null
     }
-  })
 
-  // If this was a resumed draft, remove the original now that we've re-saved it
-  if (activeDraftId.value !== null) {
-    await store.dispatch('drafts/remove', activeDraftId.value)
-    activeDraftId.value = null
+    cart.value = []
+    professionalFee.value = 0
+    moneyGiven.value = 0
+    selectedCustomer.value = null
+    pointsConfirmed.value = false
+    redeemMultiplier.value = 1
+    specialDiscount.value = 0
+    customerPoints.value = 0
+    paymentMethod.value = 'cash'
+
+    await Swal.fire({ icon: 'success', title: 'Saved as draft!', timer: 1200, showConfirmButton: false })
+  } catch (err) {
+    console.error('Failed to save draft', err)
+    await Swal.fire({
+      icon: 'error',
+      title: 'Save failed',
+      text: err.message || 'Unable to save the sale as draft.'
+    })
   }
-
-  cart.value = []
-  professionalFee.value = 0
-  moneyGiven.value = 0
-  selectedCustomer.value = null
-  pointsConfirmed.value = false
-  redeemMultiplier.value = 1
-  specialDiscount.value = 0
-  customerPoints.value = 0
-  paymentMethod.value = 'cash'
-
-  Swal.fire({ icon: 'success', title: 'Saved as draft!', timer: 1200, showConfirmButton: false })
 }
 
 const resumeDraft = (draft) => {

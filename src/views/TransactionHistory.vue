@@ -54,6 +54,7 @@ const lastVisibleColumnKey = computed(() => {
   const visibleActiveCols = activeCols.value.filter(col => visibleCols.value[col.key])
   return visibleActiveCols.at(-1)?.key || activeCols.value.at(-1)?.key || null
 })
+const visibleColumnCount = computed(() => Math.max(1, activeCols.value.filter(col => visibleCols.value[col.key]).length))
 const toggleCol = (key) => { visibleCols.value[key] = !visibleCols.value[key] }
 const toggleColumnMenu = () => {
   colMenuOpen.value = !colMenuOpen.value
@@ -439,6 +440,9 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
             <span v-else>—</span>
           </td>
         </tr>
+        <tr v-if="!paginatedData.length">
+          <td :colspan="visibleColumnCount" class="empty-state-cell">No points history found.</td>
+        </tr>
       </tbody>
     </table>
     </div>
@@ -527,6 +531,9 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
             </span>
           </td>
         </tr>
+        <tr v-if="!paginatedData.length">
+          <td :colspan="visibleColumnCount" class="empty-state-cell">No purchase history found.</td>
+        </tr>
       </tbody>
     </table>
     </div>
@@ -575,6 +582,9 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
                 <td>{{ item.quantity }}</td>
                 <td>₱{{ item.price_at_sale.toFixed(2) }}</td>
                 <td>₱{{ (item.quantity * item.price_at_sale).toFixed(2) }}</td>
+              </tr>
+              <tr v-if="!selectedSaleItems.length">
+                <td colspan="4" class="empty-state-cell">No sale items found.</td>
               </tr>
             </tbody>
           </table>

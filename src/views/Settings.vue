@@ -66,6 +66,11 @@ async function saveAppName() {
   } catch (err) {
     console.error('Failed to save app name', err)
     appNameStatus.value = 'Failed to save app name: ' + err.message
+    await Swal.fire({
+      icon: 'error',
+      title: 'Save failed',
+      text: err.message || 'Unable to save the application name.'
+    })
   }
 }
 
@@ -100,9 +105,20 @@ async function toggleInteractionSetting(key) {
     window.dispatchEvent(new CustomEvent('interaction-settings-changed', {
       detail: interactionSettings.value,
     }))
+    await Swal.fire({
+      icon: 'success',
+      title: 'Preferences saved',
+      timer: 1200,
+      showConfirmButton: false,
+    })
   } catch (err) {
     console.error('Failed to save interaction settings', err)
     interactionStatus.value = 'Failed to save interaction preferences: ' + err.message
+    await Swal.fire({
+      icon: 'error',
+      title: 'Save failed',
+      text: err.message || 'Unable to save interaction preferences.'
+    })
   }
 }
 
@@ -368,9 +384,20 @@ async function savePageVisibility() {
     status.value = 'Page visibility saved'
     // refresh router so menu and routes reflect changes immediately
     try { await refreshRoutes() } catch (e) { console.warn('Failed to refresh routes', e) }
+    await Swal.fire({
+      icon: 'success',
+      title: 'Page visibility saved',
+      timer: 1200,
+      showConfirmButton: false,
+    })
   } catch (err) {
     console.error('Failed saving page visibility', err)
     status.value = 'Failed saving page visibility: ' + err.message
+    await Swal.fire({
+      icon: 'error',
+      title: 'Save failed',
+      text: err.message || 'Unable to save page visibility.'
+    })
   }
 }
 

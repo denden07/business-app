@@ -36,6 +36,7 @@ const allCols = [
   { key: 'price2', label: 'Discount Price' },
   { key: 'stock', label: 'Stock' },
 ]
+const visibleColumnCount = computed(() => allCols.filter(col => visibleCols.value[col.key]).length + 1)
 
 const toggleCol = (key) => {
   visibleCols.value[key] = !visibleCols.value[key]
@@ -110,12 +111,6 @@ const closeForm = async (saved = false) => {
 
   if (saved) {
     await loadPage()
-    Swal.fire({
-      icon: 'success',
-      title: 'Saved!',
-      timer: 1200,
-      showConfirmButton: false
-    })
   }
 }
 
@@ -139,8 +134,23 @@ const archiveMedicine = async (medicine) => {
   })
   if (!ok.isConfirmed) return
 
-  await store.dispatch('medicines/archiveMedicine', medicine)
-  await loadPage()
+  try {
+    await store.dispatch('medicines/archiveMedicine', medicine)
+    await loadPage()
+    await Swal.fire({
+      icon: 'success',
+      title: 'Medicine archived',
+      timer: 1200,
+      showConfirmButton: false
+    })
+  } catch (err) {
+    console.error('Failed to archive medicine', err)
+    await Swal.fire({
+      icon: 'error',
+      title: 'Archive failed',
+      text: err.message || 'Unable to archive this medicine.'
+    })
+  }
 }
 
 const restoreMedicine = async (medicine) => {
@@ -152,8 +162,23 @@ const restoreMedicine = async (medicine) => {
   })
   if (!ok.isConfirmed) return
 
-  await store.dispatch('medicines/restoreMedicine', medicine)
-  await loadPage()
+  try {
+    await store.dispatch('medicines/restoreMedicine', medicine)
+    await loadPage()
+    await Swal.fire({
+      icon: 'success',
+      title: 'Medicine restored',
+      timer: 1200,
+      showConfirmButton: false
+    })
+  } catch (err) {
+    console.error('Failed to restore medicine', err)
+    await Swal.fire({
+      icon: 'error',
+      title: 'Restore failed',
+      text: err.message || 'Unable to restore this medicine.'
+    })
+  }
 }
 </script>
 
@@ -240,6 +265,9 @@ const restoreMedicine = async (medicine) => {
                 Restore
               </button>
             </td>
+          </tr>
+          <tr v-if="!medicines.length">
+            <td :colspan="visibleColumnCount" class="empty-state-cell">No medicines found.</td>
           </tr>
         </tbody>
       </table>

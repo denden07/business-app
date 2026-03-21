@@ -57,6 +57,12 @@
 .table-wrap tbody tr:last-child td { border-bottom: none; }
 .table-wrap tbody tr:hover td { background: #eef8f4; }
 
+.table-wrap .empty-state-cell {
+  text-align: center;
+  color: #64748b;
+  padding: 20px 12px;
+}
+
 /* ── Sticky actions column ────────────────────── */
 .table-wrap .col-actions {
   position: sticky;

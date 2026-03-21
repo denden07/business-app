@@ -47,6 +47,7 @@ const allCols = [
   { key: 'payment_method', label: 'Payment' },
   { key: 'status', label: 'Status' },
 ]
+const visibleColumnCount = computed(() => allCols.filter(col => visibleCols.value[col.key]).length + 1)
 const toggleCol = (key) => { visibleCols.value[key] = !visibleCols.value[key] }
 
 /* ======================
@@ -351,6 +352,9 @@ const exportCSV = async () => {
             <button v-if="sale.status === 'completed'" class="danger btn" @click="voidSale(sale)">Void</button>
           </td>
         </tr>
+        <tr v-if="!sales.length">
+          <td :colspan="visibleColumnCount" class="empty-state-cell">No sales found.</td>
+        </tr>
       </tbody>
     </table>
     </div>
@@ -399,6 +403,9 @@ const exportCSV = async () => {
               <td>{{ item.quantity }}</td>
               <td>₱{{ item.price_at_sale.toFixed(2) }}</td>
               <td>₱{{ (item.quantity * item.price_at_sale).toFixed(2) }}</td>
+            </tr>
+            <tr v-if="!saleItems.length">
+              <td colspan="4" class="empty-state-cell">No sale items found.</td>
             </tr>
           </tbody>
         </table>

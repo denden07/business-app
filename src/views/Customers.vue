@@ -32,6 +32,7 @@ const allCols = [
   { key: 'address', label: 'Address' },
   { key: 'points', label: 'Points' },
 ]
+const visibleColumnCount = computed(() => allCols.filter(col => visibleCols.value[col.key]).length + 1)
 const toggleCol = (key) => { visibleCols.value[key] = !visibleCols.value[key] }
 
 const modal = ref(null)
@@ -126,16 +127,40 @@ function close() {
    SAVE CUSTOMER
 ====================== */
 async function save() {
-  if (!form.value.name) return
-
-  if (form.value.id) {
-    await store.dispatch('customers/editCustomer', form.value)
-  } else {
-    await store.dispatch('customers/addCustomer', form.value)
+  if (!form.value.name) {
+    await Swal.fire({
+      icon: 'warning',
+      title: 'Name is required',
+      text: 'Please enter a customer name before saving.'
+    })
+    return
   }
 
-  close()
-  await load()
+  try {
+    const isEditing = !!form.value.id
+
+    if (isEditing) {
+      await store.dispatch('customers/editCustomer', form.value)
+    } else {
+      await store.dispatch('customers/addCustomer', form.value)
+    }
+
+    close()
+    await load()
+    await Swal.fire({
+      icon: 'success',
+      title: isEditing ? 'Customer updated' : 'Customer added',
+      timer: 1200,
+      showConfirmButton: false
+    })
+  } catch (err) {
+    console.error('Failed to save customer', err)
+    await Swal.fire({
+      icon: 'error',
+      title: 'Save failed',
+      text: err.message || 'Unable to save the customer.'
+    })
+  }
 }
 
 /* ======================
@@ -153,8 +178,23 @@ async function remove(c) {
 
   if (!ok.isConfirmed) return
 
-  await store.dispatch('customers/deleteCustomer', c)
-  await load()
+  try {
+    await store.dispatch('customers/deleteCustomer', c)
+    await load()
+    await Swal.fire({
+      icon: 'success',
+      title: 'Customer deleted',
+      timer: 1200,
+      showConfirmButton: false
+    })
+  } catch (err) {
+    console.error('Failed to delete customer', err)
+    await Swal.fire({
+      icon: 'error',
+      title: 'Delete failed',
+      text: err.message || 'Unable to delete this customer.'
+    })
+  }
 }
 
 /* ======================
@@ -176,7 +216,14 @@ function closePointsModal() {
 }
 
 async function savePointsAdjustment() {
-  if (!pointsForm.points) return
+  if (!pointsForm.points) {
+    await Swal.fire({
+      icon: 'warning',
+      title: 'No points entered',
+      text: 'Enter points to add or deduct before saving.'
+    })
+    return
+  }
   closePointsModal()
   const confirm = await Swal.fire({
     title: 'Confirm points adjustment?',
@@ -188,21 +235,29 @@ async function savePointsAdjustment() {
 
   if (!confirm.isConfirmed) return
 
-  await store.dispatch('customers/addManualPoints', {
-    customer_id: pointsForm.customer_id,
-    points: pointsForm.points,
-    note: pointsForm.note
-  })
+  try {
+    await store.dispatch('customers/addManualPoints', {
+      customer_id: pointsForm.customer_id,
+      points: pointsForm.points,
+      note: pointsForm.note
+    })
 
-  Swal.fire({
-    icon: 'success',
-    title: 'Points updated',
-    timer: 1200,
-    showConfirmButton: false
-  })
-
-  closePointsModal()
-  await load()
+    await load()
+    await Swal.fire({
+      icon: 'success',
+      title: 'Points updated',
+      timer: 1200,
+      showConfirmButton: false
+    })
+    closePointsModal()
+  } catch (err) {
+    console.error('Failed to update points', err)
+    await Swal.fire({
+      icon: 'error',
+      title: 'Update failed',
+      text: err.message || 'Unable to update customer points.'
+    })
+  }
 }
 
 /* ======================
@@ -311,6 +366,9 @@ function goToTransactionHistory(customerId) {
               <button class="danger btn" @click.stop="remove(c)">Delete</button>
               <button class="secondary btn" @click.stop="openPointsModal(c)">Adjust Points</button>
             </td>
+          </tr>
+          <tr v-if="!paginated.length">
+            <td :colspan="visibleColumnCount" class="empty-state-cell">No customers found.</td>
           </tr>
         </tbody>
       </table>

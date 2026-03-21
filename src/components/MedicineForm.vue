@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useStore } from 'vuex'
 import { dbPromise } from '../db'
+import Swal from 'sweetalert2'
 
 const props = defineProps({
   medicineToEdit: {
@@ -86,49 +87,66 @@ const isValid = computed(() => {
 ===================== */
 const submitForm = async () => {
   if (!isValid.value) {
-    alert('Please fill all required fields')
+    await Swal.fire({
+      icon: 'warning',
+      title: 'Incomplete form',
+      text: 'Please fill all required fields.'
+    })
     return
   }
 
-  const medicinePayload = {
-    name: name.value.trim(),
-    generic_name: genericName.value.trim(),
-    price1: Number(price1.value),
-    price2: Number(price2.value)
-  }
+  try {
+    const medicinePayload = {
+      name: name.value.trim(),
+      generic_name: genericName.value.trim(),
+      price1: Number(price1.value),
+      price2: Number(price2.value)
+    }
 
-  let medicineId
+    let medicineId
 
-  /* ---------- SAVE MEDICINE ---------- */
-  if (props.medicineToEdit) {
-    medicineId = props.medicineToEdit.id
-    await store.dispatch('medicines/updateMedicine', {
-      id: medicineId,
-      ...medicinePayload
+    if (props.medicineToEdit) {
+      medicineId = props.medicineToEdit.id
+      await store.dispatch('medicines/updateMedicine', {
+        id: medicineId,
+        ...medicinePayload
+      })
+    } else {
+      await store.dispatch('medicines/addMedicine', medicinePayload)
+
+      const db = await dbPromise
+      const all = await db.getAll('medicines')
+      medicineId = all[all.length - 1].id
+    }
+
+    if (adjustmentQty.value !== 0) {
+      const db = await dbPromise
+      await db.add('inventory_batches', {
+        medicine_id: medicineId,
+        quantity: Number(adjustmentQty.value),
+        expiry_date: expiryDate.value || null,
+        created_at: new Date().toISOString(),
+        reason: adjustmentQty.value > 0 ? 'RESTOCK' : 'ADJUSTMENT'
+      })
+    }
+
+    await Swal.fire({
+      icon: 'success',
+      title: props.medicineToEdit ? 'Medicine updated' : 'Medicine added',
+      timer: 1200,
+      showConfirmButton: false
     })
-  } else {
-    await store.dispatch('medicines/addMedicine', medicinePayload)
 
-    // get last inserted medicine safely
-    const db = await dbPromise
-    const all = await db.getAll('medicines')
-    medicineId = all[all.length - 1].id
-  }
-
-  /* ---------- STOCK ADJUSTMENT ---------- */
-  if (adjustmentQty.value !== 0) {
-    const db = await dbPromise
-    await db.add('inventory_batches', {
-      medicine_id: medicineId,
-      quantity: Number(adjustmentQty.value), // can be + or -
-      expiry_date: expiryDate.value || null,
-      created_at: new Date().toISOString(),
-      reason: adjustmentQty.value > 0 ? 'RESTOCK' : 'ADJUSTMENT'
+    emit('saved')
+    emit('close')
+  } catch (err) {
+    console.error('Failed to save medicine', err)
+    await Swal.fire({
+      icon: 'error',
+      title: props.medicineToEdit ? 'Failed to update medicine' : 'Failed to add medicine',
+      text: err.message || 'Something went wrong while saving the medicine.'
     })
   }
-
-  emit('saved')
-  emit('close')
 }
 </script>
 

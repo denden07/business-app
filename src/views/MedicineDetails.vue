@@ -244,11 +244,6 @@ const paginatedData = computed(() => {
   return activeList.value.slice(start, start + itemsPerPage.value)
 })
 
-const addMedicine = () => {
-  editingMedicine.value = null
-  showForm.value = true
-}
-
 const editMedicine = () => {
   if (!medicine.value) return
   editingMedicine.value = { ...medicine.value }
@@ -256,27 +251,10 @@ const editMedicine = () => {
 }
 
 const closeForm = async (saved = false) => {
-  const wasCreating = !editingMedicine.value
-
   showForm.value = false
   editingMedicine.value = null
 
   if (!saved) return
-
-  if (wasCreating) {
-    const db = await dbPromise
-    const allMedicines = await db.getAll('medicines')
-    const newestMedicine = allMedicines.at(-1)
-
-    if (newestMedicine?.id) {
-      await router.push({
-        name: 'MedicineDetails',
-        params: { id: newestMedicine.id },
-        query: { ...route.query, tab: 'stock' }
-      })
-      return
-    }
-  }
 
   await loadMedicineData()
 }
@@ -302,7 +280,6 @@ const goBack = () => {
         <p class="page-subtitle">Stock activity and price history for the selected medicine.</p>
       </div>
       <div class="page-actions">
-        <button class="secondary" @click="addMedicine">+ Add Medicine</button>
         <button v-if="medicine" class="warning" @click="editMedicine">Edit Medicine</button>
         <button class="info back-btn" @click="goBack">← Back to Medicines</button>
       </div>
