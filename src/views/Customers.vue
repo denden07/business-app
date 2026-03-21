@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, reactive } from 'vue'
 import { useRoute } from 'vue-router'
+import SearchInput from '../components/SearchInput.vue'
 import { useStore } from 'vuex'
 import Swal from 'sweetalert2'
 import { useRouter } from 'vue-router'
@@ -221,9 +222,8 @@ function goToTransactionHistory(customerId) {
     <h1>Customers</h1>
 
     <!-- Top bar -->
-    <div class="top-bar">
-      <div class="top-bar-actions">
-        <input v-model="search" placeholder="Search name / phone / email" class="input" />
+      <div class="top-bar">
+        <SearchInput v-model="search" placeholder="Search name / phone / email" :inputClass="'input'" />
 
         <select v-model.number="perPage" class="input per-page">
           <option :value="5">5</option>
@@ -244,7 +244,6 @@ function goToTransactionHistory(customerId) {
 
         <button @click="openAdd">Add Customer</button>
       </div>
-    </div>
 
     <!-- Table -->
     <div class="table-wrap">

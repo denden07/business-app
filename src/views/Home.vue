@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
+import SearchInput from '../components/SearchInput.vue'
 import { useStore } from 'vuex'
 import Swal from 'sweetalert2'
 import { dbPromise } from '../db'
@@ -520,7 +521,7 @@ const getStockIndicator = (med) => {
   <!-- SEARCH BAR + CUSTOMER + REDEEM (ALL INLINE) -->
   <div class="top-controls">
   <div class="search-section">
-    <input class="input pos-medicine-search" v-model="search" placeholder="Search medicine..." />
+    <SearchInput v-model="search" placeholder="Search medicine..." :inputClass="'input pos-medicine-search'" />
     
     <!-- Dropdown -->
     <div v-if="search && filteredMedicines.length" class="dropdown">
@@ -748,11 +749,7 @@ const getStockIndicator = (med) => {
   <div class="modal modal-customer">
     <h3>Select Customer</h3>
 
-    <input
-      class="input pos-medicine-search"
-      v-model="customerSearch"
-      placeholder="Search customer..."
-    />
+    <SearchInput v-model="customerSearch" placeholder="Search customer..." wrapperClass="full" :inputClass="'input pos-medicine-search'" />
 
     <div v-if="customerSearch && filteredCustomers.length" class="customer-list">
       <div
@@ -921,6 +918,7 @@ const getStockIndicator = (med) => {
 }
 
 .search-section {
+  display: flex;
   flex: 1;
   min-width: 250px;
   position: relative;

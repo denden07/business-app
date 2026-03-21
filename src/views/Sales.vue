@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch, toRaw } from 'vue'
+import SearchInput from '../components/SearchInput.vue'
 import Swal from 'sweetalert2'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
@@ -507,7 +508,7 @@ const exportCSV = async () => {
 
     <!-- TOP BAR -->
     <div class="top-bar">
-      <input v-model="searchKeyword" placeholder="Search sale #..." />
+      <SearchInput v-model="searchKeyword" placeholder="Search sale #..." />
 
       <label>
         From
@@ -640,12 +641,7 @@ const exportCSV = async () => {
 
         <!-- CUSTOMER SEARCH -->
         <div class="customer-search" style="position: relative; max-width: 300px; margin-bottom: 10px;">
-          <input
-            type="text"
-            placeholder="Search customer..."
-            v-model="customerKeyword"
-            style="width: 100%; box-sizing: border-box; padding: 6px; text-align: left;"
-          />
+          <SearchInput v-model="customerKeyword" placeholder="Search customer..." wrapperClass="full" :inputClass="'input'" />
 
           <!-- SEARCH RESULTS DROPDOWN -->
           <div v-if="customerResults.length"

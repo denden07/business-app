@@ -17,7 +17,6 @@ const pageVisibility = ref({})
 const pagesList = ref([
   { name: 'Home', label: 'Home' },
   { name: 'Medicines', label: 'Medicines' },
-  { name: 'Inventory', label: 'Inventory' },
   { name: 'Sales', label: 'Sales' },
   { name: 'Customers', label: 'Customers' },
   { name: 'Analytics', label: 'Analytics' },

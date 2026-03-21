@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import SearchInput from '../components/SearchInput.vue'
 import Pagination from '../components/Pagination.vue'
 import { useStore } from 'vuex'
 import { dbPromise } from '../db'
@@ -16,7 +17,9 @@ const customerId = Number(route.params.id)
    STATE
 ====================== */
 const activeTab = ref('points')
-const searchKeyword = ref('')
+const startDate = ref('')
+const endDate = ref('')
+const filterType = ref('all')
 const sortOrder = ref('desc')
 const currentPage = ref(1)
 const itemsPerPage = ref(10)
@@ -28,7 +31,7 @@ const selectedSale = ref(null)
 /* ======================
    WATCHERS
 ====================== */
-watch([activeTab, searchKeyword, sortOrder], () => {
+watch([activeTab, startDate, endDate, sortOrder], () => {
   currentPage.value = 1
 })
 
@@ -56,11 +59,21 @@ const sales = computed(() =>
 ====================== */
 const filteredPoints = computed(() => {
   return pointsHistory.value
-    .filter(p =>
-      !searchKeyword.value ||
-      String(p.related_sale_id || '').includes(searchKeyword.value) ||
-      String(p.date).includes(searchKeyword.value)
-    )
+    .filter(p => {
+      const pd = new Date(p.date)
+      if (startDate.value) {
+        const sd = new Date(startDate.value)
+        if (pd < sd) return false
+      }
+      if (endDate.value) {
+        const ed = new Date(endDate.value + 'T23:59:59')
+        if (pd > ed) return false
+      }
+      if (filterType.value && filterType.value !== 'all') {
+        if (p.type !== filterType.value) return false
+      }
+      return true
+    })
     .sort((a, b) =>
       sortOrder.value === 'asc'
         ? new Date(a.date) - new Date(b.date)
@@ -70,11 +83,18 @@ const filteredPoints = computed(() => {
 
 const filteredSales = computed(() => {
   return sales.value
-    .filter(s =>
-      !searchKeyword.value ||
-      String(s.id).includes(searchKeyword.value) ||
-      String(s.created_at).includes(searchKeyword.value)
-    )
+    .filter(s => {
+      const sd = new Date(s.created_at)
+      if (startDate.value) {
+        const from = new Date(startDate.value)
+        if (sd < from) return false
+      }
+      if (endDate.value) {
+        const to = new Date(endDate.value + 'T23:59:59')
+        if (sd > to) return false
+      }
+      return true
+    })
     .sort((a, b) =>
       sortOrder.value === 'asc'
         ? new Date(a.created_at) - new Date(b.created_at)
@@ -186,7 +206,22 @@ const closeSaleModal = () => {
 
     <!-- TOP BAR -->
     <div class="top-bar">
-      <input v-model="searchKeyword" placeholder="Search..." />
+      <label style="display:flex;align-items:center;gap:8px">
+        From
+        <input type="date" v-model="startDate" />
+      </label>
+
+      <label style="display:flex;align-items:center;gap:8px">
+        To
+        <input type="date" v-model="endDate" />
+      </label>
+
+      <select v-if="activeTab === 'points'" v-model="filterType">
+        <option value="all">All Types</option>
+        <option value="sale">Sale</option>
+        <option value="manual">Manual</option>
+      </select>
+
       <select v-model="sortOrder">
         <option value="desc">Newest</option>
         <option value="asc">Oldest</option>
@@ -196,6 +231,7 @@ const closeSaleModal = () => {
           {{ o }}
         </option>
       </select>
+      <button class="danger" @click="startDate=''; endDate=''; filterType='all'">Clear</button>
     </div>
 
     <!-- POINTS HISTORY -->
@@ -544,6 +580,16 @@ body.dark-mode .modal {
 
 body.dark-mode .back-btn {
   background: #2980b9;
+}
+
+/* Danger button (red) */
+.danger {
+  background-color: #e74c3c;
+  color: #fff;
+}
+
+.danger:hover {
+  background-color: #c0392b;
 }
 
 /* ======================

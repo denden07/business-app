@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import SearchInput from '../components/SearchInput.vue'
 import { useStore } from 'vuex'
 import MedicineForm from '../components/MedicineForm.vue'
 import MedicineViewModal from '../components/MedicineViewModal.vue'
@@ -142,11 +143,7 @@ const restoreMedicine = async med => {
     <h1>Medicines</h1>
 
     <div class="top-bar">
-      <input
-        type="text"
-        v-model="searchKeyword"
-        placeholder="Search medicine..."
-      />
+      <SearchInput v-model="searchKeyword" placeholder="Search medicine..." />
 
       <!-- FILTER -->
       <select v-model="filterMode">
