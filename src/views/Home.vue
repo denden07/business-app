@@ -1,10 +1,15 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import SearchInput from '../components/SearchInput.vue'
 import { useStore } from 'vuex'
 import { useRouter, useRoute } from 'vue-router'
 import Swal from 'sweetalert2'
 import { dbPromise } from '../db'
+import { Haptics } from '@capacitor/haptics'
+import {
+  defaultInteractionSettings,
+  loadInteractionSettings,
+} from '../utils/interactionPreferences'
 
 const store = useStore()
 const router = useRouter()
@@ -108,11 +113,14 @@ const resumeDraft = (draft) => {
 
 onMounted(async () => {
   await store.dispatch('drafts/load')
+  await loadFeedbackSettings()
   const draftId = Number(route.query.draft)
   if (draftId) {
     const draft = store.state.drafts.drafts.find(d => d.id === draftId)
     if (draft) resumeDraft(draft)
   }
+
+  window.addEventListener('interaction-settings-changed', handleInteractionSettingsChanged)
 })
 
 // ======================
@@ -133,12 +141,106 @@ const setActiveInput = (item, field) => {
   focusedField.value = field
 }
 
+const getQtyInputStyle = (value) => {
+  const digits = String(Math.max(0, Number(value) || 0)).length
+  const widthCh = Math.max(2, digits) + 1.4
+
+  return {
+    width: `${widthCh}ch`,
+    minWidth: '3.4rem',
+  }
+}
+
 const paymentMethod = ref('cash') // default
+const interactionSettings = ref({ ...defaultInteractionSettings })
+let numpadAudioContext = null
+
+const handleInteractionSettingsChanged = (event) => {
+  interactionSettings.value = {
+    ...defaultInteractionSettings,
+    ...(event.detail || {}),
+  }
+}
+
+const loadFeedbackSettings = async () => {
+  try {
+    interactionSettings.value = await loadInteractionSettings()
+  } catch (err) {
+    console.error('Failed to load interaction settings', err)
+    interactionSettings.value = { ...defaultInteractionSettings }
+  }
+}
+
+const getNumpadAudioContext = () => {
+  if (typeof window === 'undefined') return null
+
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext
+  if (!AudioContextClass) return null
+
+  if (!numpadAudioContext) {
+    numpadAudioContext = new AudioContextClass()
+  }
+
+  return numpadAudioContext
+}
+
+const playNumpadTone = async (frequency = 760, duration = 0.045) => {
+  if (!interactionSettings.value.soundEnabled) return
+
+  const audioContext = getNumpadAudioContext()
+  if (!audioContext) return
+
+  try {
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume()
+    }
+
+    const oscillator = audioContext.createOscillator()
+    const gainNode = audioContext.createGain()
+    const startAt = audioContext.currentTime
+    const endAt = startAt + duration
+
+    oscillator.type = 'triangle'
+    oscillator.frequency.setValueAtTime(frequency, startAt)
+
+    gainNode.gain.setValueAtTime(0.0001, startAt)
+    gainNode.gain.exponentialRampToValueAtTime(0.028, startAt + 0.006)
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, endAt)
+
+    oscillator.connect(gainNode)
+    gainNode.connect(audioContext.destination)
+
+    oscillator.start(startAt)
+    oscillator.stop(endAt + 0.01)
+  } catch {
+    // Ignore platforms that block short synthesized UI sounds.
+  }
+}
+
+const vibrateNumpad = async () => {
+  if (!interactionSettings.value.vibrationEnabled) return
+
+  try {
+    await Haptics.selectionChanged()
+    return
+  } catch {
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate(12)
+    }
+  }
+}
+
+const triggerNumpadFeedback = (frequency, duration) => {
+  void playNumpadTone(frequency, duration)
+  void vibrateNumpad()
+}
 
 // ======================
 // NUMBER PAD
 // ======================
 const appendNumber = (num) => {
+  triggerNumpadFeedback(760, 0.045)
+
   if (!focusedField.value) return
 
   if (focusedField.value === 'qty' && focusedItem.value) {
@@ -151,6 +253,8 @@ const appendNumber = (num) => {
 }
 
 const backspace = () => {
+  triggerNumpadFeedback(620, 0.05)
+
   if (!focusedField.value) return
 
   if (focusedField.value === 'qty' && focusedItem.value) {
@@ -163,11 +267,33 @@ const backspace = () => {
 }
 
 const clearInput = () => {
+  triggerNumpadFeedback(480, 0.07)
+
   if (!focusedField.value) return
 
   if (focusedField.value === 'qty' && focusedItem.value) focusedItem.value.qty = 1
   else if (focusedField.value === 'professionalFee') professionalFee.value = 0
   else if (focusedField.value === 'moneyGiven') moneyGiven.value = 0
+}
+
+const incrementQty = (item) => {
+  triggerNumpadFeedback(760, 0.045)
+  item.qty += 1
+}
+
+const decrementQty = (item) => {
+  triggerNumpadFeedback(620, 0.05)
+  item.qty = Math.max(1, item.qty - 1)
+}
+
+const selectPaymentMethod = (method) => {
+  triggerNumpadFeedback(700, 0.04)
+  paymentMethod.value = method
+}
+
+const selectItemPriceType = (item, type) => {
+  triggerNumpadFeedback(type === 'regular' ? 720 : 680, 0.04)
+  setPriceType(item, type)
 }
 
 // ======================
@@ -616,6 +742,15 @@ watch(showSpecialDiscountModal, (open) => {
   }
 })
 
+onBeforeUnmount(() => {
+  window.removeEventListener('interaction-settings-changed', handleInteractionSettingsChanged)
+
+  if (numpadAudioContext && numpadAudioContext.state !== 'closed') {
+    numpadAudioContext.close().catch(() => {})
+  }
+  numpadAudioContext = null
+})
+
 const getStockIndicator = (med) => {
   if (!med.quantity || med.quantity <= 0) {
     return { icon: '▲!', color: 'red', text: 'Out of stock', quantity: 0 }
@@ -728,7 +863,7 @@ const getStockIndicator = (med) => {
   <button
     class="price-option-btn"
     :class="{ active: item.priceType === 'regular', inactive: item.priceType !== 'regular' }"
-    @click="setPriceType(item, 'regular')"
+    @click="selectItemPriceType(item, 'regular')"
   >
     Reg ₱{{ medicinesMap[item.id]?.price1.toFixed(2) || '0.00' }}
   </button>
@@ -737,7 +872,7 @@ const getStockIndicator = (med) => {
     class="price-option-btn"
     v-if="medicinesMap[item.id]?.price2 && medicinesMap[item.id]?.price2 > 0"
     :class="{ active: item.priceType === 'discount', inactive: item.priceType !== 'discount' }"
-    @click="setPriceType(item, 'discount')"
+    @click="selectItemPriceType(item, 'discount')"
   >
     Dis ₱{{ medicinesMap[item.id]?.price2.toFixed(2) || '0.00' }}
   </button>
@@ -746,16 +881,17 @@ const getStockIndicator = (med) => {
             </td>
             <td>
               <div class="qty-wrapper">
-                <button class="qty-step-btn" @click="item.qty = Math.max(1,item.qty-1)">-</button>
+                <button class="qty-step-btn" @click="decrementQty(item)">-</button>
                 <input
                   style="font-weight: bold"
                   type="number"
                   :value="item.qty"
                   readonly
                   @click="setActiveInput(item,'qty')"
+                  :style="getQtyInputStyle(item.qty)"
                   :class="{ 'active-input': focusedField==='qty' && focusedItem===item }"
                 />
-                <button class="qty-step-btn" @click="item.qty += 1">+</button>
+                <button class="qty-step-btn" @click="incrementQty(item)">+</button>
               </div>
             </td>
             <td>₱{{ (item.price * item.qty).toFixed(2) }}</td>
@@ -844,7 +980,7 @@ const getStockIndicator = (med) => {
       <button
         class="payment-option-btn"
         :class="{ active: paymentMethod === 'cash' }"
-        @click="paymentMethod = 'cash'"
+        @click="selectPaymentMethod('cash')"
       >
         Cash
       </button>
@@ -852,7 +988,7 @@ const getStockIndicator = (med) => {
       <button
         class="payment-option-btn"
         :class="{ active: paymentMethod === 'gcash' }"
-        @click="paymentMethod = 'gcash'"
+        @click="selectPaymentMethod('gcash')"
       >
         GCash
       </button>
@@ -1368,9 +1504,21 @@ tbody tr:last-child td { border-bottom: none; }
   border-radius: 10px;
   border: 1px solid #c4d0db;
   background: linear-gradient(180deg, #fbfdfe 0%, #f3f7fa 100%);
-  color: #222;
+  color: #0f172a;
+  -webkit-text-fill-color: #0f172a;
+  opacity: 1;
+  font-weight: 700;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 4px 10px rgba(15, 23, 42, 0.05);
   transition: all 160ms ease-in-out;
+}
+.qty-wrapper input::-webkit-outer-spin-button,
+.qty-wrapper input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.qty-wrapper input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
 .qty-wrapper input.active-input {
   border: 2px solid #2b6cb0;

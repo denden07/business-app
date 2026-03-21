@@ -386,6 +386,7 @@ body.dark-mode .home-view .qty-wrapper input,
 body.dark-mode .home-view .modal input {
   background: var(--field-bg);
   color: var(--field-text);
+  -webkit-text-fill-color: var(--field-text);
   border-color: var(--field-border);
 }
 

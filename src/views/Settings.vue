@@ -9,6 +9,11 @@ import { FilePicker } from '@capawesome/capacitor-file-picker'
 import { refreshRoutes } from '../router'
 import PageVisibilitySettings from '../components/PageVisibilitySettings.vue'
 import Swal from 'sweetalert2'
+import {
+  defaultInteractionSettings,
+  loadInteractionSettings,
+  saveInteractionSettings,
+} from '../utils/interactionPreferences'
 
 const router = useRouter()
 
@@ -20,6 +25,8 @@ const appNameLimit = 40
 const appName = ref('Pharmacy POS')
 const appNameStatus = ref('')
 const isDarkMode = ref(localStorage.getItem('darkMode') === 'true')
+const interactionSettings = ref({ ...defaultInteractionSettings })
+const interactionStatus = ref('')
 
 function clampAppName(value) {
   return String(value || '').slice(0, appNameLimit)
@@ -70,6 +77,33 @@ function applyTheme(value) {
 
 function toggleNightMode() {
   applyTheme(!isDarkMode.value)
+}
+
+async function loadInteractionPreferences() {
+  try {
+    interactionSettings.value = await loadInteractionSettings()
+  } catch (err) {
+    console.error('Failed to load interaction settings', err)
+    interactionSettings.value = { ...defaultInteractionSettings }
+  }
+}
+
+async function toggleInteractionSetting(key) {
+  const nextSettings = {
+    ...interactionSettings.value,
+    [key]: !interactionSettings.value[key],
+  }
+
+  try {
+    interactionSettings.value = await saveInteractionSettings(nextSettings)
+    interactionStatus.value = 'Interaction preferences saved'
+    window.dispatchEvent(new CustomEvent('interaction-settings-changed', {
+      detail: interactionSettings.value,
+    }))
+  } catch (err) {
+    console.error('Failed to save interaction settings', err)
+    interactionStatus.value = 'Failed to save interaction preferences: ' + err.message
+  }
 }
 
 /* ======================
@@ -346,6 +380,7 @@ onMounted(async () => {
     applyTheme(isDarkMode.value)
     pinIsSet.value = !!(await getPin())
     await loadAppName()
+    await loadInteractionPreferences()
     await loadPageVisibility()
   }
 })
@@ -407,6 +442,44 @@ onMounted(async () => {
             {{ isDarkMode ? 'Switch To Light Mode' : 'Switch To Dark Mode' }}
           </button>
         </div>
+      </div>
+
+      <div class="card card-section">
+        <div class="section-heading">
+          <span class="section-icon">📳</span>
+          <div>
+            <h2>Interaction Feedback</h2>
+            <p class="muted">Control keypad sound and vibration feedback on supported devices.</p>
+          </div>
+        </div>
+
+        <div class="setting-stack">
+          <div class="setting-row">
+            <div class="setting-copy">
+              <strong>Numpad Sound</strong>
+              <span>Play a tap sound when pressing keypad buttons.</span>
+            </div>
+
+            <button class="secondary" @click="toggleInteractionSetting('soundEnabled')">
+              {{ interactionSettings.soundEnabled ? 'Disable Sound' : 'Enable Sound' }}
+            </button>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-copy">
+              <strong>Numpad Vibration</strong>
+              <span>Trigger haptic feedback on keypad presses in Android builds.</span>
+            </div>
+
+            <button class="secondary" @click="toggleInteractionSetting('vibrationEnabled')">
+              {{ interactionSettings.vibrationEnabled ? 'Disable Vibration' : 'Enable Vibration' }}
+            </button>
+          </div>
+        </div>
+
+        <p v-if="interactionStatus" class="status" :class="{ error: interactionStatus.includes('Failed') }">
+          {{ interactionStatus }}
+        </p>
       </div>
 
       <div class="card card-section card-emphasis">
@@ -591,9 +664,28 @@ body.dark-mode .section-icon {
   background: rgba(148, 163, 184, 0.08);
   border: 1px solid rgba(148, 163, 184, 0.16);
 }
+.setting-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
 .theme-copy { display: flex; flex-direction: column; gap: 4px; }
+.setting-copy { display: flex; flex-direction: column; gap: 4px; }
 .theme-copy strong { color: #1f2937; }
+.setting-copy strong { color: #1f2937; }
 .theme-copy span { color: #6b7280; font-size: 14px; }
+.setting-copy span { color: #6b7280; font-size: 14px; }
 .note {
   background: linear-gradient(180deg, #eef7ff 0%, #e6f3ff 100%);
   border: 1px solid rgba(33, 150, 243, 0.18);
@@ -647,8 +739,14 @@ body.dark-mode .theme-row {
   background: rgba(148, 163, 184, 0.08);
   border-color: rgba(148, 163, 184, 0.18);
 }
+body.dark-mode .setting-row {
+  background: rgba(148, 163, 184, 0.08);
+  border-color: rgba(148, 163, 184, 0.18);
+}
 body.dark-mode .theme-copy strong { color: #f8fafc; }
+body.dark-mode .setting-copy strong { color: #f8fafc; }
 body.dark-mode .theme-copy span { color: #cbd5e1; }
+body.dark-mode .setting-copy span { color: #cbd5e1; }
 body.dark-mode .text-limiter { color: #94a3b8; }
 body.dark-mode .text-limiter.warning { color: #fbbf24; }
 body.dark-mode .note {
@@ -686,6 +784,7 @@ body.dark-mode .pin-inactive { background: #2a2a2a; color: #888; }
   }
 
   .theme-row,
+  .setting-row,
   .pin-status-row {
     flex-direction: column;
     align-items: flex-start;
