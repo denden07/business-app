@@ -305,7 +305,7 @@ const exportCSV = async () => {
 
 
     <!-- TABLE -->
-    <div class="table-wrap">
+    <div class="table-wrap" :class="{ 'table-wrap-menu-open': colMenuOpen }">
     <table>
       <thead>
         <tr>
@@ -359,8 +359,8 @@ const exportCSV = async () => {
     <Pagination v-model:page="currentPage" :total-pages="totalPages" :max-pages="5" />
 
     <!-- VIEW SALE MODAL -->
-    <div v-if="showView" class="modal-backdrop">
-      <div class="modal">
+    <div v-if="showView" class="modal-backdrop app-modal-backdrop">
+      <div class="modal app-modal-panel modal-lg">
         <div class="sale-header">
           <div>
             <h2>Sale #{{ selectedSale.id }}</h2>
@@ -433,13 +433,6 @@ body.dark-mode .medicines-page { background-color: #121212; color: #eee; }
 .items-per-page { display: flex; align-items: center; gap: 4px; }
 
 .actions-td button { padding: 6px 10px; }
-
-.pagination { margin-top: 12px; display: flex; justify-content: center; gap: 6px; }
-.pagination button.active { background-color: #1abc9c; }
-
-.modal-backdrop { overflow-y:auto; position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; z-index: 2000; }
-.modal { background: #fff; padding: 20px; border-radius: 10px; width: 90%; max-width: 600px; }
-body.dark-mode .modal { background: #1e1e1e; color: #eee; }
 
 .status-ok { color: #1abc9c; font-weight: 600; }
 .status-voided { color: #e74c3c; font-weight: 700; }

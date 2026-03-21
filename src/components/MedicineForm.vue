@@ -134,8 +134,8 @@ const submitForm = async () => {
 </script>
 
 <template>
-  <div class="modal">
-    <div class="modal-content modal-form">
+  <div class="modal app-modal-backdrop">
+    <div class="modal-content modal-form modal-md">
       <h2>{{ medicineToEdit ? 'Edit Medicine' : 'Add Medicine' }}</h2>
 
       <label>Brand Name</label>
@@ -164,7 +164,7 @@ const submitForm = async () => {
       <label>Expiry Date (optional)</label>
       <input v-model="expiryDate" type="date" />
 
-      <div class="actions">
+      <div class="actions app-modal-actions">
         <button class="primary" :disabled="!isValid" @click="submitForm">
           {{ medicineToEdit ? 'Save Changes' : 'Add Medicine' }}
         </button>
@@ -179,42 +179,13 @@ const submitForm = async () => {
 /* =========================
    MODAL BACKDROP
 ========================= */
-.modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 2000;
-
-  /* IMPORTANT: allow scrolling */
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-
-  padding: 16px;
-}
-
 /* =========================
    MODAL CONTENT
 ========================= */
 .modal-content {
-  background: #ffffff;
-  color: #222;
-
-  width: 100%;
   max-width: 460px;
-
-  /* CRITICAL FOR ANDROID */
   min-height: fit-content;
   max-height: none;
-
-  margin: 0 auto; /* center horizontally */
-  border-radius: 14px;
-
-  padding: 24px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
 }
 
 /* =========================
@@ -259,12 +230,6 @@ hr {
 /* =========================
    ACTION BUTTONS
 ========================= */
-.actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 16px;
-}
-
 /* Make buttons sticky on small screens */
 @media (max-height: 600px) {
   .actions {

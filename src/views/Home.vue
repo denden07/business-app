@@ -864,8 +864,8 @@ const getStockIndicator = (med) => {
 </div>
 
 <!-- CUSTOMER MODAL -->
-<div v-if="showCustomerModal" class="modal-backdrop">
-  <div class="modal modal-customer">
+<div v-if="showCustomerModal" class="modal-backdrop app-modal-backdrop">
+  <div class="modal app-modal-panel modal-sm modal-customer">
     <h3>Select Customer</h3>
 
     <SearchInput v-model="customerSearch" placeholder="Search customer..." wrapperClass="full" :inputClass="'input pos-medicine-search'" />
@@ -904,8 +904,8 @@ const getStockIndicator = (med) => {
 </div>
 
 <!-- REDEEM MODAL -->
-<div v-if="showRedeemModal" class="modal-backdrop">
-  <div class="modal">
+<div v-if="showRedeemModal" class="modal-backdrop app-modal-backdrop">
+  <div class="modal app-modal-panel modal-sm">
     <h3>Redeem Points</h3>
     <p>Available: <strong>{{ customerPoints }}</strong></p>
 
@@ -927,8 +927,8 @@ const getStockIndicator = (med) => {
 </div>
 
 <!-- SPECIAL DISCOUNT MODAL -->
-<div v-if="showSpecialDiscountModal" class="modal-backdrop">
-  <div class="modal">
+<div v-if="showSpecialDiscountModal" class="modal-backdrop app-modal-backdrop">
+  <div class="modal app-modal-panel modal-sm">
     <h3>Special Discount</h3>
     
     <div v-if="pointsUsed > 0" style="padding: 10px; background: #e6f7ff; border-radius: 6px; margin-bottom: 10px;">
@@ -1412,25 +1412,8 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
 /* =========================
    CUSTOMER MODAL
 ========================= */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.6);
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  z-index:1000;
-}
 .modal {
-  background: #fff;
-  border-radius: 12px;
-  padding: 16px;
   width: 380px;
-  max-height: 80vh;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
 }
 .customer-list {
   max-height: 220px;
@@ -1506,11 +1489,6 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
 }
 
 /* Modal buttons aligned */
-.modal-actions {
-  display: flex;
-  gap: 10px;
-  align-items: flex-end;
-}
 .modal-actions .btn {
   flex: 1;
   height: 44px;
@@ -1534,7 +1512,7 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
 }
 
 /* Prevent flex shrink in modal */
-.modal > * {
+.app-modal-panel > * {
   flex-shrink: 0;
 }
 

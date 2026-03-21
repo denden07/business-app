@@ -14,6 +14,11 @@
   margin-bottom: 4px;
   position: relative;
 }
+
+.table-wrap.table-wrap-menu-open {
+  padding-bottom: 210px;
+}
+
 body.dark-mode .table-wrap {
   border-color: #2a2a2a;
   box-shadow: 0 2px 12px rgba(0,0,0,.3);
@@ -87,6 +92,12 @@ body.dark-mode .table-wrap thead .col-actions { background: #162520; }
 body.dark-mode .table-wrap tbody tr .col-actions { background: #181818; }
 .table-wrap tbody tr:hover .col-actions { background: #f5fef9; }
 body.dark-mode .table-wrap tbody tr:hover .col-actions { background: #1e2e25; }
+
+.table-wrap .col-actions-menu-only {
+  width: 52px;
+  min-width: 52px;
+  text-align: right;
+}
 
 /* ── Actions td flex layout ───────────────────── */
 .table-wrap .actions-td { display: flex; gap: 6px; align-items: center; }

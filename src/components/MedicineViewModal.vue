@@ -60,8 +60,8 @@ const formatDate = (date) => {
 </script>
 
 <template>
-  <div v-if="show" class="modal">
-    <div class="modal-content">
+  <div v-if="show" class="modal app-modal-backdrop">
+    <div class="modal-content modal-lg">
       <h2>Medicine Details</h2>
 
       <p><strong>Brand:</strong> {{ medicine.name }}</p>
@@ -134,7 +134,7 @@ const formatDate = (date) => {
         </div>
       </div>
 
-      <div class="actions">
+      <div class="actions app-modal-actions">
         <button @click="$emit('close')">Close</button>
       </div>
     </div>
@@ -142,27 +142,8 @@ const formatDate = (date) => {
 </template>
 
 <style scoped>
-.modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.45);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 16px;
-  z-index: 3000;
-}
-
 .modal-content {
-  background: #fff;
-  color: #222;
-  width: 100%;
   max-width: 520px;
-  max-height: 90vh;
-  overflow-y: auto;
-  padding: 24px;
-  border-radius: 14px;
-  box-shadow: 0 12px 30px rgba(0,0,0,.3);
 }
 
 h2, h3 {
@@ -217,9 +198,4 @@ hr {
   font-size: 16px;
 }
 
-.actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
-}
 </style>

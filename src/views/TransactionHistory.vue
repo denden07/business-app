@@ -53,6 +53,8 @@ const activeCols = computed(() => activeTab.value === 'points' ? ptCols : puCols
 const toggleCol = (key) => { visibleCols.value[key] = !visibleCols.value[key] }
 const showSaleModal = ref(false)
 const selectedSale = ref(null)
+const saleCustomer = ref(null)
+const currentCustomer = ref(null)
 
 /* ======================
    WATCHERS
@@ -75,6 +77,7 @@ watch([activeTab, startDate, endDate, sortOrder], () => {
    LOAD DATA
 ====================== */
 onMounted(async () => {
+  currentCustomer.value = await dbPromise.then(db => db.get('customers', customerId))
   await store.dispatch('transaction/loadPointsHistory', customerId)
   await store.dispatch('transaction/loadSales', customerId)
 })
@@ -199,6 +202,12 @@ const openSaleModal = async (sale) => {
     item.generic_name = med?.generic_name || ''
   }
 
+  if (sale.customer_id) {
+    saleCustomer.value = await db.get('customers', sale.customer_id)
+  } else {
+    saleCustomer.value = null
+  }
+
   await tx.done
 
   selectedSale.value = sale
@@ -212,15 +221,55 @@ const openSaleModal = async (sale) => {
 const closeSaleModal = () => {
   showSaleModal.value = false
   selectedSale.value = null
+  selectedSaleItems.value = []
+  saleCustomer.value = null
 }
+
+const saleStatusLabel = computed(() => {
+  if (!selectedSale.value) return ''
+  return selectedSale.value.status === 'voided' ? 'VOIDED' : 'COMPLETED'
+})
+
+const salePurchasedAt = computed(() => {
+  if (!selectedSale.value) return ''
+  return selectedSale.value.purchased_date || selectedSale.value.created_at || ''
+})
+
+const saleDiscountAmount = computed(() => {
+  if (!selectedSale.value) return 0
+  return Number(selectedSale.value.discount ?? selectedSale.value.points_discount ?? 0)
+})
+
+const currentCustomerPoints = computed(() => {
+  if (currentCustomer.value?.points !== undefined && currentCustomer.value?.points !== null) {
+    return Number(currentCustomer.value.points || 0)
+  }
+  return pointsHistory.value.reduce((sum, entry) => sum + Number(entry.points || 0), 0)
+})
+
+const currentCustomerName = computed(() => currentCustomer.value?.name || `Customer #${customerId}`)
 </script>
 
 <template>
   <div class="medicines-page">
-    <h1>Customer Transactions</h1>
+    <div class="page-header">
+      <div>
+        <h1>Customer Transactions</h1>
+        <p class="page-subtitle">Transaction activity and points history for the selected customer.</p>
+      </div>
 
-    <div class="top-bar">
       <button class="info back-btn" @click="goBack">← Back to Customers</button>
+    </div>
+
+    <div class="customer-summary">
+      <div class="customer-summary-card">
+        <span class="summary-label">Current Customer</span>
+        <strong class="summary-value">{{ currentCustomerName }}</strong>
+      </div>
+      <div class="customer-summary-card points-card">
+        <span class="summary-label">Available Points</span>
+        <strong class="summary-value">{{ currentCustomerPoints }}</strong>
+      </div>
     </div>
 
     <!-- TABS -->
@@ -283,7 +332,7 @@ const closeSaleModal = () => {
     </div>
 
     <!-- POINTS HISTORY -->
-    <div v-if="activeTab === 'points'" class="table-wrap">
+    <div v-if="activeTab === 'points'" class="table-wrap" :class="{ 'table-wrap-menu-open': colMenuOpen }">
     <table>
       <thead>
         <tr>
@@ -292,7 +341,7 @@ const closeSaleModal = () => {
           <th v-if="visibleCols.pt_type">Type</th>
           <th v-if="visibleCols.pt_description">Notes</th>
           <th v-if="visibleCols.pt_sale">Sale #</th>
-          <th class="col-actions">
+          <th class="col-actions col-actions-menu-only">
             <div class="col-toggle-wrap">
               <button class="col-icon-btn" @click.stop="colMenuOpen = !colMenuOpen" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
               <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
@@ -322,14 +371,14 @@ const closeSaleModal = () => {
             </span>
             <span v-else>—</span>
           </td>
-          <td class="col-actions"></td>
+          <td class="col-actions col-actions-menu-only"></td>
         </tr>
       </tbody>
     </table>
     </div>
 
     <!-- PURCHASE HISTORY -->
-    <div v-if="activeTab === 'purchases'" class="table-wrap">
+    <div v-if="activeTab === 'purchases'" class="table-wrap" :class="{ 'table-wrap-menu-open': colMenuOpen }">
     <table>
       <thead>
         <tr>
@@ -337,7 +386,7 @@ const closeSaleModal = () => {
           <th v-if="visibleCols.pu_id">Sale #</th>
           <th v-if="visibleCols.pu_total">Total</th>
           <th v-if="visibleCols.pu_status">Status</th>
-          <th class="col-actions">
+          <th class="col-actions col-actions-menu-only">
             <div class="col-toggle-wrap">
               <button class="col-icon-btn" @click.stop="colMenuOpen = !colMenuOpen" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
               <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
@@ -369,7 +418,7 @@ const closeSaleModal = () => {
               {{ s.status }}
             </span>
           </td>
-          <td class="col-actions"></td>
+          <td class="col-actions col-actions-menu-only"></td>
         </tr>
       </tbody>
     </table>
@@ -379,41 +428,64 @@ const closeSaleModal = () => {
     <Pagination v-model:page="currentPage" :total-pages="totalPages" :max-pages="5" />
 
     <!-- SALE MODAL -->
-    <div v-if="showSaleModal" class="modal-overlay">
-      <div class="modal">
-        <h2>Sale #{{ selectedSale.id }}</h2>
-        <p>Date: {{ new Date(selectedSale.created_at).toLocaleString() }}</p>
-        <p>Status: {{ selectedSale.status || 'completed' }}</p>
+    <div v-if="showSaleModal" class="modal-overlay app-modal-backdrop">
+      <div class="modal app-modal-panel modal-lg">
+        <div class="sale-header">
+          <div>
+            <h2>Sale #{{ selectedSale.id }}</h2>
+            <div class="sale-meta">
+              {{ salePurchasedAt ? new Date(salePurchasedAt).toLocaleString() : '' }}
+            </div>
+            <div class="sale-meta">
+              Customer: {{ saleCustomer ? saleCustomer.name : 'Walk-in' }}
+            </div>
+            <div class="sale-meta">
+              Payment: {{ selectedSale.payment_method || 'Cash' }}
+            </div>
+          </div>
 
-        <hr/>
-        <table>
-          <thead>
-            <tr>
-              <th>Medicine</th>
-              <th>Price</th>
-              <th>Qty</th>
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in selectedSaleItems" :key="item.id">
-              <td>{{ item.medicine_name }} <small v-if="item.generic_name">{{ item.generic_name }}</small></td>
-              <td>₱{{ item.price_at_sale.toFixed(2) }}</td>
-              <td>{{ item.quantity }}</td>
-              <td>₱{{ (item.price_at_sale * item.quantity).toFixed(2) }}</td>
-            </tr>
-          </tbody>
-        </table>
+          <span
+            class="badge"
+            :class="selectedSale.status === 'voided' ? 'badge-voided' : 'badge-ok'"
+          >
+            {{ saleStatusLabel }}
+          </span>
+        </div>
 
-        <hr/>
-        <p>Subtotal: ₱{{ selectedSale.total_amount.toFixed(2) }}</p>
-        <p>Professional Fee: ₱{{ selectedSale.professional_fee.toFixed(2) }}</p>
-        <p>Discount (Points): -₱{{ selectedSale.points_discount?.toFixed(2) || 0 }}</p>
-        <p><strong>Final Total: ₱{{ selectedSale.final_total.toFixed(2) }}</strong></p>
-        <p>Money Given: ₱{{ selectedSale.money_given.toFixed(2) }}</p>
-        <p>Change: ₱{{ selectedSale.change.toFixed(2) }}</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Medicine</th>
+                <th>Qty</th>
+                <th>Price</th>
+                <th>Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in selectedSaleItems" :key="item.id">
+                <td>{{ item.medicine_name }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>₱{{ item.price_at_sale.toFixed(2) }}</td>
+                <td>₱{{ (item.quantity * item.price_at_sale).toFixed(2) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-        <button class="secondary" @click="showSaleModal = false">Close</button>
+        <div class="sale-summary">
+          <div>Subtotal: ₱{{ Number(selectedSale.total_amount || 0).toFixed(2) }}</div>
+          <div>Professional Fee: ₱{{ Number(selectedSale.professional_fee || 0).toFixed(2) }}</div>
+          <div>Discount: ₱{{ saleDiscountAmount.toFixed(2) }}</div>
+          <div><strong>Total: ₱{{ Number(selectedSale.final_total || 0).toFixed(2) }}</strong></div>
+
+          <hr />
+
+          <div>Money Given: ₱{{ Number(selectedSale.money_given || 0).toFixed(2) }}</div>
+          <div>Change: ₱{{ Number(selectedSale.change || 0).toFixed(2) }}</div>
+        </div>
+
+        <button class="secondary btn-block-mobile" @click="closeSaleModal">Close</button>
       </div>
     </div>
 
@@ -430,6 +502,71 @@ const closeSaleModal = () => {
   padding: 20px;
   overflow-x: hidden;
   height: 100%;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.page-subtitle {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+body.dark-mode .page-subtitle {
+  color: #94a3b8;
+}
+
+.customer-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.customer-summary-card {
+  padding: 16px 18px;
+  border: 1px solid #dbe6e2;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fffc 100%);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+body.dark-mode .customer-summary-card {
+  background: linear-gradient(180deg, #162520 0%, #121b18 100%);
+  border-color: #244034;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+}
+
+.points-card {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.summary-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #1a8a6e;
+}
+
+.summary-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+body.dark-mode .summary-value {
+  color: #f8fafc;
 }
 
 body.dark-mode .medicines-page {
@@ -454,6 +591,7 @@ body.dark-mode .medicines-page {
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 12px;
+  align-items: center;
 }
 
 /* ======================
@@ -485,40 +623,48 @@ body.dark-mode .medicines-page {
 /* ======================
    MODAL
 ====================== */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.6);
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 40px 20px;
-  overflow-y: auto;
-  z-index: 999;
-}
-
 .modal {
-  background: #fff;
-  padding: 20px;
-  border-radius: 14px;
   min-width: 320px;
   max-width: 90vw;
-  box-shadow: 0 10px 30px rgba(0,0,0,.3);
 }
 
-body.dark-mode .modal {
-  background: #1c1c1c;
-  color: #eee;
-}
-
-/* modal content */
-.modal h2 {
-  margin-top: 0;
+.sale-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 10px;
 }
 
-.modal p {
-  margin: 6px 0;
+.sale-meta {
+  font-size: 13px;
+  color: #666;
+}
+
+body.dark-mode .sale-meta {
+  color: #aaa;
+}
+
+.badge {
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.badge-ok {
+  background: #1abc9c;
+  color: white;
+}
+
+.badge-voided {
+  background: #e74c3c;
+  color: white;
+}
+
+.sale-summary hr {
+  margin: 8px 0;
+  border: none;
+  border-top: 1px dashed #ccc;
 }
 
 /* ======================
@@ -541,6 +687,20 @@ body.dark-mode .modal {
 }
 
 @media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .customer-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .points-card {
+    align-items: flex-start;
+    text-align: left;
+  }
+
   .top-bar {
     flex-direction: column;
     align-items: stretch;

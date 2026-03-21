@@ -180,7 +180,7 @@ const restoreMedicine = async med => {
       </div>
     </div>
 
-    <div class="table-wrap">
+    <div class="table-wrap" :class="{ 'table-wrap-menu-open': colMenuOpen }">
     <table>
       <thead>
         <tr>
@@ -305,29 +305,6 @@ body.dark-mode .medicines-page {
 }
 
 /* ===========================
-   PAGINATION
-=========================== */
-.pagination {
-  margin-top: 12px !important;
-  display: flex !important;
-  justify-content: center !important;
-  align-items: center !important;
-  gap: 6px !important;
-  flex-wrap: wrap !important;
-}
-
-.pagination button.active {
-  background-color: #1abc9c !important;
-  color: #fff !important;
-  border-radius: 6px !important;
-  padding: 6px 12px !important;
-}
-
-body.dark-mode .pagination button.active {
-  background-color: #16a085 !important;
-}
-
-/* ===========================
    MOBILE FIXES
 =========================== */
 @media (max-width: 768px) {
@@ -348,10 +325,6 @@ body.dark-mode .pagination button.active {
 
   .items-per-page > .select-field {
     flex: 1;
-  }
-
-  .pagination {
-    gap: 4px !important;
   }
 }
 

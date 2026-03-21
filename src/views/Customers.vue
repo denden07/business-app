@@ -279,7 +279,7 @@ function goToTransactionHistory(customerId) {
       </div>
 
     <!-- Table -->
-    <div class="table-wrap">
+    <div class="table-wrap" :class="{ 'table-wrap-menu-open': colMenuOpen }">
       <table class="table w-full">
         <thead>
           <tr>
@@ -320,7 +320,7 @@ function goToTransactionHistory(customerId) {
     <Pagination v-model:page="page" :total-pages="totalPages" :max-pages="5" />
 
     <!-- CUSTOMER MODAL -->
-    <dialog ref="modal" class="modal">
+    <dialog ref="modal" class="modal app-modal-dialog modal-sm">
       <h3>{{ form.id ? 'Edit Customer' : 'Add Customer' }}</h3>
 
       <div class="modal-form">
@@ -337,7 +337,7 @@ function goToTransactionHistory(customerId) {
     </dialog>
 
     <!-- POINTS MODAL -->
-    <dialog ref="pointsModal" class="modal">
+    <dialog ref="pointsModal" class="modal app-modal-dialog modal-sm">
       <h3>Adjust Customer Points</h3>
 
       <div class="modal-form">
@@ -391,43 +391,12 @@ function goToTransactionHistory(customerId) {
 }
 
 /* ======================
-   PAGINATION
-====================== */
-.pagination {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-/* ======================
    MODAL
 ====================== */
-.modal {
-  border-radius: 12px;
-  padding: 20px;
-  width: 90%;
-  max-width: 420px;
-  background-color: #fff;
-  position: absolute;
-  z-index: 10;
-}
-
-body.dark-mode .modal {
-  background-color: #1e1e1e;
-  color: #eee;
-}
-
 /* STACK INPUTS */
 .modal-form {
   gap: 12px;
   margin: 14px 0;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
 }
 
 /* ======================

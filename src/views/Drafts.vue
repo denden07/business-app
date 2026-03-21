@@ -59,7 +59,7 @@ const deleteDraft = async (draft) => {
       No saved drafts yet.
     </div>
 
-    <div v-if="drafts.length" class="table-wrap">
+    <div v-if="drafts.length" class="table-wrap" :class="{ 'table-wrap-menu-open': colMenuOpen }">
     <table>
       <thead>
         <tr>
