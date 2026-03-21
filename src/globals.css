@@ -18,12 +18,16 @@
   --btn-text-light: #fff;
   --btn-text-dark: #222;
   --btn-border-light: #bcc7d1;
-  --field-bg: #f4f7fa;
-  --field-border: #b8c3cd;
+  --btn-shadow: 0 10px 18px rgba(15, 23, 42, 0.12);
+  --btn-shadow-hover: 0 14px 24px rgba(15, 23, 42, 0.16);
+  --field-bg: linear-gradient(180deg, #f9fbfd 0%, #f2f6fa 100%);
+  --field-border: #b9c6d1;
   --field-text: #222;
   --field-placeholder: #7a8694;
   --field-focus-border: #1abc9c;
   --field-focus-ring: rgba(26, 188, 156, 0.2);
+  --field-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --field-shadow-hover: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 4px 10px rgba(15, 23, 42, 0.06);
 }
 
 :root {
@@ -166,67 +170,73 @@ input[type="password"],
 input[type="tel"] {
   appearance: none;
   -webkit-appearance: none;
-  min-height: 44px;
-  padding: 8px 12px;
-  border-radius: 8px;
+  min-height: 46px;
+  padding: 10px 14px;
+  border-radius: 12px;
   border: 1px solid var(--field-border);
-  background-color: var(--field-bg);
+  background: var(--field-bg);
   color: var(--field-text);
   font-family: inherit;
   font-size: 15px;
   line-height: 1.2;
   box-sizing: border-box;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+  box-shadow: var(--field-shadow);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.15s ease;
 }
 
 .select-field,
 select {
   appearance: none;
   -webkit-appearance: none;
-  min-height: 44px;
-  padding: 8px 38px 8px 12px;
-  border-radius: 8px;
+  min-height: 46px;
+  padding: 10px 42px 10px 14px;
+  border-radius: 12px;
   border: 1px solid var(--field-border);
-  background-color: var(--field-bg);
+  background-color: #f7fafc;
   background-image:
     linear-gradient(45deg, transparent 50%, currentColor 50%),
-    linear-gradient(135deg, currentColor 50%, transparent 50%);
+    linear-gradient(135deg, currentColor 50%, transparent 50%),
+    linear-gradient(180deg, #f9fbfd 0%, #f2f6fa 100%);
   background-position:
     calc(100% - 18px) calc(50% - 2px),
-    calc(100% - 12px) calc(50% - 2px);
-  background-size: 6px 6px, 6px 6px;
+    calc(100% - 12px) calc(50% - 2px),
+    0 0;
+  background-size: 6px 6px, 6px 6px, 100% 100%;
   background-repeat: no-repeat;
   color: var(--field-text);
   font-family: inherit;
   font-size: 15px;
   line-height: 1.2;
   box-sizing: border-box;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+  box-shadow: var(--field-shadow);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.15s ease;
 }
 
 input[type="file"] {
-  min-height: 44px;
-  padding: 8px 12px;
-  border-radius: 8px;
+  min-height: 46px;
+  padding: 10px 14px;
+  border-radius: 12px;
   border: 1px solid var(--field-border);
-  background-color: var(--field-bg);
+  background: var(--field-bg);
   color: var(--field-text);
   font-family: inherit;
   font-size: 15px;
   line-height: 1.2;
   box-sizing: border-box;
+  box-shadow: var(--field-shadow);
 }
 
 input[type="file"]::file-selector-button {
   margin-right: 12px;
-  padding: 8px 12px;
+  padding: 8px 14px;
   border: none;
-  border-radius: 6px;
+  border-radius: 10px;
   background: var(--btn-secondary-bg);
   color: var(--btn-text-light);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
 }
 
 input[type="file"]::file-selector-button:hover {
@@ -299,17 +309,34 @@ input[type="password"]:focus,
 input[type="tel"]:focus {
   outline: none;
   border-color: var(--field-focus-border);
-  box-shadow: 0 0 0 2px var(--field-focus-ring);
+  box-shadow: 0 0 0 3px var(--field-focus-ring), 0 10px 20px rgba(26, 188, 156, 0.08);
+}
+
+.input:hover,
+.select-field:hover,
+.form-control:hover,
+textarea:hover,
+select:hover,
+input:not([type]):hover,
+input[type="text"]:hover,
+input[type="search"]:hover,
+input[type="number"]:hover,
+input[type="date"]:hover,
+input[type="email"]:hover,
+input[type="password"]:hover,
+input[type="tel"]:hover,
+input[type="file"]:hover {
+  box-shadow: var(--field-shadow-hover);
 }
 
 button,
 .btn {
   appearance: none;
   -webkit-appearance: none;
-  border: none;
-  border-radius: 8px;
-  min-height: 40px;
-  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  min-height: 42px;
+  padding: 9px 16px;
   font-family: inherit;
   font-size: 15px;
   font-weight: 600;
@@ -317,17 +344,20 @@ button,
   cursor: pointer;
   color: var(--btn-text-light);
   background: var(--btn-primary-bg);
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease, opacity 0.2s ease;
+  box-shadow: var(--btn-shadow);
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease, opacity 0.2s ease, box-shadow 0.2s ease;
 }
 
 button:hover,
 .btn:hover {
   background: var(--btn-primary-hover);
+  box-shadow: var(--btn-shadow-hover);
+  transform: translateY(-1px);
 }
 
 button:active,
 .btn:active {
-  transform: scale(0.97);
+  transform: translateY(0) scale(0.985);
 }
 
 button:focus-visible,
@@ -428,15 +458,16 @@ button:disabled,
 .ghost,
 .btn.ghost,
 .btn-ghost {
-  background: transparent;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f8fb 100%);
   color: var(--btn-text-dark);
   border: 1px solid var(--btn-border-light);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.06);
 }
 
 .ghost:hover,
 .btn.ghost:hover,
 .btn-ghost:hover {
-  background: rgba(148, 163, 184, 0.12);
+  background: linear-gradient(180deg, #f7fafc 0%, #eef3f7 100%);
 }
 
 .btn-sm {
@@ -468,7 +499,7 @@ button:disabled,
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -476,23 +507,26 @@ button:disabled,
   min-height: 36px;
   min-width: 36px;
   padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--btn-border-light);
-  background: var(--field-bg);
-  color: var(--field-text);
+  border-radius: 10px;
+  border: 1px solid #cdd8e2;
+  background: linear-gradient(180deg, #ffffff 0%, #edf3f8 100%);
+  color: #334155;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.06);
 }
 
 .pagination button:hover:not(:disabled):not([aria-current="page"]) {
-  background: rgba(26, 188, 156, 0.08);
-  border-color: rgba(26, 188, 156, 0.35);
+  background: linear-gradient(180deg, #f5fbf9 0%, #e6f6f0 100%);
+  border-color: rgba(26, 188, 156, 0.42);
+  color: #0f766e;
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
 }
 
 .pagination button.active,
 .pagination button[aria-current="page"] {
-  background-color: var(--btn-primary-bg);
+  background: linear-gradient(180deg, #1abc9c 0%, #15967f 100%);
   color: #fff;
   border-color: var(--btn-primary-bg);
-  box-shadow: 0 6px 14px rgba(22, 160, 133, 0.14);
+  box-shadow: 0 10px 20px rgba(22, 160, 133, 0.22);
   transform: translateY(-1px);
 }
 
@@ -503,8 +537,9 @@ button:disabled,
 .pagination button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-  background: rgba(148, 163, 184, 0.12);
-  color: #999;
+  background: linear-gradient(180deg, #f3f5f7 0%, #e8edf2 100%);
+  color: #94a3b8;
+  border-color: #dbe3ea;
   box-shadow: none;
   transform: none;
 }
@@ -512,6 +547,8 @@ button:disabled,
 .pagination span {
   display: inline-block;
   padding: 6px 8px;
+  color: #64748b;
+  font-weight: 600;
 }
 
 .top-bar {
@@ -602,10 +639,11 @@ button:disabled,
   min-width: 40px;
   min-height: 40px;
   padding: 0;
-  background: #fff;
-  border: 1px solid #ccc;
-  border-radius: 8px;
+  background: linear-gradient(180deg, #ffffff 0%, #f2f6fa 100%);
+  border: 1px solid var(--field-border);
+  border-radius: 12px;
   color: #444;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.06);
 }
 
 .date-icon-btn:hover {
@@ -637,7 +675,7 @@ button:disabled,
 .mini {
   min-height: 28px;
   padding: 4px 8px;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 12px;
   font-weight: 700;
 }
@@ -653,6 +691,7 @@ button:disabled,
 .button-remove-med {
   min-height: 24px;
   padding: 2px 5px;
+  box-shadow: 0 6px 12px rgba(231, 76, 60, 0.18);
 }
 
 .qty-step-btn {
@@ -661,7 +700,7 @@ button:disabled,
   min-height: 26px;
   height: 26px;
   padding: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--btn-info-bg);
   color: #fff;
   font-size: 13px;
@@ -681,7 +720,7 @@ button:disabled,
   min-height: 44px;
   box-sizing: border-box;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 14px;
   background: var(--btn-info-bg);
   color: #fff;
   font-size: clamp(14px, 2.4vw, 28px);
@@ -706,7 +745,7 @@ button:disabled,
   border-radius: 50%;
   background: var(--btn-info-bg);
   color: #fff;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
@@ -722,7 +761,7 @@ button:disabled,
   flex: 1 1 0;
   min-width: 0;
   height: clamp(36px, 4.5vw, 56px);
-  background: var(--btn-neutral-bg);
+  background: linear-gradient(180deg, #e4ebf1 0%, #d4dee7 100%);
   color: var(--btn-text-dark);
   font-weight: 700;
   font-size: clamp(14px, 2.4vw, 18px);
@@ -742,7 +781,7 @@ button:disabled,
   min-height: 30px;
   min-width: 70px;
   padding: 4px 8px;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 2px solid transparent;
   background: var(--btn-info-bg);
   color: #fff;

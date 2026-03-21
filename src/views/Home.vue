@@ -1097,15 +1097,19 @@ const getStockIndicator = (med) => {
 .input.pos-medicine-search {
   width: 70%;
   display: block;
+  min-height: 48px;
+  border-radius: 14px;
+  font-size: 15px;
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
 }
 .btn.select-customer {
-  background: #3498db;
+  background: linear-gradient(180deg, #3fa4e8 0%, #2b88cc 100%);
   color: #fff;
-  border: none;
-  border-radius: 8px;
-  height: 44px;
-  padding: 0 14px;
-  cursor: pointer;
+  border: 1px solid rgba(37, 99, 235, 0.15);
+  border-radius: 12px;
+  height: 46px;
+  padding: 0 16px;
+  box-shadow: 0 10px 20px rgba(52, 152, 219, 0.18);
   white-space: nowrap;
 }
 
@@ -1177,24 +1181,25 @@ const getStockIndicator = (med) => {
 table {
   width: 100%;
   border-collapse: collapse;
-  background: #fff;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdfe 100%);
 }
 thead th {
-  background: #f0faf7;
-  color: #1a8a6e;
+  background: linear-gradient(180deg, #f4fbf8 0%, #ebf7f1 100%);
+  color: #166a5e;
   font-weight: 700;
   font-size: 13px;
-  padding: 10px 8px;
-  border-bottom: 2px solid #c8ede3;
+  padding: 12px 10px;
+  border-bottom: 1px solid #d0e7de;
   text-align: center;
 }
 tbody td {
-  padding: 8px;
-  border-bottom: 1px solid #efefef;
+  padding: 11px 10px;
+  border-bottom: 1px solid #e7edf2;
   text-align: center;
-  color: #333;
+  color: #24323f;
 }
-tbody tr:hover td { background: #f5fef9; }
+tbody tr:nth-child(even) td { background: #f7fafc; }
+tbody tr:hover td { background: #eef8f4; }
 tbody tr:last-child td { border-bottom: none; }
 
 /* Totals below table */
@@ -1269,14 +1274,15 @@ tbody tr:last-child td { border-bottom: none; }
   min-height: 2.2rem;
   max-height: 3.2rem;
   height: 2.6rem;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  padding: 0 10px;
+  border-radius: 12px;
+  border: 1px solid #c4d0db;
+  padding: 0 12px;
   font-size: 1.1rem;
-  background: #fff;
+  background: linear-gradient(180deg, #fbfdfe 0%, #f3f7fa 100%);
   color: #222;
   box-sizing: border-box;
-  transition: height 0.2s, font-size 0.2s;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 6px 14px rgba(15, 23, 42, 0.05);
+  transition: height 0.2s, font-size 0.2s, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .right-panel input:focus {
@@ -1359,10 +1365,11 @@ tbody tr:last-child td { border-bottom: none; }
   width: 50px;
   height: 36px;
   text-align: center;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #c4d0db;
+  background: linear-gradient(180deg, #fbfdfe 0%, #f3f7fa 100%);
   color: #222;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 4px 10px rgba(15, 23, 42, 0.05);
   transition: all 160ms ease-in-out;
 }
 .qty-wrapper input.active-input {
@@ -1414,15 +1421,16 @@ tbody tr:last-child td { border-bottom: none; }
 .customer-list {
   max-height: 220px;
   overflow-y: auto;
-  border: 1px solid #ccc;
-  border-radius: 6px;
+  border: 1px solid #d7e1ea;
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
 }
 .customer-row {
-  padding: 8px;
+  padding: 10px 12px;
   cursor: pointer;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid #e7edf2;
 }
-.customer-row:hover { background: #f0f8ff; }
+.customer-row:hover { background: #eef8f4; }
 
 /* =========================
    MED NAMES
@@ -1444,18 +1452,18 @@ tbody tr:last-child td { border-bottom: none; }
 /* Customer search field */
 .modal .pos-medicine-search {
   width: 100%;
-  height: 44px;
+  height: 46px;
   font-size: 15px;
   padding: 0 14px;
-  border-radius: 10px;
+  border-radius: 12px;
   box-sizing: border-box;
 }
 
 /* Modal buttons aligned */
 .modal-actions .btn {
   flex: 1;
-  height: 44px;
-  border-radius: 10px;
+  height: 46px;
+  border-radius: 12px;
   font-size: 14px;
   font-weight: 600;
   display: flex;
@@ -1486,7 +1494,16 @@ tbody tr:last-child td { border-bottom: none; }
 .price-toggle {
   display: flex;
   justify-content: center;
-  gap: 4px;
+  gap: 6px;
+}
+
+.num-btn,
+.payment-option-btn,
+.price-option-btn,
+.qty-step-btn,
+.discount-add-btn,
+.button-remove-med {
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.1);
 }
 
 .payment-toggle {

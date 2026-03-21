@@ -172,7 +172,6 @@ const visibleMenu = () => {
   z-index: 1001;
   transform: translateX(-100%);
   transition: transform 0.3s ease;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
 }
 
 .menu-drawer.open {
@@ -216,8 +215,7 @@ const visibleMenu = () => {
 }
 
 .close-btn:hover {
-  background: #3b4c60;
-  border-radius: 6px;
+  background: transparent;
 }
 
 /* Menu List */
@@ -235,24 +233,29 @@ const visibleMenu = () => {
   background: none;
   border: none;
   color: inherit;
-  padding: 12px;
+  padding: 12px 4px;
   display: flex;
   gap: 12px;
   align-items: center;
   cursor: pointer;
   border-radius: 6px;
   font-size: 15px;
-  transition: background 0.2s;
+  transition: color 0.2s, transform 0.2s;
+  box-shadow: none!important;
 }
 
 .menu-list button:hover {
-  background: #3b4c60;
+  background: transparent;
+  color: #dff7f1;
+  transform: translateX(2px);
 }
 
 .menu-list button.active {
   background: #1abc9c;
   color: #fff;
   font-weight: 600;
+  box-shadow: none;
+  transform: none;
 }
 
 /* Icon */

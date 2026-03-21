@@ -56,16 +56,25 @@ const emits = defineEmits(['update:modelValue'])
   right: 6px;
   top: 50%;
   transform: translateY(-50%);
-  border: none;
-  background: transparent;
-  font-size: 18px;
+  border: 1px solid rgba(220, 20, 60, 0.15);
+  background: linear-gradient(180deg, #fff5f7 0%, #ffe8ed 100%);
+  font-size: 15px;
+  font-weight: 700;
   line-height: 1;
   cursor: pointer;
   color: #DC143C;
-  padding: 2px 6px;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(220, 20, 60, 0.12);
 }
 
 .clear-btn:hover {
-  color: #333;
+  color: #b01033;
 }
 </style>
