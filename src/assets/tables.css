@@ -16,6 +16,11 @@
   background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
 }
 
+.table-wrap.table-wrap-menu-open {
+  overflow: visible;
+  z-index: 30;
+}
+
 /* ── Table base ───────────────────────────────── */
 .table-wrap table {
   width: 100%;
@@ -89,6 +94,18 @@
   white-space: nowrap;
 }
 
+.table-wrap thead th.col-menu-anchor {
+  position: relative;
+  padding-right: 52px;
+}
+
+.table-wrap thead th.col-menu-anchor .col-toggle-wrap {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+}
+
 /* ── Gear icon button (inside th) ────────────── */
 .col-icon-btn {
   background: rgba(255,255,255,.66);
@@ -117,7 +134,7 @@
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  z-index: 200;
+  z-index: 240;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
   border: 1px solid #d7e1ea;
   border-radius: 14px;

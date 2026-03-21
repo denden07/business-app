@@ -50,7 +50,14 @@ const puCols = [
   { key: 'pu_status', label: 'Status' },
 ]
 const activeCols = computed(() => activeTab.value === 'points' ? ptCols : puCols)
+const lastVisibleColumnKey = computed(() => {
+  const visibleActiveCols = activeCols.value.filter(col => visibleCols.value[col.key])
+  return visibleActiveCols.at(-1)?.key || activeCols.value.at(-1)?.key || null
+})
 const toggleCol = (key) => { visibleCols.value[key] = !visibleCols.value[key] }
+const toggleColumnMenu = () => {
+  colMenuOpen.value = !colMenuOpen.value
+}
 const showSaleModal = ref(false)
 const selectedSale = ref(null)
 const saleCustomer = ref(null)
@@ -69,7 +76,12 @@ watch(dateRange, (range) => {
   }
 })
 
-watch([activeTab, startDate, endDate, sortOrder], () => {
+watch(activeTab, () => {
+  currentPage.value = 1
+  colMenuOpen.value = false
+})
+
+watch([startDate, endDate, sortOrder], () => {
   currentPage.value = 1
 })
 
@@ -328,7 +340,7 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
           {{ o }}
         </option>
       </select>
-      <button class="secondary" @click="dateRange = null; filterType='all'">Clear</button>
+      <!-- <button class="secondary" @click="dateRange = null; filterType='all'">Clear</button> -->
     </div>
 
     <!-- POINTS HISTORY -->
@@ -336,20 +348,75 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
     <table>
       <thead>
         <tr>
-          <th v-if="visibleCols.pt_date">Date</th>
-          <th v-if="visibleCols.pt_points">Points</th>
-          <th v-if="visibleCols.pt_type">Type</th>
-          <th v-if="visibleCols.pt_description">Notes</th>
-          <th v-if="visibleCols.pt_sale">Sale #</th>
-          <th class="col-actions col-actions-menu-only">
-            <div class="col-toggle-wrap">
-              <button class="col-icon-btn" @click.stop="colMenuOpen = !colMenuOpen" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
-              <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
-              <div v-if="colMenuOpen" class="col-menu">
-                <div class="col-menu-title">Columns</div>
-                <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+          <th v-if="visibleCols.pt_date" :class="{ 'col-menu-anchor': lastVisibleColumnKey === 'pt_date' }">
+            <div class="th-actions-head" v-if="lastVisibleColumnKey === 'pt_date'">
+              Date
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
               </div>
             </div>
+            <template v-else>Date</template>
+          </th>
+          <th v-if="visibleCols.pt_points" :class="{ 'col-menu-anchor': lastVisibleColumnKey === 'pt_points' }">
+            <div class="th-actions-head" v-if="lastVisibleColumnKey === 'pt_points'">
+              Points
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+            <template v-else>Points</template>
+          </th>
+          <th v-if="visibleCols.pt_type" :class="{ 'col-menu-anchor': lastVisibleColumnKey === 'pt_type' }">
+            <div class="th-actions-head" v-if="lastVisibleColumnKey === 'pt_type'">
+              Type
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+            <template v-else>Type</template>
+          </th>
+          <th v-if="visibleCols.pt_description" :class="{ 'col-menu-anchor': lastVisibleColumnKey === 'pt_description' }">
+            <div class="th-actions-head" v-if="lastVisibleColumnKey === 'pt_description'">
+              Notes
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+            <template v-else>Notes</template>
+          </th>
+          <th v-if="visibleCols.pt_sale" :class="{ 'col-menu-anchor': lastVisibleColumnKey === 'pt_sale' }">
+            <div class="th-actions-head" v-if="lastVisibleColumnKey === 'pt_sale'">
+              Sale #
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+            <template v-else>Sale #</template>
           </th>
         </tr>
       </thead>
@@ -371,7 +438,6 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
             </span>
             <span v-else>—</span>
           </td>
-          <td class="col-actions col-actions-menu-only"></td>
         </tr>
       </tbody>
     </table>
@@ -382,19 +448,61 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
     <table>
       <thead>
         <tr>
-          <th v-if="visibleCols.pu_date">Date</th>
-          <th v-if="visibleCols.pu_id">Sale #</th>
-          <th v-if="visibleCols.pu_total">Total</th>
-          <th v-if="visibleCols.pu_status">Status</th>
-          <th class="col-actions col-actions-menu-only">
-            <div class="col-toggle-wrap">
-              <button class="col-icon-btn" @click.stop="colMenuOpen = !colMenuOpen" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
-              <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
-              <div v-if="colMenuOpen" class="col-menu">
-                <div class="col-menu-title">Columns</div>
-                <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+          <th v-if="visibleCols.pu_date" :class="{ 'col-menu-anchor': lastVisibleColumnKey === 'pu_date' }">
+            <div class="th-actions-head" v-if="lastVisibleColumnKey === 'pu_date'">
+              Date
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
               </div>
             </div>
+            <template v-else>Date</template>
+          </th>
+          <th v-if="visibleCols.pu_id" :class="{ 'col-menu-anchor': lastVisibleColumnKey === 'pu_id' }">
+            <div class="th-actions-head" v-if="lastVisibleColumnKey === 'pu_id'">
+              Sale #
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+            <template v-else>Sale #</template>
+          </th>
+          <th v-if="visibleCols.pu_total" :class="{ 'col-menu-anchor': lastVisibleColumnKey === 'pu_total' }">
+            <div class="th-actions-head" v-if="lastVisibleColumnKey === 'pu_total'">
+              Total
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+            <template v-else>Total</template>
+          </th>
+          <th v-if="visibleCols.pu_status" :class="{ 'col-menu-anchor': lastVisibleColumnKey === 'pu_status' }">
+            <div class="th-actions-head" v-if="lastVisibleColumnKey === 'pu_status'">
+              Status
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+            <template v-else>Status</template>
           </th>
         </tr>
       </thead>
@@ -418,7 +526,6 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
               {{ s.status }}
             </span>
           </td>
-          <td class="col-actions col-actions-menu-only"></td>
         </tr>
       </tbody>
     </table>
@@ -509,6 +616,7 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
+  margin-top: 28px;
   margin-bottom: 14px;
 }
 

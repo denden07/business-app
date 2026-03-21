@@ -4,6 +4,7 @@ import { dbPromise } from '../db'
 // Import pages (views)
 import Home from '../views/Home.vue'
 import Medicines from '../views/Medicines.vue'
+import MedicineDetails from '../views/MedicineDetails.vue'
 import Inventory from '../views/Inventory.vue'
 import Sales from '../views/Sales.vue'
 import Customers from '../views/Customers.vue'
@@ -15,6 +16,7 @@ import Drafts from '../views/Drafts.vue'
 let allRoutes = [
   { path: '/', name: 'Home', component: Home },
   { path: '/medicines', name: 'Medicines', component: Medicines },
+  { path: '/medicines/:id', name: 'MedicineDetails', component: MedicineDetails },
   { path: '/inventory', name: 'Inventory', component: Inventory },
   { path: '/sales', name: 'Sales', component: Sales },
   { path: '/customers', name: 'Customers', component: Customers },
