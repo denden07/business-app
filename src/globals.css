@@ -50,11 +50,12 @@
   inset: 0;
   display: flex;
   justify-content: center;
-  align-items: flex-start;
+  align-items: center;
   padding: 20px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   z-index: 2000;
+  box-sizing: border-box;
 }
 
 .app-modal-panel,
@@ -70,6 +71,7 @@
   color: var(--modal-surface-text);
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28);
   box-sizing: border-box;
+  margin: auto 0;
 }
 
 .app-modal-dialog {
@@ -333,6 +335,8 @@ button,
 .btn {
   appearance: none;
   -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   border: 1px solid transparent;
   border-radius: 12px;
   min-height: 42px;
@@ -346,6 +350,7 @@ button,
   background: var(--btn-primary-bg);
   box-shadow: var(--btn-shadow);
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+  will-change: transform;
 }
 
 button:hover,
@@ -357,7 +362,8 @@ button:hover,
 
 button:active,
 .btn:active {
-  transform: translateY(0) scale(0.985);
+  transform: translateY(1px) scale(0.965);
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.14);
 }
 
 button:focus-visible,
@@ -530,6 +536,11 @@ button:disabled,
   transform: translateY(-1px);
 }
 
+.pagination button:active:not(:disabled) {
+  transform: translateY(1px) scale(0.95);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
+}
+
 .pagination button[aria-current="page"] {
   pointer-events: none;
 }
@@ -644,6 +655,7 @@ button:disabled,
   border-radius: 12px;
   color: #444;
   box-shadow: 0 8px 16px rgba(15, 23, 42, 0.06);
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
 }
 
 .date-icon-btn:hover {
@@ -654,6 +666,18 @@ button:disabled,
 .date-icon-btn.active {
   border-color: #1abc9c;
   color: #1abc9c;
+}
+
+.date-icon-btn:active,
+.col-icon-btn:active,
+.qty-step-btn:active,
+.num-btn:active,
+.discount-add-btn:active,
+.payment-option-btn:active,
+.price-option-btn:active,
+.mini:active {
+  transform: translateY(1px) scale(0.96);
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.14);
 }
 
 .date-clear {
