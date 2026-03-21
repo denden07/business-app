@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, reactive } from 'vue'
+import { useRoute } from 'vue-router'
 import { useStore } from 'vuex'
 import Swal from 'sweetalert2'
 import { useRouter } from 'vue-router'
@@ -11,6 +12,7 @@ const store = useStore()
    STATE
 ====================== */
 const page = ref(1)
+const route = useRoute()
 const perPage = ref(10)
 
 const search = ref('')
@@ -185,12 +187,32 @@ async function savePointsAdjustment() {
 /* ======================
    INIT
 ====================== */
-onMounted(load)
+onMounted(() => {
+  const q = route.query
+  const qPage = Number(q.page || 0)
+  if (qPage && qPage > 0) page.value = qPage
+  if (q.search !== undefined) search.value = q.search
+  const qPer = Number(q.perPage || 0)
+  if (qPer && qPer > 0) perPage.value = qPer
+  if (q.sortBy) sortBy.value = q.sortBy
+  if (q.sortOrder) sortOrder.value = q.sortOrder
+  load()
+})
 
 const router = useRouter()
 
 function goToTransactionHistory(customerId) {
-  router.push({ name: 'TransactionHistory', params: { id: customerId } })
+  router.push({
+    name: 'TransactionHistory',
+    params: { id: customerId },
+    query: {
+      page: page.value,
+      search: search.value || undefined,
+      perPage: perPage.value,
+      sortBy: sortBy.value,
+      sortOrder: sortOrder.value
+    }
+  })
 }
 </script>
 

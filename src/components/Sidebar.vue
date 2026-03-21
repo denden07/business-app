@@ -1,6 +1,7 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { dbPromise } from '../db'
 
 const router = useRouter()
 const route = useRoute()
@@ -45,6 +46,36 @@ const menuItems = [
 ]
 
 const isActive = (path) => route.path === path
+
+const pageVisibility = ref(null)
+
+async function loadVisibility() {
+  try {
+    const db = await dbPromise
+    const all = await db.getAll('pages')
+    const map = {}
+    all.forEach(r => { map[r.name] = !!r.visible })
+    // if no records, default to showing all
+    if (!all.length) {
+      menuItems.forEach(m => (map[m.name] = true))
+    }
+    pageVisibility.value = map
+  } catch (err) {
+    console.error('Failed to load page visibility', err)
+    pageVisibility.value = null
+  }
+}
+
+onMounted(() => {
+  loadVisibility()
+  // simple polling to refresh visibility if changed in Settings
+  setInterval(loadVisibility, 2500)
+})
+
+const visibleMenu = () => {
+  if (!pageVisibility.value) return menuItems
+  return menuItems.filter(m => pageVisibility.value[m.name] !== false)
+}
 </script>
 
 <template>
@@ -62,7 +93,7 @@ const isActive = (path) => route.path === path
     </div>
 
     <ul class="menu-list">
-      <li v-for="item in menuItems" :key="item.path">
+      <li v-for="item in visibleMenu()" :key="item.path">
         <button
           :class="{ active: isActive(item.path) }"
           @click="navigateTo(item.path)"

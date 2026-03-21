@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { dbPromise } from '../db'
 
 // Import pages (views)
 import Home from '../views/Home.vue'
@@ -10,7 +11,7 @@ import Analytics from '../views/Analytics.vue'
 import TransactionHistory from '../views/TransactionHistory.vue'
 import Settings from '../views/Settings.vue'
 
-const routes = [
+let allRoutes = [
   { path: '/', name: 'Home', component: Home },
   { path: '/medicines', name: 'Medicines', component: Medicines },
   { path: '/inventory', name: 'Inventory', component: Inventory },
@@ -29,9 +30,36 @@ const routes = [
   }
 ]
 
+async function buildRoutes() {
+  try {
+    const db = await dbPromise
+    const pages = await db.getAll('pages')
+    if (!pages.length) return allRoutes
+    const visibleMap = {}
+    pages.forEach(p => { visibleMap[p.name] = !!p.visible })
+    return allRoutes.filter(r => !r.name || visibleMap[r.name] !== false)
+  } catch (err) {
+    console.error('Failed to load pages visibility', err)
+    return allRoutes
+  }
+}
+
+const routes = await buildRoutes()
+
 const router = createRouter({
   history: createWebHistory(),
   routes
 })
 
+// helper to refresh routes after updating settings
+async function refreshRoutes() {
+  const newRoutes = await buildRoutes()
+  // clear existing and add new
+  router.getRoutes().forEach(rt => {
+    try { router.removeRoute(rt.name) } catch (e) {}
+  })
+  newRoutes.forEach(r => router.addRoute(r))
+}
+
+export { refreshRoutes }
 export default router

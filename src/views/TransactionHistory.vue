@@ -109,7 +109,15 @@ const pageNumbers = computed(() =>
 )
 
 function goBack() {
-  router.push({ name: 'Customers' })
+  const q = route.query || {}
+  const payload = {}
+  if (q.page) payload.page = q.page
+  if (q.search !== undefined) payload.search = q.search
+  if (q.perPage) payload.perPage = q.perPage
+  if (q.sortBy) payload.sortBy = q.sortBy
+  if (q.sortOrder) payload.sortOrder = q.sortOrder
+
+  router.push({ name: 'Customers', query: payload })
 }
 
 /* ======================
@@ -475,7 +483,9 @@ body.dark-mode tbody tr:hover {
   background: rgba(0,0,0,.6);
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
+  padding: 40px 20px;
+  overflow-y: auto;
   z-index: 999;
 }
 

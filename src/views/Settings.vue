@@ -1,15 +1,27 @@
 <script setup>
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { dbPromise } from '../db'
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
 import { Device } from '@capacitor/device'
 import { FilePicker } from '@capawesome/capacitor-file-picker'
+import { refreshRoutes } from '../router'
+import PageVisibilitySettings from '../components/PageVisibilitySettings.vue'
 
 const status = ref('')
 const progress = ref(0)
 const fileName = ref('pharmacy_pos_backup.json')
 const restoreInput = ref(null)
+
+const pageVisibility = ref({})
+const pagesList = ref([
+  { name: 'Home', label: 'Home' },
+  { name: 'Medicines', label: 'Medicines' },
+  { name: 'Inventory', label: 'Inventory' },
+  { name: 'Sales', label: 'Sales' },
+  { name: 'Customers', label: 'Customers' },
+  { name: 'Analytics', label: 'Analytics' },
+])
 
 async function backupDB() {
   status.value = 'Preparing backup...'
@@ -114,119 +126,110 @@ async function restoreDB() {
     setTimeout(() => { progress.value = 0 }, 3000)
   }
 }
+
+async function loadPageVisibility() {
+  try {
+    const db = await dbPromise
+    const all = await db.getAll('pages')
+    const map = {}
+    // default all true
+    pagesList.value.forEach(p => (map[p.name] = true))
+    for (const row of all) {
+      map[row.name] = !!row.visible
+    }
+    pageVisibility.value = map
+  } catch (err) {
+    console.error('Failed loading page visibility', err)
+  }
+}
+
+async function savePageVisibility() {
+  try {
+    const db = await dbPromise
+    const tx = db.transaction('pages', 'readwrite')
+    const store = tx.objectStore('pages')
+    for (const p of pagesList.value) {
+      await store.put({ name: p.name, visible: !!pageVisibility.value[p.name] })
+    }
+    await tx.done
+    status.value = 'Page visibility saved'
+    // refresh router so menu and routes reflect changes immediately
+    try { await refreshRoutes() } catch (e) { console.warn('Failed to refresh routes', e) }
+  } catch (err) {
+    console.error('Failed saving page visibility', err)
+    status.value = 'Failed saving page visibility: ' + err.message
+  }
+}
+
+onMounted(async () => {
+  // existing onMounted logic is inside the file; ensure we still load visibility
+  await loadPageVisibility()
+})
 </script>
 
 <template>
-  <div class="backup-page">
-    <h1>Database Management</h1>
+  <div class="settings-grid">
+    <div class="left-col">
+      <div class="card">
+        <h1>Database Management</h1>
+        <p class="note">
+          💡 <b>Tip:</b> Keep your backups in a safe place (Google Drive, Email) to prevent data loss.
+        </p>
 
-    <p class="note">
-      💡 <b>Tip:</b> Keep your backups in a safe place (Google Drive, Email) to prevent data loss.
-    </p>
+        <div class="actions">
+          <button class="btn-backup" @click="backupDB">Backup Database</button>
 
-    <div class="actions">
-      <button class="btn-backup" @click="backupDB">Backup Database</button>
+          <div class="restore-section">
+            <label class="file-label">
+              Select Backup File:
+              <input type="file" accept=".json" ref="restoreInput" />
+            </label>
 
-      <div class="restore-section">
-        <label class="file-label">
-          Select Backup File:
-          <input type="file" accept=".json" ref="restoreInput" />
-        </label>
-        
-        <button class="btn-restore" @click="restoreDB">
-          Restore Database
-        </button>
+            <button class="btn-restore" @click="restoreDB">
+              Restore Database
+            </button>
+          </div>
+        </div>
+
+        <div v-if="progress > 0" class="progress-container">
+          <div class="progress-bar" :style="{ width: progress + '%' }"></div>
+          <span class="progress-text">{{ progress }}%</span>
+        </div>
+
+        <p class="status" :class="{ 'error': status.includes('failed') }">
+          {{ status }}
+        </p>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <PageVisibilitySettings :pages="pagesList" />
       </div>
     </div>
 
-    <div v-if="progress > 0" class="progress-container">
-      <div class="progress-bar" :style="{ width: progress + '%' }"></div>
-      <span class="progress-text">{{ progress }}%</span>
-    </div>
-
-    <p class="status" :class="{ 'error': status.includes('failed') }">
-      {{ status }}
-    </p>
+    <!-- <div class="right-col">
+      <div class="card">
+        <h2>Advanced</h2>
+        <p class="muted">Device & export utilities</p>
+        <p>Use backup and restore to move data between devices or keep periodic snapshots.</p>
+      </div>
+    </div> -->
   </div>
 </template>
 
 <style scoped>
-.backup-page {
-  padding: 20px;
-  font-family: sans-serif;
-}
+/* layout */
+.settings-grid { display: flex; gap: 18px; padding: 20px }
+.left-col { flex: 2 }
+.right-col { flex: 1 }
+.card { background:#fff; padding: 16px; border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,0.06) }
 
-.note {
-  background-color: #e3f2fd;
-  border-left: 4px solid #2196f3;
-  padding: 12px;
-  margin-bottom: 25px;
-  font-size: 0.9rem;
-}
-
-.actions {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.restore-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #eee;
-}
-
-button {
-  padding: 12px;
-  border: none;
-  border-radius: 8px;
-  font-weight: bold;
-  color: white;
-  transition: opacity 0.2s;
-}
-
-.btn-backup { background-color: #2ecc71; }
-.btn-restore { background-color: #3498db; }
-
-button:active { opacity: 0.7; }
-
-.progress-container {
-  margin-top: 25px;
-  background-color: #eee;
-  border-radius: 10px;
-  height: 20px;
-  position: relative;
-  overflow: hidden;
-}
-
-.progress-bar {
-  background-color: #2ecc71;
-  height: 100%;
-  transition: width 0.3s ease;
-}
-
-.progress-text {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 10px;
-  font-weight: bold;
-  color: #333;
-}
-
-.status {
-  margin-top: 15px;
-  font-style: italic;
-  color: #666;
-}
-
-.error { color: #e74c3c; font-weight: bold; }
-
-.file-label {
-  font-size: 0.8rem;
-  color: #666;
-}
+/* reuse some existing styles */
+.note { background-color: #e3f2fd; border-left: 4px solid #2196f3; padding: 12px; margin-bottom: 12px; font-size: 0.9rem }
+.actions { display:flex; flex-direction:column; gap:12px }
+.restore-section { display:flex; flex-direction:column; gap:10px; padding-top:10px; border-top:1px solid #eee }
+.btn-backup { background-color: #2ecc71; padding: 12px; color: #fff; border-radius:8px; border:none }
+.btn-restore { background-color: #3498db; padding: 12px; color: #fff; border-radius:8px; border:none }
+.progress-container { margin-top: 12px; background:#eee; border-radius:10px; height:20px; position:relative }
+.progress-bar { background:#2ecc71; height:100%; transition: width 0.3s }
+.status { margin-top:12px; font-style:italic; color:#666 }
 </style>
