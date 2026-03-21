@@ -37,10 +37,16 @@ let allRoutes = [
 async function buildRoutes() {
   try {
     const db = await dbPromise
-    const pages = await db.getAll('pages')
-    if (!pages.length) return allRoutes
     const visibleMap = {}
-    pages.forEach(p => { visibleMap[p.name] = !!p.visible })
+    let hasRows = false
+    let cursor = await db.transaction('pages').objectStore('pages').openCursor()
+    while (cursor) {
+      hasRows = true
+      const page = cursor.value
+      visibleMap[page.name] = !!page.visible
+      cursor = await cursor.continue()
+    }
+    if (!hasRows) return allRoutes
     return allRoutes.filter(r => !r.name || visibleMap[r.name] !== false)
   } catch (err) {
     console.error('Failed to load pages visibility', err)

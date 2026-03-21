@@ -59,11 +59,18 @@ async function loadAppName() {
 async function loadVisibility() {
   try {
     const db = await dbPromise
-    const all = await db.getAll('pages')
     const map = {}
-    all.forEach(r => { map[r.name] = !!r.visible })
+    const store = db.transaction('pages').objectStore('pages')
+    let count = 0
+    let cursor = await store.openCursor()
+    while (cursor) {
+      const row = cursor.value
+      map[row.name] = !!row.visible
+      count += 1
+      cursor = await cursor.continue()
+    }
     // if no records, default to showing all
-    if (!all.length) {
+    if (!count) {
       menuItems.forEach(m => (map[m.name] = true))
     }
     pageVisibility.value = map

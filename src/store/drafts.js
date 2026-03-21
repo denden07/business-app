@@ -4,22 +4,68 @@ export default {
   namespaced: true,
 
   state: () => ({
-    drafts: []
+    drafts: [],
+    currentPage: 1,
+    itemsPerPage: 10,
+    totalCount: 0
   }),
 
   mutations: {
     SET_DRAFTS(state, drafts) {
       state.drafts = drafts
+    },
+    SET_CURRENT_PAGE(state, page) {
+      state.currentPage = page
+    },
+    SET_ITEMS_PER_PAGE(state, perPage) {
+      state.itemsPerPage = perPage
+    },
+    SET_TOTAL_COUNT(state, total) {
+      state.totalCount = total
     }
   },
 
   actions: {
-    /** Load all drafts from IndexedDB, newest first. */
-    async load({ commit }) {
+    /** Load a paged slice of drafts from IndexedDB, newest first. */
+    async loadPage({ commit, state }, { page = state.currentPage, perPage = state.itemsPerPage } = {}) {
       const db = await dbPromise
-      const all = await db.getAll('draft_sales')
-      const sorted = all.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      commit('SET_DRAFTS', sorted)
+      const index = db.transaction('draft_sales').objectStore('draft_sales').index('created_at')
+      const total = await index.count()
+      const offset = (page - 1) * perPage
+      const drafts = []
+      let skipped = 0
+      let cursor = await index.openCursor(null, 'prev')
+
+      while (cursor) {
+        if (skipped < offset) {
+          skipped += 1
+          cursor = await cursor.continue()
+          continue
+        }
+
+        drafts.push(cursor.value)
+        if (drafts.length >= perPage) {
+          break
+        }
+        cursor = await cursor.continue()
+      }
+
+      commit('SET_CURRENT_PAGE', page)
+      commit('SET_ITEMS_PER_PAGE', perPage)
+      commit('SET_TOTAL_COUNT', total)
+      commit('SET_DRAFTS', drafts)
+    },
+
+    async load({ dispatch, state }, payload = {}) {
+      return dispatch('loadPage', {
+        page: payload.page ?? state.currentPage,
+        perPage: payload.perPage ?? state.itemsPerPage
+      })
+    },
+
+    async getDraftById(_, id) {
+      const db = await dbPromise
+      return db.get('draft_sales', id)
     },
 
     /**
@@ -36,14 +82,17 @@ export default {
         created_at: new Date().toISOString(),
         ...snapshot
       })
-      await dispatch('load')
+      await dispatch('loadPage', { page: 1 })
     },
 
     /** Delete a draft by id and refresh the list. */
-    async remove({ dispatch }, id) {
+    async remove({ dispatch, state }, id) {
       const db = await dbPromise
       await db.delete('draft_sales', id)
-      await dispatch('load')
+      const nextTotal = Math.max(0, state.totalCount - 1)
+      const totalPages = Math.max(1, Math.ceil(nextTotal / state.itemsPerPage))
+      const targetPage = Math.min(state.currentPage, totalPages)
+      await dispatch('loadPage', { page: targetPage, perPage: state.itemsPerPage })
     }
   }
 }

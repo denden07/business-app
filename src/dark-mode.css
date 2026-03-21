@@ -344,6 +344,15 @@ body.dark-mode .home-view .right-panel {
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
 }
 
+body.dark-mode .home-view .customer-section {
+  color: #e5e7eb;
+}
+
+body.dark-mode .home-view .customer-section label,
+body.dark-mode .home-view .customer-name {
+  color: #f8fafc;
+}
+
 body.dark-mode .home-view .cart-table-container::-webkit-scrollbar-thumb {
   background-color: rgba(148, 163, 184, 0.35);
 }
@@ -365,6 +374,10 @@ body.dark-mode .home-view thead th {
 body.dark-mode .home-view tbody td {
   border-bottom-color: var(--table-border);
   color: var(--table-text);
+}
+
+body.dark-mode .home-view tbody tr:nth-child(even) td {
+  background: var(--table-surface-alt);
 }
 
 body.dark-mode .home-view tbody tr:hover td {

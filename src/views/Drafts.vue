@@ -3,14 +3,33 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
+import Pagination from '../components/Pagination.vue'
 
 const store = useStore()
 const router = useRouter()
 
 const drafts = computed(() => store.state.drafts.drafts)
+const currentPage = computed({
+  get: () => store.state.drafts.currentPage,
+  set: (value) => store.commit('drafts/SET_CURRENT_PAGE', value)
+})
+const itemsPerPage = computed({
+  get: () => store.state.drafts.itemsPerPage,
+  set: (value) => store.commit('drafts/SET_ITEMS_PER_PAGE', value)
+})
+const totalCount = computed(() => store.state.drafts.totalCount)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / itemsPerPage.value)))
+const itemsPerPageOptions = [5, 10, 20, 50]
 
 onMounted(() => {
-  store.dispatch('drafts/load')
+  store.dispatch('drafts/loadPage')
+})
+
+watch([currentPage, itemsPerPage], () => {
+  store.dispatch('drafts/loadPage', {
+    page: currentPage.value,
+    perPage: itemsPerPage.value
+  })
 })
 
 const resumeDraft = (draft) => {
@@ -45,6 +64,11 @@ const deleteDraft = async (draft) => {
   if (!confirm.isConfirmed) return
   await store.dispatch('drafts/remove', draft.id)
 }
+
+const goPage = (page) => {
+  if (page < 1 || page > totalPages.value) return
+  currentPage.value = page
+}
 </script>
 
 <template>
@@ -53,6 +77,14 @@ const deleteDraft = async (draft) => {
 
     <div class="top-bar">
       <button @click="router.push('/')">+ New Sale</button>
+      <div class="items-per-page">
+        <label>Items:</label>
+        <select v-model.number="itemsPerPage" class="select-field">
+          <option v-for="opt in itemsPerPageOptions" :key="opt" :value="opt">
+            {{ opt }}
+          </option>
+        </select>
+      </div>
     </div>
 
     <div v-if="!drafts.length" class="empty-state">
@@ -98,6 +130,14 @@ const deleteDraft = async (draft) => {
       </tbody>
     </table>
     </div>
+
+    <Pagination
+      v-if="drafts.length"
+      :page="currentPage"
+      :total-pages="totalPages"
+      :max-pages="5"
+      @update:page="goPage"
+    />
   </div>
 </template>
 

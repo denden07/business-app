@@ -5,6 +5,7 @@ import { useStore } from 'vuex'
 import { useRouter, useRoute } from 'vue-router'
 import Swal from 'sweetalert2'
 import { dbPromise } from '../db'
+import { reduceFromSource } from '../db/query'
 import { Haptics } from '@capacitor/haptics'
 import {
   defaultInteractionSettings,
@@ -120,11 +121,10 @@ const resumeDraft = (draft) => {
 }
 
 onMounted(async () => {
-  await store.dispatch('drafts/load')
   await loadFeedbackSettings()
   const draftId = Number(route.query.draft)
   if (draftId) {
-    const draft = store.state.drafts.drafts.find(d => d.id === draftId)
+    const draft = await store.dispatch('drafts/getDraftById', draftId)
     if (draft) resumeDraft(draft)
   }
 
@@ -304,6 +304,8 @@ const selectItemPriceType = (item, type) => {
   setPriceType(item, type)
 }
 
+const SEARCH_RESULT_LIMIT = 20
+
 // ======================
 // MEDICINES SEARCH (WITH LATEST PRICE)
 // ======================
@@ -321,24 +323,41 @@ watch(search, async (val) => {
   }
 
   const db = await dbPromise
-  const meds = await db.getAll('medicines')
-  const batches = await db.getAll('inventory_batches')
+  const tx = db.transaction(['medicines', 'inventory_batches'], 'readonly')
+  const medsStore = tx.objectStore('medicines')
+  const batchIndex = tx.objectStore('inventory_batches').index('medicine_id')
+  const matches = []
 
-  const matches = meds.filter(m =>
-    m.name.toLowerCase().includes(q) ||
-    (m.generic_name || '').toLowerCase().includes(q)
-  )
+  let cursor = await medsStore.openCursor()
+  while (cursor) {
+    const medicine = cursor.value
+    const name = (medicine.name || '').toLowerCase()
+    const generic = (medicine.generic_name || '').toLowerCase()
+    const matchesQuery = name.startsWith(q) || generic.startsWith(q)
+
+    if (matchesQuery) {
+      if (matches.length < SEARCH_RESULT_LIMIT) {
+        matches.push({ ...medicine })
+      }
+    }
+
+    cursor = await cursor.continue()
+  }
 
   for (const m of matches) {
-    const medBatches = batches.filter(b => b.medicine_id === m.id)
-    const totalStock = medBatches.reduce((sum, b) => sum + (b.quantity || 0), 0)
+    const totalStock = await reduceFromSource(
+      batchIndex,
+      (sum, batch) => sum + Number(batch.quantity || 0),
+      0,
+      { query: m.id }
+    )
 
     m.quantity = totalStock
     m.stockIndicator = getStockIndicator({ quantity: totalStock })
     medicinesMap.value[m.id] = m
   }
 
-  // Sort: prioritize items that START with the search term
+  // Sort exact prefix matches by brand first, then generic name.
   matches.sort((a, b) => {
     const aName = a.name.toLowerCase()
     const bName = b.name.toLowerCase()
@@ -378,12 +397,25 @@ watch(customerSearch, async (val) => {
   }
 
   const db = await dbPromise
-  const customers = await db.getAll('customers')
+  const customersStore = db.transaction(['customers', 'yearly_points'], 'readonly').objectStore('customers')
+  const matches = []
 
-  const matches = customers.filter(c =>
-    c.name.toLowerCase().includes(q) ||
-    (c.phone || '').includes(q)
-  )
+  let cursor = await customersStore.openCursor()
+  while (cursor) {
+    const customer = cursor.value
+    const matchesQuery =
+      (customer.name || '').toLowerCase().startsWith(q) ||
+      (customer.phone || '').startsWith(q)
+
+    if (matchesQuery) {
+      matches.push({ ...customer })
+      if (matches.length >= SEARCH_RESULT_LIMIT) {
+        break
+      }
+    }
+
+    cursor = await cursor.continue()
+  }
 
   const year = new Date().getFullYear()
   const yearlyStore = db.transaction('yearly_points').objectStore('yearly_points')

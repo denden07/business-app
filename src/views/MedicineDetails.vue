@@ -8,6 +8,7 @@ import { dbPromise } from '../db'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 import { format } from 'date-fns'
+import { collectFromSource } from '../db/query'
 
 const route = useRoute()
 const router = useRouter()
@@ -121,11 +122,11 @@ const loadMedicineData = async () => {
   medicine.value = currentMedicine
 
   const stockIndex = db.transaction('inventory_batches').objectStore('inventory_batches').index('medicine_id')
-  const allStock = await stockIndex.getAll(IDBKeyRange.only(medicineId.value))
+  const allStock = await collectFromSource(stockIndex, { query: IDBKeyRange.only(medicineId.value) })
   stockEntries.value = allStock.sort((left, right) => new Date(right.created_at) - new Date(left.created_at))
 
   const priceIndex = db.transaction('price_history').objectStore('price_history').index('medicine_id')
-  const allPrices = await priceIndex.getAll(IDBKeyRange.only(medicineId.value))
+  const allPrices = await collectFromSource(priceIndex, { query: IDBKeyRange.only(medicineId.value) })
   priceEntries.value = allPrices.sort((left, right) => new Date(right.changed_at) - new Date(left.changed_at))
 }
 

@@ -1,4 +1,5 @@
 import { dbPromise } from '../db'
+import { collectFromSource, reduceFromSource } from '../db/query'
 import Swal from 'sweetalert2'
 
 export default {
@@ -51,11 +52,10 @@ export default {
           .get(sale.customer_id)
       }
 
-      const items = await db
-        .transaction('sale_items')
-        .objectStore('sale_items')
-        .index('sale_id')
-        .getAll(saleId)
+      const items = await collectFromSource(
+        db.transaction('sale_items').objectStore('sale_items').index('sale_id'),
+        { query: saleId }
+      )
 
       const medsStore = db.transaction('medicines').objectStore('medicines')
 
@@ -127,7 +127,10 @@ async saveSale({ commit }, payload) {
 
 // Deduct inventory (allow negative quantities)
 for (const item of cart) {
-  const allBatches = await batchesStore.index('medicine_id').getAll(item.id)
+  const allBatches = await collectFromSource(
+    batchesStore.index('medicine_id'),
+    { query: item.id }
+  )
   
   let remainingQty = item.qty
   let primaryBatchId = null
@@ -172,6 +175,7 @@ for (const item of cart) {
   const medicine = await medicinesStore.get(item.id)
   if (medicine) {
     medicine.last_sold_at = now
+    medicine.updated_at = now
     await medicinesStore.put(medicine)
   }
 }
@@ -230,7 +234,9 @@ for (const item of cart) {
     // ======================
     async loadSales({ commit }) {
       const db = await dbPromise
-      const allSales = await db.getAll('sales')
+      const allSales = await collectFromSource(
+        db.transaction('sales').objectStore('sales')
+      )
 
       const sales = allSales
         .map(s => ({
@@ -305,7 +311,7 @@ for (const item of cart) {
       const itemsStore = tx.objectStore('sale_items')
       const medsStore = tx.objectStore('medicines')
 
-      const items = await itemsStore.index('sale_id').getAll(saleId)
+      const items = await collectFromSource(itemsStore.index('sale_id'), { query: saleId })
 
       for (const item of items) {
         const med = await medsStore.get(item.medicine_id)
@@ -319,7 +325,7 @@ for (const item of cart) {
     // ======================
     // VOID SALE
     // ======================
-async voidSale({ dispatch }, sale) {
+async voidSale(_, sale) {
   const result = await Swal.fire({
     title: 'Void Sale?',
     text: 'This will restore inventory, return redeemed points, and remove earned points from this sale.',
@@ -333,11 +339,10 @@ async voidSale({ dispatch }, sale) {
   const db = await dbPromise
 
   // 1️⃣ Restore inventory
-  const items = await db
-    .transaction('sale_items')
-    .objectStore('sale_items')
-    .index('sale_id')
-    .getAll(sale.id)
+  const items = await collectFromSource(
+    db.transaction('sale_items').objectStore('sale_items').index('sale_id'),
+    { query: sale.id }
+  )
 
   const invTx = db.transaction('inventory_batches', 'readwrite')
   const batchStore = invTx.objectStore('inventory_batches')
@@ -359,7 +364,7 @@ async voidSale({ dispatch }, sale) {
     const yearlyStore = tx.objectStore('yearly_points')
     const now = new Date()
 
-    const points = await pointsStore.index('related_sale_id').getAll(sale.id)
+    const points = await collectFromSource(pointsStore.index('related_sale_id'), { query: sale.id })
 
     const year = new Date().getFullYear()
     const yearlyKey = [sale.customer_id, year]
@@ -408,7 +413,6 @@ async voidSale({ dispatch }, sale) {
   }
   await salesTx.done
 
-  await dispatch('loadSales')
 },
 
 
@@ -419,10 +423,14 @@ async voidSale({ dispatch }, sale) {
     async getMedicinesMap() {
       const db = await dbPromise
       const medsStore = db.transaction('medicines').objectStore('medicines')
-      const allMeds = await medsStore.getAll()
-      const map = {}
-      allMeds.forEach(med => (map[med.id] = med))
-      return map
+      return reduceFromSource(
+        medsStore,
+        (map, med) => {
+          map[med.id] = med
+          return map
+        },
+        {}
+      )
     },
 
     async exportSalesByDateRange(_, { startDate, endDate }) {

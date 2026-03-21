@@ -8,6 +8,7 @@ import { dbPromise } from '../db'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 import { format } from 'date-fns'
+import { collectFromSource } from '../db/query'
 
 const route = useRoute()
 const store = useStore()
@@ -15,6 +16,7 @@ const store = useStore()
 const router = useRouter()
 
 const customerId = Number(route.params.id)
+const customerPoints = ref(0)
 
 /* ======================
    STATE
@@ -80,20 +82,58 @@ watch(dateRange, (range) => {
 watch(activeTab, () => {
   currentPage.value = 1
   colMenuOpen.value = false
+  loadActiveTab()
 })
 
-watch([startDate, endDate, sortOrder], () => {
+watch([startDate, endDate, sortOrder, itemsPerPage], () => {
   currentPage.value = 1
+  loadActiveTab()
+})
+
+watch(filterType, () => {
+  if (activeTab.value !== 'points') return
+  currentPage.value = 1
+  loadPointsPage()
+})
+
+watch(currentPage, () => {
+  loadActiveTab()
 })
 
 /* ======================
    LOAD DATA
 ====================== */
 onMounted(async () => {
-  currentCustomer.value = await dbPromise.then(db => db.get('customers', customerId))
-  await store.dispatch('transaction/loadPointsHistory', customerId)
-  await store.dispatch('transaction/loadSales', customerId)
+  const db = await dbPromise
+  currentCustomer.value = await db.get('customers', customerId)
+  const year = new Date().getFullYear()
+  const yearly = await db.get('yearly_points', [customerId, year])
+  customerPoints.value = Number(yearly?.points || 0)
+  await loadActiveTab()
 })
+
+const loadPointsPage = () => store.dispatch('transaction/loadPointsHistoryPage', {
+  customerId,
+  page: currentPage.value,
+  perPage: itemsPerPage.value,
+  startDate: startDate.value,
+  endDate: endDate.value,
+  filterType: filterType.value,
+  sortOrder: sortOrder.value
+})
+
+const loadSalesPage = () => store.dispatch('transaction/loadSalesPage', {
+  customerId,
+  page: currentPage.value,
+  perPage: itemsPerPage.value,
+  startDate: startDate.value,
+  endDate: endDate.value,
+  sortOrder: sortOrder.value
+})
+
+function loadActiveTab() {
+  return activeTab.value === 'points' ? loadPointsPage() : loadSalesPage()
+}
 
 /* ======================
    VUEX SOURCES
@@ -102,83 +142,40 @@ const pointsHistory = computed(() =>
   store.state.transaction.pointsHistory
 )
 
+const pointsTotal = computed(() =>
+  store.state.transaction.pointsTotal
+)
+
 const sales = computed(() =>
   store.state.transaction.sales
+)
+
+const salesTotal = computed(() =>
+  store.state.transaction.salesTotal
 )
 
 /* ======================
    FILTERED DATA
 ====================== */
-const filteredPoints = computed(() => {
-  return pointsHistory.value
-    .filter(p => {
-      const pd = new Date(p.date)
-      if (startDate.value) {
-        const sd = new Date(startDate.value)
-        if (pd < sd) return false
-      }
-      if (endDate.value) {
-        const ed = new Date(endDate.value + 'T23:59:59')
-        if (pd > ed) return false
-      }
-      if (filterType.value && filterType.value !== 'all') {
-        if (p.type !== filterType.value) return false
-      }
-      return true
-    })
-    .sort((a, b) =>
-      sortOrder.value === 'asc'
-        ? new Date(a.date) - new Date(b.date)
-        : new Date(b.date) - new Date(a.date)
-    )
-})
-
-const filteredSales = computed(() => {
-  return sales.value
-    .filter(s => {
-      const sd = new Date(s.created_at)
-      if (startDate.value) {
-        const from = new Date(startDate.value)
-        if (sd < from) return false
-      }
-      if (endDate.value) {
-        const to = new Date(endDate.value + 'T23:59:59')
-        if (sd > to) return false
-      }
-      return true
-    })
-    .sort((a, b) =>
-      sortOrder.value === 'asc'
-        ? new Date(a.created_at) - new Date(b.created_at)
-        : new Date(b.created_at) - new Date(a.created_at)
-    )
-})
-
-/* ======================
-   PAGINATION
-====================== */
 const activeList = computed(() =>
-  activeTab.value === 'points' ? filteredPoints.value : filteredSales.value
+  activeTab.value === 'points' ? pointsHistory.value : sales.value
+)
+
+const activeTotal = computed(() =>
+  activeTab.value === 'points' ? pointsTotal.value : salesTotal.value
 )
 
 const totalPages = computed(() =>
-  Math.ceil(activeList.value.length / itemsPerPage.value)
+  Math.ceil(activeTotal.value / itemsPerPage.value)
 )
 
-const paginatedData = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage.value
-  return activeList.value.slice(start, start + itemsPerPage.value)
-})
+const paginatedData = computed(() => activeList.value)
 
 const goPage = (page) => {
   if (page >= 1 && page <= totalPages.value) {
     currentPage.value = page
   }
 }
-
-const pageNumbers = computed(() =>
-  Array.from({ length: totalPages.value }, (_, i) => i + 1)
-)
 
 function goBack() {
   const q = route.query || {}
@@ -207,7 +204,7 @@ const openSaleModal = async (sale) => {
   const itemsStore = tx.objectStore('sale_items')
   const medsStore = tx.objectStore('medicines')
 
-  const items = await itemsStore.index('sale_id').getAll(sale.id)
+  const items = await collectFromSource(itemsStore.index('sale_id'), { query: sale.id })
 
   for (const item of items) {
     const med = await medsStore.get(item.medicine_id)
@@ -254,10 +251,7 @@ const saleDiscountAmount = computed(() => {
 })
 
 const currentCustomerPoints = computed(() => {
-  if (currentCustomer.value?.points !== undefined && currentCustomer.value?.points !== null) {
-    return Number(currentCustomer.value.points || 0)
-  }
-  return pointsHistory.value.reduce((sum, entry) => sum + Number(entry.points || 0), 0)
+  return customerPoints.value
 })
 
 const currentCustomerName = computed(() => currentCustomer.value?.name || `Customer #${customerId}`)

@@ -1,4 +1,5 @@
 import { dbPromise } from '../db'
+import { collectFromSource, reduceFromSource } from '../db/query'
 
 export default {
   namespaced: true,
@@ -51,28 +52,75 @@ export default {
 
       const db = await dbPromise
       const store = db.transaction('medicines').objectStore('medicines')
-      // Collect all matching items first, then sort and paginate in-memory.
+      const normalizedKeyword = (keyword || '').trim().toLowerCase()
+
+      if (!normalizedKeyword && sortBy !== 'stock') {
+        const source = sortBy === 'name'
+          ? store.index('name')
+          : store.index('updated_at')
+        const direction = sortBy === 'name'
+          ? (sortOrder === 'asc' ? 'next' : 'prev')
+          : 'prev'
+
+        let totalCount = 0
+        let countCursor = await source.openCursor(null, direction)
+        while (countCursor) {
+          const medicine = { is_archived: false, ...countCursor.value }
+          if (matchesFilter(medicine, filter)) {
+            totalCount += 1
+          }
+          countCursor = await countCursor.continue()
+        }
+
+        commit('SET_TOTAL_COUNT', totalCount)
+
+        const offset = (page - 1) * itemsPerPage
+        const list = []
+        let matched = 0
+        let cursor = await source.openCursor(null, direction)
+        while (cursor) {
+          const medicine = { is_archived: false, ...cursor.value }
+          if (!matchesFilter(medicine, filter)) {
+            cursor = await cursor.continue()
+            continue
+          }
+
+          if (matched >= offset && list.length < itemsPerPage) {
+            list.push(medicine)
+          }
+
+          matched += 1
+          if (list.length >= itemsPerPage) {
+            break
+          }
+
+          cursor = await cursor.continue()
+        }
+
+        commit('SET_MEDICINES', list)
+        await dispatch('loadStockForPage')
+        await dispatch('loadPriceHistoryForPage')
+        commit('SET_LOADING', false)
+        return
+      }
+
+      // Fallback path for substring search and derived stock sorting.
       const all = []
       let cursor = await store.openCursor()
       while (cursor) {
         const m = { is_archived: false, ...cursor.value }
 
         // FILTER
-        if (filter === 'active' && m.is_archived) {
-          cursor = await cursor.continue()
-          continue
-        }
-        if (filter === 'archived' && !m.is_archived) {
+        if (!matchesFilter(m, filter)) {
           cursor = await cursor.continue()
           continue
         }
 
         // SEARCH
-        if (keyword) {
-          const k = keyword.toLowerCase()
+        if (normalizedKeyword) {
           if (
-            !m.name.toLowerCase().includes(k) &&
-            !(m.generic_name || '').toLowerCase().includes(k)
+            !m.name.toLowerCase().includes(normalizedKeyword) &&
+            !(m.generic_name || '').toLowerCase().includes(normalizedKeyword)
           ) {
             cursor = await cursor.continue()
             continue
@@ -146,7 +194,7 @@ export default {
     // =============================
     async loadStockForPage({ state, commit }) {
       const db = await dbPromise
-      const store = db.transaction('inventory_batches').objectStore('inventory_batches')
+      const index = db.transaction('inventory_batches').objectStore('inventory_batches').index('medicine_id')
 
       const ids = state.medicines.map(m => m.id)
       const map = {}
@@ -156,14 +204,16 @@ export default {
         return
       }
 
-      let cursor = await store.openCursor()
-      while (cursor) {
-        const b = cursor.value
-        if (ids.includes(b.medicine_id)) {
-          if (!map[b.medicine_id]) map[b.medicine_id] = 0
-          map[b.medicine_id] += b.quantity || 0
+      for (const id of ids) {
+        const total = await reduceFromSource(
+          index,
+          (sum, batch) => sum + Number(batch.quantity || 0),
+          0,
+          { query: id }
+        )
+        if (total) {
+          map[id] = total
         }
-        cursor = await cursor.continue()
       }
 
       commit('SET_STOCK_MAP', map)
@@ -174,7 +224,7 @@ export default {
     // =============================
     async loadPriceHistoryForPage({ state, commit }) {
       const db = await dbPromise
-      const store = db.transaction('price_history').objectStore('price_history')
+      const index = db.transaction('price_history').objectStore('price_history').index('medicine_id')
 
       const ids = state.medicines.map(m => m.id)
       const map = {}
@@ -184,14 +234,11 @@ export default {
         return
       }
 
-      let cursor = await store.openCursor()
-      while (cursor) {
-        const row = cursor.value
-        if (ids.includes(row.medicine_id)) {
-          if (!map[row.medicine_id]) map[row.medicine_id] = []
-          map[row.medicine_id].push(row)
+      for (const id of ids) {
+        const rows = await collectFromSource(index, { query: id })
+        if (rows.length) {
+          map[id] = rows
         }
-        cursor = await cursor.continue()
       }
 
       commit('SET_PRICE_HISTORY_MAP', map)
@@ -217,6 +264,8 @@ export default {
         price2: medicine.price2,
         changed_at: new Date().toISOString()
       })
+
+      return id
     },
 
     // =============================
@@ -266,11 +315,26 @@ export default {
       })
     },
 
-    async searchMedicines({ state }, keyword) {
-      // query IndexedDB for medicines matching keyword
+    async searchMedicines(_, keyword) {
       const db = await dbPromise
-      const all = await db.getAll('medicines')
-      return all.filter(m => m.name.toLowerCase().includes(keyword.toLowerCase()))
+      const store = db.transaction('medicines').objectStore('medicines')
+      const query = keyword.toLowerCase()
+      const results = []
+      let cursor = await store.openCursor()
+      while (cursor) {
+        const medicine = cursor.value
+        if ((medicine.name || '').toLowerCase().includes(query)) {
+          results.push(medicine)
+        }
+        cursor = await cursor.continue()
+      }
+      return results
     }
   }
+}
+
+function matchesFilter(medicine, filter) {
+  if (filter === 'active') return !medicine.is_archived
+  if (filter === 'archived') return !!medicine.is_archived
+  return true
 }

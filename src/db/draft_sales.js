@@ -1,4 +1,5 @@
 import { dbPromise } from './index'
+import { collectFromSource } from './query'
 
 /**
  * Save the current cart state as a draft (held sale).
@@ -19,8 +20,10 @@ export async function saveDraft(name, snapshot) {
 /** Return all drafts, newest first. */
 export async function getDrafts() {
   const db = await dbPromise
-  const all = await db.getAll('draft_sales')
-  return all.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+  return collectFromSource(
+    db.transaction('draft_sales').objectStore('draft_sales').index('created_at'),
+    { direction: 'prev' }
+  )
 }
 
 /** Delete a single draft by id. */

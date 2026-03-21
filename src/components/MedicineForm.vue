@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useStore } from 'vuex'
 import { dbPromise } from '../db'
+import { reduceFromSource } from '../db/query'
 import Swal from 'sweetalert2'
 
 const props = defineProps({
@@ -44,10 +45,11 @@ const loadTotalStock = async (medicineId) => {
     .objectStore('inventory_batches')
     .index('medicine_id')
 
-  const batches = await index.getAll(IDBKeyRange.only(medicineId))
-  totalStock.value = batches.reduce(
-    (sum, b) => sum + Number(b.quantity || 0),
-    0
+  totalStock.value = await reduceFromSource(
+    index,
+    (sum, batch) => sum + Number(batch.quantity || 0),
+    0,
+    { query: IDBKeyRange.only(medicineId) }
   )
 }
 
@@ -112,11 +114,7 @@ const submitForm = async () => {
         ...medicinePayload
       })
     } else {
-      await store.dispatch('medicines/addMedicine', medicinePayload)
-
-      const db = await dbPromise
-      const all = await db.getAll('medicines')
-      medicineId = all[all.length - 1].id
+      medicineId = await store.dispatch('medicines/addMedicine', medicinePayload)
     }
 
     if (adjustmentQty.value !== 0) {

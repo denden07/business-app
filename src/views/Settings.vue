@@ -8,6 +8,7 @@ import { Device } from '@capacitor/device'
 import { FilePicker } from '@capawesome/capacitor-file-picker'
 import { refreshRoutes } from '../router'
 import PageVisibilitySettings from '../components/PageVisibilitySettings.vue'
+import { collectFromSource } from '../db/query'
 import Swal from 'sweetalert2'
 import {
   defaultInteractionSettings,
@@ -262,7 +263,9 @@ async function backupDB() {
 
     for (let i = 0; i < storeNames.length; i++) {
       const name = storeNames[i]
-      backupData[name] = await db.getAll(name)
+      backupData[name] = await collectFromSource(
+        db.transaction(name).objectStore(name)
+      )
       progress.value = Math.round(((i + 1) / storeNames.length) * 100)
     }
 
@@ -359,12 +362,15 @@ async function restoreDB() {
 async function loadPageVisibility() {
   try {
     const db = await dbPromise
-    const all = await db.getAll('pages')
     const map = {}
+    const store = db.transaction('pages').objectStore('pages')
     // default all true
     pagesList.value.forEach(p => (map[p.name] = true))
-    for (const row of all) {
+    let cursor = await store.openCursor()
+    while (cursor) {
+      const row = cursor.value
       map[row.name] = !!row.visible
+      cursor = await cursor.continue()
     }
     pageVisibility.value = map
   } catch (err) {

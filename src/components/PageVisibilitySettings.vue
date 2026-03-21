@@ -53,10 +53,15 @@ async function load() {
   loading.value = true
   try {
     const db = await dbPromise
-    const rows = await db.getAll('pages')
     const map = {}
+    const store = db.transaction('pages').objectStore('pages')
     props.pages.forEach(p => (map[p.name] = true))
-    for (const r of rows) map[r.name] = !!r.visible
+    let cursor = await store.openCursor()
+    while (cursor) {
+      const row = cursor.value
+      map[row.name] = !!row.visible
+      cursor = await cursor.continue()
+    }
     visibility.value = map
   } catch (err) {
     console.error('load visibility', err)

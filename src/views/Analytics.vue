@@ -106,21 +106,6 @@ const getEndDate = () => {
 }
 
 // --------------------
-// Load Analytics
-// --------------------
-let sales = []
-let saleItems = []
-let medicinesStore = []
-
-const loadAnalytics = async () => {
-  const db = await dbPromise
-  sales = await db.getAll('sales')
-  saleItems = await db.getAll('sale_items')
-  medicinesStore = await db.getAll('medicines')
-  updateCharts()
-}
-
-// --------------------
 // Build Charts & Metrics
 // --------------------
 const updateCharts = async () => {
@@ -132,27 +117,47 @@ const updateCharts = async () => {
   const analyticsGridColor = isDark.value ? '#475569' : '#d9e2ec'
   const startDate = getStartDate()
   const endDate = getEndDate()
+  const db = await dbPromise
+  const [sales, saleItems, medicines] = await Promise.all([
+    db.getAll('sales'),
+    db.getAll('sale_items'),
+    db.getAll('medicines')
+  ])
+  const includedSaleIds = new Set()
+  const dailySalesMap = new Map()
+  const medicinesMap = new Map(medicines.map(medicine => [medicine.id, medicine]))
 
-  // Filter sales (exclude voided sales)
-  const filteredSales = sales.filter(s => {
-    const d = new Date(s.purchased_date || s.date)
-    return d >= startDate && d <= endDate && s.status !== 'voided'
-  })
+  totalSales.value = 0
+  totalItems.value = 0
+  voidedSalesCount.value = 0
 
-  // Voided sales for metric
-  const voidedSales = sales.filter(s => {
-    const d = new Date(s.purchased_date || s.date)
-    return d >= startDate && d <= endDate && s.status === 'voided'
-  })
-  voidedSalesCount.value = voidedSales.length
+  for (const sale of sales) {
+    const saleDate = new Date(sale.purchased_date || sale.date)
+    if (saleDate < startDate || saleDate > endDate) continue
 
-  const filteredSaleItems = saleItems.filter(item => {
-    return filteredSales.some(s => String(s.id) === String(item.sale_id))
-  })
+    if (sale.status === 'voided') {
+      voidedSalesCount.value += 1
+      continue
+    }
 
-  // Metrics
-  totalSales.value = filteredSales.reduce((sum, s) => sum + Number(s.final_total || 0), 0)
-  totalItems.value = filteredSaleItems.reduce((sum, i) => sum + Number(i.quantity || 0), 0)
+    includedSaleIds.add(sale.id)
+    const saleTotal = Number(sale.final_total || 0)
+    totalSales.value += saleTotal
+
+    const dayKey = format(saleDate, 'yyyy-MM-dd')
+    dailySalesMap.set(dayKey, (dailySalesMap.get(dayKey) || 0) + saleTotal)
+  }
+
+  const medicineTotals = new Map()
+  for (const item of saleItems) {
+    if (!includedSaleIds.has(item.sale_id)) continue
+
+    totalItems.value += Number(item.quantity || 0)
+    medicineTotals.set(
+      item.medicine_id,
+      (medicineTotals.get(item.medicine_id) || 0) + Number(item.quantity || 0)
+    )
+  }
 
   // --------------------
   // Sales Trend
@@ -164,10 +169,11 @@ const updateCharts = async () => {
     d.setDate(startDate.getDate() + i)
     trendMap[format(d, 'MM/dd')] = 0
   }
-  filteredSales.forEach(sale => {
-    const date = new Date(sale.purchased_date || sale.date)
-    const label = format(date, 'MM/dd')
-    trendMap[label] += Number(sale.final_total || 0)
+  dailySalesMap.forEach((value, key) => {
+    const label = format(new Date(key), 'MM/dd')
+    if (trendMap[label] !== undefined) {
+      trendMap[label] += value
+    }
   })
   salesTrendSeries.value = [{ name: 'Sales', data: Object.values(trendMap) }]
   salesTrendOptions.value = {
@@ -188,17 +194,15 @@ const updateCharts = async () => {
   // --------------------
   // Top Medicines
   // --------------------
-  const medMap = {}
-  filteredSaleItems.forEach(item => {
-    medMap[item.medicine_id] = (medMap[item.medicine_id] || 0) + Number(item.quantity || 0)
-  })
-  const topMeds = Object.entries(medMap)
-    .map(([id, qty]) => {
-      const med = medicinesStore.find(m => String(m.id) === String(id))
-      return { name: med?.name || id, value: qty }
-    })
-    .sort((a,b)=>b.value-a.value)
-    .slice(0,5)
+  const topMeds = await Promise.all(
+    Array.from(medicineTotals.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(async ([id, qty]) => {
+        const med = medicinesMap.get(id)
+        return { name: med?.name || id, value: qty }
+      })
+  )
   topMedicinesSeries.value = topMeds.map(m=>m.value)
   topMedicinesOptions.value = {
     chart: { type: 'bar', height: 350, foreColor: analyticsMutedText },
@@ -221,8 +225,8 @@ const updateCharts = async () => {
 
   if(timeRange.value === 'today') {
     // 1 day
-    const today = filteredSales[0] ? new Date(filteredSales[0].purchased_date || filteredSales[0].date) : new Date()
-    const total = filteredSales.reduce((sum, s)=>sum+Number(s.final_total||0),0)
+    const today = new Date(startDate)
+    const total = dailySalesMap.get(format(today, 'yyyy-MM-dd')) || 0
     heatmapSeries = [{ name: format(today,'MMM'), data:[{x: format(today,'dd'), y: total}] }]
   } else if(timeRange.value === 'week') {
     // 7 days
@@ -230,9 +234,7 @@ const updateCharts = async () => {
     for(let i=0;i<7;i++){
       const d = new Date(startDate)
       d.setDate(startDate.getDate()+i)
-      const total = filteredSales
-        .filter(s=>format(new Date(s.purchased_date||s.date),'yyyy-MM-dd') === format(d,'yyyy-MM-dd'))
-        .reduce((sum,s)=>sum+Number(s.final_total||0),0)
+      const total = dailySalesMap.get(format(d,'yyyy-MM-dd')) || 0
       heatmapSeries.push({ name: 'Week', data:[{x: format(d,'EEE'), y: total}] })
     }
   } else if(timeRange.value === 'month') {
@@ -240,9 +242,7 @@ const updateCharts = async () => {
     heatmapSeries = [{ name: format(startDate,'MMM'), data: [] }]
     for(let i=1;i<=daysInMonth;i++){
       const d = new Date(startDate.getFullYear(), startDate.getMonth(), i)
-      const total = filteredSales
-        .filter(s=>format(new Date(s.purchased_date||s.date),'yyyy-MM-dd')===format(d,'yyyy-MM-dd'))
-        .reduce((sum,s)=>sum+Number(s.final_total||0),0)
+      const total = dailySalesMap.get(format(d,'yyyy-MM-dd')) || 0
       heatmapSeries[0].data.push({x:i.toString(), y: total})
     }
   } else if(timeRange.value === 'year') {
@@ -252,9 +252,7 @@ const updateCharts = async () => {
       const monthData = { name: format(new Date(startDate.getFullYear(),m,1),'MMM'), data: [] }
       for(let d=1;d<=daysInMonth;d++){
         const dateObj = new Date(startDate.getFullYear(),m,d)
-        const total = filteredSales
-          .filter(s=>format(new Date(s.purchased_date||s.date),'yyyy-MM-dd')===format(dateObj,'yyyy-MM-dd'))
-          .reduce((sum,s)=>sum+Number(s.final_total||0),0)
+        const total = dailySalesMap.get(format(dateObj,'yyyy-MM-dd')) || 0
         monthData.data.push({ x:d.toString(), y: total })
       }
       heatmapSeries.push(monthData)
@@ -287,7 +285,7 @@ const updateCharts = async () => {
 }
 
 watch([timeRange, customStart, customEnd], () => updateCharts())
-onMounted(loadAnalytics)
+onMounted(updateCharts)
 </script>
 
 <template>
