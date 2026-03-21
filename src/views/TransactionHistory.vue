@@ -617,45 +617,6 @@ body.dark-mode .medicines-page {
   max-width: 90vw;
 }
 
-.sale-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.sale-meta {
-  font-size: 13px;
-  color: #666;
-}
-
-body.dark-mode .sale-meta {
-  color: #aaa;
-}
-
-.badge {
-  padding: 6px 10px;
-  border-radius: 8px;
-  font-weight: 700;
-  font-size: 12px;
-}
-
-.badge-ok {
-  background: #1abc9c;
-  color: white;
-}
-
-.badge-voided {
-  background: #e74c3c;
-  color: white;
-}
-
-.sale-summary hr {
-  margin: 8px 0;
-  border: none;
-  border-top: 1px dashed #ccc;
-}
-
 /* ======================
    SALE STATUS COLORS
 ====================== */
