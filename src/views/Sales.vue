@@ -347,8 +347,8 @@ const exportCSV = async () => {
           <td v-if="visibleCols.payment_method">{{ sale.payment_method || 'Cash' }}</td>
           <td v-if="visibleCols.status" :class="sale.status === 'voided' ? 'status-voided' : 'status-ok'">{{ sale.status }}</td>
           <td class="col-actions actions-td">
-            <button @click="openSaleModal(sale)">View</button>
-            <button v-if="sale.status === 'completed'" class="danger" @click="voidSale(sale)">Void</button>
+            <button class="info btn" @click="openSaleModal(sale)">View</button>
+            <button v-if="sale.status === 'completed'" class="danger btn" @click="voidSale(sale)">Void</button>
           </td>
         </tr>
       </tbody>
@@ -415,7 +415,7 @@ const exportCSV = async () => {
           <div>Change: ₱{{ (selectedSale.change || 0).toFixed(2) }}</div>
         </div>
 
-        <button @click="closeModal">Close</button>
+        <button class="secondary btn-block-mobile" @click="closeModal">Close</button>
       </div>
     </div>
 
@@ -429,16 +429,10 @@ const exportCSV = async () => {
 body.dark-mode .medicines-page { background-color: #121212; color: #eee; }
 
 .top-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
-.top-bar input, .top-bar select { min-height: 40px; padding: 8px 12px; border-radius: 8px; border: 1px solid #ccc; background: #fff; color: #222; font-size: 16px; }
-body.dark-mode .top-bar input, body.dark-mode .top-bar select { background-color: #1c1c1c; border-color: #333; color: #eee; }
 
 .items-per-page { display: flex; align-items: center; gap: 4px; }
 
-button { min-height: 40px; padding: 8px 14px; border-radius: 8px; border: none; background-color: #1abc9c; color: #fff; cursor: pointer; }
-body.dark-mode button { background-color: #16a085; }
-
 .actions-td button { padding: 6px 10px; }
-.danger { background-color: #e74c3c; }
 
 .pagination { margin-top: 12px; display: flex; justify-content: center; gap: 6px; }
 .pagination button.active { background-color: #1abc9c; }
@@ -446,7 +440,6 @@ body.dark-mode button { background-color: #16a085; }
 .modal-backdrop { overflow-y:auto; position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; z-index: 2000; }
 .modal { background: #fff; padding: 20px; border-radius: 10px; width: 90%; max-width: 600px; }
 body.dark-mode .modal { background: #1e1e1e; color: #eee; }
-.close-btn { margin-top: 12px; width: 100%; }
 
 .status-ok { color: #1abc9c; font-weight: 600; }
 .status-voided { color: #e74c3c; font-weight: 700; }
@@ -457,7 +450,8 @@ body.dark-mode .med-generic { color: #aaa; }
 
 @media (max-width: 768px) {
   .top-bar { flex-direction: column; }
-  button { width: 100%; }
+  .top-bar > button,
+  .top-bar > :deep(.date-icon-btn) { width: 100%; }
 }
 
 /* Modal input styling */
@@ -526,27 +520,6 @@ body.dark-mode .sale-meta {
   display: inline-flex;
   width: auto;
 }
-
-/* Calendar icon trigger */
-.date-icon-btn {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  width: 40px;
-  background: #fff;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  color: #444;
-  cursor: pointer;
-  padding: 0;
-  transition: border-color 0.2s, background 0.2s;
-}
-.date-icon-btn:hover { border-color: #1abc9c; }
-.date-icon-btn.active { border-color: #1abc9c; color: #1abc9c; }
-body.dark-mode .date-icon-btn { background: #1c1c1c; border-color: #333; color: #ccc; }
-body.dark-mode .date-icon-btn.active { border-color: #1abc9c; color: #1abc9c; }
 
 .date-clear {
   position: absolute;

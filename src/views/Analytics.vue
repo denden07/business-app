@@ -283,11 +283,11 @@ onMounted(loadAnalytics)
 
   <!-- Time Range Buttons -->
   <div class="time-range-selector">
-    <button @click="timeRange='today'">Today</button>
-    <button @click="timeRange='week'">This Week</button>
-    <button @click="timeRange='month'">This Month</button>
-    <button @click="timeRange='year'">This Year</button>
-    <button @click="timeRange='custom'">Custom Range</button>
+    <button class="tab-button" :class="{ active: timeRange==='today' }" @click="timeRange='today'">Today</button>
+    <button class="tab-button" :class="{ active: timeRange==='week' }" @click="timeRange='week'">This Week</button>
+    <button class="tab-button" :class="{ active: timeRange==='month' }" @click="timeRange='month'">This Month</button>
+    <button class="tab-button" :class="{ active: timeRange==='year' }" @click="timeRange='year'">This Year</button>
+    <button class="tab-button" :class="{ active: timeRange==='custom' }" @click="timeRange='custom'">Custom Range</button>
     <div v-if="timeRange==='custom'" class="custom-range">
       <VueDatePicker
         v-model="dateRange"
@@ -347,13 +347,6 @@ onMounted(loadAnalytics)
   align-items: center;
   gap: 8px;
   margin-bottom: 16px;
-}
-
-.time-range-selector button {
-  padding: 6px 12px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  cursor: pointer;
 }
 
 .custom-range input {

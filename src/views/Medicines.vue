@@ -219,12 +219,12 @@ const restoreMedicine = async med => {
           <td v-if="visibleCols.price2">₱{{ med.price2 }}</td>
           <td v-if="visibleCols.stock">{{ stockMap[med.id] || 0 }}</td>
           <td class="col-actions actions-td">
-            <button @click="editMedicine(med)">Edit</button>
-            <button @click="viewMedicine(med)">View</button>
+            <button class="warning btn" @click="editMedicine(med)">Edit</button>
+            <button class="info btn" @click="viewMedicine(med)">View</button>
 
             <button
               v-if="!med.is_archived"
-              class="danger"
+              class="danger btn"
               @click="archiveMedicine(med)"
             >
               Archive
@@ -232,7 +232,7 @@ const restoreMedicine = async med => {
 
             <button
               v-else
-              class="restore"
+              class="restore btn"
               @click="restoreMedicine(med)"
             >
               Restore
@@ -339,45 +339,11 @@ body.dark-mode .top-bar select {
 }
 
 /* ===========================
-   BUTTONS
-=========================== */
-button {
-  appearance: none !important;
-  -webkit-appearance: none !important;
-  min-height: 40px !important;
-  padding: 8px 14px !important;
-  border-radius: 8px !important;
-  border: none !important;
-  font-size: 15px !important;
-  font-weight: 500 !important;
-  cursor: pointer !important;
-  background-color: #1abc9c !important;
-  color: #fff !important;
-}
-
-button:active {
-  transform: scale(0.97);
-}
-
-body.dark-mode button {
-  background-color: #16a085 !important;
-}
-
-/* ===========================
    ACTION BUTTONS
 =========================== */
 .actions-td button {
   margin-right: 6px !important;
   padding: 6px 10px !important;
-}
-
-body.dark-mode .actions-td button {
-  background-color: #222 !important;
-  color: #eee !important;
-}
-
-body.dark-mode .actions-td button:hover {
-  background-color: #333 !important;
 }
 
 /* ===========================
@@ -412,7 +378,7 @@ body.dark-mode .pagination button.active {
     align-items: stretch !important;
   }
 
-  .top-bar button {
+  .top-bar > button {
     width: 100% !important;
   }
 
@@ -420,32 +386,5 @@ body.dark-mode .pagination button.active {
     gap: 4px !important;
   }
 }
-
-.actions-td .danger {
-  background-color: #e74c3c !important;
-}
-body.dark-mode .actions-td .danger {
-  background-color: #c0392b !important;
-}
-
-.actions-td .danger {
-  background-color: #e74c3c !important;
-}
-body.dark-mode .actions-td .danger {
-  background-color: #c0392b !important;
-}
-
-
-.actions-td .default {
-  background-color: #3498db !important;
-}
-body.dark-mode .actions-td .default {
-  background-color: #3498db !important;
-}
-
-.actions-td .restore {
-  background-color: #3498db !important;
-}
-
 
 </style>

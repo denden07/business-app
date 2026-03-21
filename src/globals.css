@@ -1,0 +1,434 @@
+/* Shared button system */
+
+:root {
+  --btn-primary-bg: #1abc9c;
+  --btn-primary-hover: #16a085;
+  --btn-secondary-bg: #6c757d;
+  --btn-secondary-hover: #5a6268;
+  --btn-danger-bg: #e74c3c;
+  --btn-danger-hover: #c0392b;
+  --btn-warning-bg: #f39c12;
+  --btn-warning-hover: #d68910;
+  --btn-info-bg: #3498db;
+  --btn-info-hover: #2980b9;
+  --btn-success-bg: #28a745;
+  --btn-success-hover: #218838;
+  --btn-neutral-bg: #ddd;
+  --btn-neutral-hover: #cfcfcf;
+  --btn-text-light: #fff;
+  --btn-text-dark: #222;
+  --btn-border-light: #d0d7de;
+}
+
+body.dark-mode {
+  --btn-primary-bg: #16a085;
+  --btn-primary-hover: #1abc9c;
+  --btn-secondary-bg: #4b5563;
+  --btn-secondary-hover: #606b7a;
+  --btn-danger-bg: #c0392b;
+  --btn-danger-hover: #a93226;
+  --btn-warning-bg: #d68910;
+  --btn-warning-hover: #b9770e;
+  --btn-info-bg: #2980b9;
+  --btn-info-hover: #3498db;
+  --btn-success-bg: #218838;
+  --btn-success-hover: #28a745;
+  --btn-neutral-bg: #333;
+  --btn-neutral-hover: #3f3f3f;
+  --btn-text-dark: #eee;
+  --btn-border-light: #3a3a3a;
+}
+
+button,
+.btn {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  border-radius: 8px;
+  min-height: 40px;
+  padding: 8px 14px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  color: var(--btn-text-light);
+  background: var(--btn-primary-bg);
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease, opacity 0.2s ease;
+}
+
+button:hover,
+.btn:hover {
+  background: var(--btn-primary-hover);
+}
+
+button:active,
+.btn:active {
+  transform: scale(0.97);
+}
+
+button:focus-visible,
+.btn:focus-visible {
+  outline: 2px solid rgba(26, 188, 156, 0.35);
+  outline-offset: 2px;
+}
+
+button:disabled,
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.primary,
+.btn.primary,
+.btn-primary {
+  background: var(--btn-primary-bg);
+  color: var(--btn-text-light);
+}
+
+.primary:hover,
+.btn.primary:hover,
+.btn-primary:hover {
+  background: var(--btn-primary-hover);
+}
+
+.secondary,
+.btn.secondary,
+.btn-secondary {
+  background: var(--btn-secondary-bg);
+  color: var(--btn-text-light);
+}
+
+.secondary:hover,
+.btn.secondary:hover,
+.btn-secondary:hover {
+  background: var(--btn-secondary-hover);
+}
+
+.danger,
+.btn.danger,
+.btn-danger {
+  background: var(--btn-danger-bg);
+  color: var(--btn-text-light);
+}
+
+.danger:hover,
+.btn.danger:hover,
+.btn-danger:hover {
+  background: var(--btn-danger-hover);
+}
+
+.warning,
+.btn.warning,
+.btn-warning {
+  background: var(--btn-warning-bg);
+  color: var(--btn-text-light);
+}
+
+.warning:hover,
+.btn.warning:hover,
+.btn-warning:hover {
+  background: var(--btn-warning-hover);
+}
+
+.info,
+.restore,
+.btn.info,
+.btn-info {
+  background: var(--btn-info-bg);
+  color: var(--btn-text-light);
+}
+
+.info:hover,
+.restore:hover,
+.btn.info:hover,
+.btn-info:hover {
+  background: var(--btn-info-hover);
+}
+
+.success,
+.checkout,
+.btn.success,
+.btn-success {
+  background: var(--btn-success-bg);
+  color: var(--btn-text-light);
+}
+
+.success:hover,
+.checkout:hover,
+.btn.success:hover,
+.btn-success:hover {
+  background: var(--btn-success-hover);
+}
+
+.ghost,
+.btn.ghost,
+.btn-ghost {
+  background: transparent;
+  color: var(--btn-text-dark);
+  border: 1px solid var(--btn-border-light);
+}
+
+.ghost:hover,
+.btn.ghost:hover,
+.btn-ghost:hover {
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.btn-sm {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.tab-button {
+  background: var(--btn-neutral-bg);
+  color: var(--btn-text-dark);
+}
+
+.tab-button:hover {
+  background: var(--btn-neutral-hover);
+}
+
+.tab-button.active {
+  background: var(--btn-primary-bg);
+  color: var(--btn-text-light);
+}
+
+.date-icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  color: #444;
+}
+
+.date-icon-btn:hover {
+  background: #fff;
+  border-color: #1abc9c;
+}
+
+.date-icon-btn.active {
+  border-color: #1abc9c;
+  color: #1abc9c;
+}
+
+body.dark-mode .date-icon-btn {
+  background: #1c1c1c;
+  border-color: #333;
+  color: #ccc;
+}
+
+body.dark-mode .date-icon-btn:hover {
+  background: #1c1c1c;
+}
+
+body.dark-mode .date-icon-btn.active {
+  border-color: #1abc9c;
+  color: #1abc9c;
+}
+
+.date-clear {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--btn-danger-bg);
+  color: #fff;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.mini {
+  min-height: 28px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mini.regular {
+  background: var(--btn-info-bg);
+}
+
+.mini.regular:hover {
+  background: var(--btn-info-hover);
+}
+
+.button-remove-med {
+  min-height: 24px;
+  padding: 2px 5px;
+}
+
+.qty-step-btn {
+  width: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 6px;
+  background: var(--btn-info-bg);
+  color: #fff;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qty-step-btn:hover {
+  background: var(--btn-info-hover);
+}
+
+.num-btn {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0;
+  border-radius: 8px;
+  background: var(--btn-info-bg);
+  color: #fff;
+  font-size: clamp(14px, 2.4vw, 28px);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.num-btn:hover {
+  background: var(--btn-info-hover);
+}
+
+.discount-add-btn {
+  width: 25px;
+  min-width: 25px;
+  min-height: 25px;
+  height: 25px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--btn-info-bg);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.discount-add-btn:hover {
+  background: var(--btn-info-hover);
+  transform: scale(1.08);
+}
+
+.payment-option-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  height: clamp(36px, 4.5vw, 56px);
+  background: var(--btn-neutral-bg);
+  color: var(--btn-text-dark);
+  font-weight: 700;
+  font-size: clamp(14px, 2.4vw, 18px);
+  box-sizing: border-box;
+}
+
+.payment-option-btn:hover {
+  background: var(--btn-neutral-hover);
+}
+
+.payment-option-btn.active {
+  background: var(--btn-success-bg);
+  color: #fff;
+}
+
+.price-option-btn {
+  min-height: 30px;
+  min-width: 70px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background: var(--btn-info-bg);
+  color: #fff;
+  font-weight: 600;
+}
+
+.price-option-btn:hover {
+  background: var(--btn-info-hover);
+}
+
+.price-option-btn.inactive {
+  background: #6b7280;
+}
+
+.price-option-btn.active {
+  background: var(--btn-success-bg);
+  border-color: #000;
+}
+
+.back-btn {
+  padding-inline: 14px;
+}
+
+@media (max-width: 900px) {
+  .payment-option-btn {
+    font-size: 0.95rem;
+    padding: 6px 8px;
+    height: 2rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .btn-block-mobile {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .payment-option-btn {
+    font-size: 0.85rem;
+    height: 1.7rem;
+  }
+}
+
+@media (min-width: 1200px) {
+  .num-btn {
+    font-size: 1.3rem;
+  }
+
+  .payment-option-btn {
+    max-width: 220px;
+    font-size: 1.1rem;
+    height: 2.6rem;
+  }
+}
+
+@media (orientation: landscape) and (min-resolution: 2dppx) {
+  .num-btn {
+    font-size: clamp(14px, 1.8vw, 20px) !important;
+    padding: 0 !important;
+  }
+
+  .payment-option-btn {
+    height: clamp(44px, 4.5vh, 64px) !important;
+    font-size: clamp(16px, 2.4vh, 20px) !important;
+  }
+}

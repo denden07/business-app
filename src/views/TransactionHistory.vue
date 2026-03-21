@@ -220,12 +220,13 @@ const closeSaleModal = () => {
     <h1>Customer Transactions</h1>
 
     <div class="top-bar">
-      <button class="secondary back-btn" @click="goBack">← Back to Customers</button>
+      <button class="info back-btn" @click="goBack">← Back to Customers</button>
     </div>
 
     <!-- TABS -->
     <div class="tabs">
       <button
+        class="tab-button"
         :class="{ active: activeTab === 'points' }"
         @click="activeTab = 'points'"
       >
@@ -233,6 +234,7 @@ const closeSaleModal = () => {
       </button>
 
       <button
+        class="tab-button"
         :class="{ active: activeTab === 'purchases' }"
         @click="activeTab = 'purchases'"
       >
@@ -277,7 +279,7 @@ const closeSaleModal = () => {
           {{ o }}
         </option>
       </select>
-      <button class="danger" @click="dateRange = null; filterType='all'">Clear</button>
+      <button class="secondary" @click="dateRange = null; filterType='all'">Clear</button>
     </div>
 
     <!-- POINTS HISTORY -->
@@ -411,7 +413,7 @@ const closeSaleModal = () => {
         <p>Money Given: ₱{{ selectedSale.money_given.toFixed(2) }}</p>
         <p>Change: ₱{{ selectedSale.change.toFixed(2) }}</p>
 
-        <button @click="showSaleModal = false">Close</button>
+        <button class="secondary" @click="showSaleModal = false">Close</button>
       </div>
     </div>
 
@@ -442,29 +444,6 @@ body.dark-mode .medicines-page {
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
-}
-
-.tabs button {
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: none;
-  background: #ddd;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.tabs button.active {
-  background: #1abc9c;
-  color: #fff;
-}
-
-body.dark-mode .tabs button {
-  background: #333;
-  color: #eee;
-}
-
-body.dark-mode .tabs button.active {
-  background: #16a085;
 }
 
 /* ======================
@@ -521,35 +500,6 @@ body.dark-mode .top-bar select {
 }
 
 /* ======================
-   PAGINATION
-====================== */
-.pagination {
-  margin-top: 12px;
-  display: flex;
-  justify-content: center;
-  gap: 6px;
-}
-
-.pagination button {
-  min-height: 36px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: none;
-  background: #1abc9c;
-  color: #fff;
-  cursor: pointer;
-}
-
-.pagination button.active {
-  background: #16a085;
-}
-
-.pagination button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* ======================
    MODAL
 ====================== */
 .modal-overlay {
@@ -588,49 +538,6 @@ body.dark-mode .modal {
   margin: 6px 0;
 }
 
-/* modal button */
-.modal button {
-  margin-top: 14px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: none;
-  background: #1abc9c;
-  color: #fff;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.modal button:hover {
-  background: #16a085;
-}
-
-.back-btn {
-  background: #3498db;
-  color: #fff;
-  padding: 6px 14px;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.back-btn:hover {
-  background: #2980b9;
-}
-
-body.dark-mode .back-btn {
-  background: #2980b9;
-}
-
-/* Danger button (red) */
-.danger {
-  background-color: #e74c3c;
-  color: #fff;
-}
-
-.danger:hover {
-  background-color: #c0392b;
-}
-
 /* ======================
    SALE STATUS COLORS
 ====================== */
@@ -649,26 +556,6 @@ body.dark-mode .back-btn {
   display: inline-flex;
   width: auto;
 }
-.date-icon-btn {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  width: 40px;
-  background: #fff;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  color: #444;
-  cursor: pointer;
-  padding: 0;
-  transition: border-color 0.2s, background 0.2s;
-}
-.date-icon-btn:hover { border-color: #1abc9c; }
-.date-icon-btn.active { border-color: #1abc9c; color: #1abc9c; }
-body.dark-mode .date-icon-btn { background: #1c1c1c; border-color: #333; color: #ccc; }
-body.dark-mode .date-icon-btn.active { border-color: #1abc9c; color: #1abc9c; }
-
 .date-clear {
   position: absolute;
   top: -6px;

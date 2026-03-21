@@ -91,8 +91,8 @@ const deleteDraft = async (draft) => {
           <td v-if="visibleCols.customer">{{ draft.customer?.name ?? 'Walk-in' }}</td>
           <td v-if="visibleCols.created_at">{{ new Date(draft.created_at).toLocaleString() }}</td>
           <td class="col-actions actions-td">
-            <button @click="resumeDraft(draft)">▶ Resume</button>
-            <button class="danger" @click="deleteDraft(draft)">Delete</button>
+            <button class="primary btn" @click="resumeDraft(draft)">▶ Resume</button>
+            <button class="danger btn" @click="deleteDraft(draft)">Delete</button>
           </td>
         </tr>
       </tbody>
@@ -116,16 +116,11 @@ h1 { margin-bottom: 16px; }
   font-size: 16px;
 }
 
-button { min-height: 40px; padding: 8px 14px; border-radius: 8px; border: none; background-color: #1abc9c; color: #fff; cursor: pointer; }
-body.dark-mode button { background-color: #16a085; }
-
 .actions-td { display: flex; gap: 8px; }
-.danger { background-color: #e74c3c; }
-.danger:hover { background-color: #c0392b; }
 
 @media (max-width: 768px) {
   .top-bar { flex-direction: column; }
-  button { width: 100%; }
+  .top-bar > button { width: 100%; }
   .actions-td { flex-direction: column; }
 }
 </style>

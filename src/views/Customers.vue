@@ -307,9 +307,9 @@ function goToTransactionHistory(customerId) {
             <td v-if="visibleCols.address">{{ c.address || '-' }}</td>
             <td v-if="visibleCols.points">{{ c.points }}</td>
             <td class="col-actions actions-td">
-              <button class="btn-sm" @click.stop="openEdit(c)">Edit</button>
-              <button class="btn-sm danger" @click.stop="remove(c)">Delete</button>
-              <button class="secondary" @click.stop="openPointsModal(c)">Adjust Points</button>
+              <button class="warning btn" @click.stop="openEdit(c)">Edit</button>
+              <button class="danger btn" @click.stop="remove(c)">Delete</button>
+              <button class="secondary btn" @click.stop="openPointsModal(c)">Adjust Points</button>
             </td>
           </tr>
         </tbody>
@@ -331,7 +331,7 @@ function goToTransactionHistory(customerId) {
       </div>
 
       <div class="modal-actions">
-        <button class="danger" @click="close">Cancel</button>
+        <button class="secondary" @click="close">Cancel</button>
         <button @click="save">Save</button>
       </div>
     </dialog>
@@ -350,7 +350,7 @@ function goToTransactionHistory(customerId) {
       </div>
 
       <div class="modal-actions">
-        <button class="danger" @click="closePointsModal">Cancel</button>
+        <button class="secondary" @click="closePointsModal">Cancel</button>
         <button @click="savePointsAdjustment">Save</button>
       </div>
     </dialog>
@@ -428,31 +428,6 @@ body.dark-mode input::placeholder {
 }
 
 /* ======================
-   BUTTONS
-====================== */
-button {
-  height: 44px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: none;
-  background-color: #1abc9c;
-  color: #fff;
-  cursor: pointer;
-}
-
-button:disabled {
-  opacity: 0.5;
-}
-
-body.dark-mode button {
-  background-color: #16a085;
-}
-
-.danger {
-  background-color: #e74c3c;
-}
-
-/* ======================
    PAGINATION
 ====================== */
 .pagination {
@@ -507,7 +482,8 @@ body.dark-mode .modal {
     flex-direction: column;
   }
 
-  button {
+  .top-bar-actions > button,
+  .modal-actions > button {
     width: 100%;
   }
 }

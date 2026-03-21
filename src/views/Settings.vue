@@ -304,7 +304,7 @@ onMounted(async () => {
         </p>
 
         <div class="actions">
-          <button class="btn-backup" @click="backupDB">Backup Database</button>
+          <button class="success" @click="backupDB">Backup Database</button>
 
           <div class="restore-section">
             <label class="file-label">
@@ -312,7 +312,7 @@ onMounted(async () => {
               <input type="file" accept=".json" ref="restoreInput" />
             </label>
 
-            <button class="btn-restore" @click="restoreDB">
+            <button class="info" @click="restoreDB">
               Restore Database
             </button>
           </div>
@@ -343,8 +343,8 @@ onMounted(async () => {
             </span>
           </div>
           <div class="pin-btn-row">
-            <button class="btn-set-pin" @click="setOrChangePin">{{ pinIsSet ? 'Change PIN' : 'Set PIN' }}</button>
-            <button v-if="pinIsSet" class="btn-remove-pin" @click="removePin">Remove PIN</button>
+            <button class="primary" @click="setOrChangePin">{{ pinIsSet ? 'Change PIN' : 'Set PIN' }}</button>
+            <button v-if="pinIsSet" class="danger" @click="removePin">Remove PIN</button>
           </div>
         </div>
       </div>
@@ -372,8 +372,6 @@ body.dark-mode .card { background: #1e1e1e; color: #eee; }
 .note { background-color: #e3f2fd; border-left: 4px solid #2196f3; padding: 12px; margin-bottom: 12px; font-size: 0.9rem }
 .actions { display:flex; flex-direction:column; gap:12px }
 .restore-section { display:flex; flex-direction:column; gap:10px; padding-top:10px; border-top:1px solid #eee }
-.btn-backup { background-color: #2ecc71; padding: 12px; color: #fff; border-radius:8px; border:none }
-.btn-restore { background-color: #3498db; padding: 12px; color: #fff; border-radius:8px; border:none }
 .progress-container { margin-top: 12px; background:#eee; border-radius:10px; height:20px; position:relative }
 .progress-bar { background:#2ecc71; height:100%; transition: width 0.3s }
 .status { margin-top:12px; font-style:italic; color:#666 }
@@ -389,8 +387,4 @@ body.dark-mode .pin-label { color: #bbb; }
 body.dark-mode .pin-active { background: #1a3a2e; color: #1abc9c; }
 body.dark-mode .pin-inactive { background: #2a2a2a; color: #888; }
 .pin-btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
-.btn-set-pin { background: #1abc9c; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; cursor: pointer; font-weight: 600; }
-.btn-set-pin:hover { background: #16a085; }
-.btn-remove-pin { background: #e74c3c; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; cursor: pointer; font-weight: 600; }
-.btn-remove-pin:hover { background: #c0392b; }
 </style>

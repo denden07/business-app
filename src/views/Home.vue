@@ -726,6 +726,7 @@ const getStockIndicator = (med) => {
             <td>
 <div class="price-toggle">
   <button
+    class="price-option-btn"
     :class="{ active: item.priceType === 'regular', inactive: item.priceType !== 'regular' }"
     @click="setPriceType(item, 'regular')"
   >
@@ -733,6 +734,7 @@ const getStockIndicator = (med) => {
   </button>
 
   <button
+    class="price-option-btn"
     v-if="medicinesMap[item.id]?.price2 && medicinesMap[item.id]?.price2 > 0"
     :class="{ active: item.priceType === 'discount', inactive: item.priceType !== 'discount' }"
     @click="setPriceType(item, 'discount')"
@@ -744,7 +746,7 @@ const getStockIndicator = (med) => {
             </td>
             <td>
               <div class="qty-wrapper">
-                <button @click="item.qty = Math.max(1,item.qty-1)">-</button>
+                <button class="qty-step-btn" @click="item.qty = Math.max(1,item.qty-1)">-</button>
                 <input
                   style="font-weight: bold"
                   type="number"
@@ -753,7 +755,7 @@ const getStockIndicator = (med) => {
                   @click="setActiveInput(item,'qty')"
                   :class="{ 'active-input': focusedField==='qty' && focusedItem===item }"
                 />
-                <button @click="item.qty += 1">+</button>
+                <button class="qty-step-btn" @click="item.qty += 1">+</button>
               </div>
             </td>
             <td>₱{{ (item.price * item.qty).toFixed(2) }}</td>
@@ -840,6 +842,7 @@ const getStockIndicator = (med) => {
 
     <div class="payment-toggle">
       <button
+        class="payment-option-btn"
         :class="{ active: paymentMethod === 'cash' }"
         @click="paymentMethod = 'cash'"
       >
@@ -847,6 +850,7 @@ const getStockIndicator = (med) => {
       </button>
 
       <button
+        class="payment-option-btn"
         :class="{ active: paymentMethod === 'gcash' }"
         @click="paymentMethod = 'gcash'"
       >
@@ -878,7 +882,7 @@ const getStockIndicator = (med) => {
       </div>
     </div>
 
-    <button class="btn" @click="showNewCustomerForm = !showNewCustomerForm" style="margin-top: 12px; background: #3498db; color: #fff; width: 100%; box-sizing: border-box;">
+    <button class="btn info btn-block" @click="showNewCustomerForm = !showNewCustomerForm" style="margin-top: 12px; box-sizing: border-box;">
       {{ showNewCustomerForm ? '✕ Hide New Customer' : '+ Add New Customer' }}
     </button>
 
@@ -906,9 +910,9 @@ const getStockIndicator = (med) => {
     <p>Available: <strong>{{ customerPoints }}</strong></p>
 
     <div class="qty-wrapper">
-      <button @click="redeemMultiplier = Math.max(1, redeemMultiplier - 1)">-</button>
+      <button class="qty-step-btn" @click="redeemMultiplier = Math.max(1, redeemMultiplier - 1)">-</button>
       <input type="number" :value="redeemMultiplier" readonly />
-      <button @click="redeemMultiplier += 1">+</button>
+      <button class="qty-step-btn" @click="redeemMultiplier += 1">+</button>
     </div>
 
     <p>
@@ -965,7 +969,7 @@ const getStockIndicator = (med) => {
         @click="removeSpecialDiscount(); showSpecialDiscountModal = false"
         style="flex: 0.8;"
       >Remove</button>
-      <button class="btn" @click="showSpecialDiscountModal=false" style="background: #6c757d; color: white;">Cancel</button>
+      <button class="btn secondary" @click="showSpecialDiscountModal=false">Cancel</button>
     </div>
   </div>
 </div>
@@ -1321,33 +1325,10 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
   overflow: auto;
   /* grid-auto-rows: minmax(48px, 1fr); */
 }
-.num-btn {
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  border-radius: 8px;
-  border: none;
-  background: #3498db;
-  color: #fff;
-  font-size: clamp(14px, 2.4vw, 28px);
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
 /* Larger, full-screen friendly number pad for wide/tall screens */
 @media (min-width: 900px) and (min-height: 700px) {
   .home-view .right-panel {
     width: 320px;
-  }
-  .home-view .num-btn {
-    font-size: 20px;
-    border-radius: 10px;
   }
 }
 
@@ -1355,9 +1336,6 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
 @media (min-width: 1200px) {
   .home-view .right-panel {
     width: 380px;
-  }
-  .home-view .num-btn {
-    font-size: 22px;
   }
 }
 /* Very tall screens: increase right-panel and scale number pad rows to fill height */
@@ -1368,18 +1346,9 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
   .home-view .number-pad {
     grid-auto-rows: minmax(64px, 1fr);
   }
-  .home-view .num-btn {
-    font-size: 26px;
-  }
-}
-.num-btn:active {
-  transform: scale(0.95);
 }
 .btn.checkout {
   margin-top: 6px;
-  background: #28a745;
-  color: #fff;
-  border-radius: 8px;
   min-height: 2.1rem;
   max-height: 2.8rem;
   height: 2.4rem;
@@ -1411,19 +1380,6 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
   border: 2px solid #2b6cb0;
   box-shadow: 0 4px 12px rgba(43,108,176,0.15);
 }
-.qty-wrapper button {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  border: none;
-  background: #3498db;
-  color: #fff;
-  font-size: 13px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
 /* =========================
    PRICE BUTTONS
 ========================= */
@@ -1447,18 +1403,6 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
   background: #28a745;
   border: 2px solid #000;
 }
-
-.mini.danger {
-  background: red;
-  color: #ffff;
-}
-
-
-.mini.regular {
-  background: #2980b9 !important;
-  color: #ffff !important
-}
-
 
 /* =========================
    SELECTED CUSTOMER BADGE
@@ -1515,36 +1459,6 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
   border-bottom: 1px solid #ddd;
 }
 .customer-row:hover { background: #f0f8ff; }
-
-/* =========================
-   DISCOUNT ADD BUTTON
-========================= */
-.discount-add-btn {
-  width: 25px;
-  height: 25px;
-  border-radius: 50%;
-  border: none;
-  background: #3498db;
-  color: #fff;
-  font-size: 12px;
-  font-weight: bold;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: all 0.2s ease;
-  line-height: 1;
-}
-
-.discount-add-btn:hover {
-  background: #2980b9;
-  transform: scale(1.15);
-}
-
-.discount-add-btn:active {
-  transform: scale(0.9);
-}
 
 /* =========================
    MED NAMES
@@ -1679,21 +1593,6 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
   gap: 4px;
 }
 
-.price-toggle button.active {
-  background-color: green;
-  color: white;
-}
-
-.price-toggle button.inactive {
-  background-color: gray;
-  color: white;
-}
-
-.button-remove-med {
-  padding: 2px 5px !important;
-  color: #fff !important
-}
-
 .payment-toggle {
   display: flex;
   gap: 12px; /* visible separator between buttons */
@@ -1702,39 +1601,17 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
   width: 100%;
   box-sizing: border-box;
 }
-.payment-toggle button {
-  /* Let both buttons share available width with a gap */
-  flex: 1 1 0;
-  min-width: 0; /* allow shrinking */
-  height: clamp(36px, 4.5vw, 56px) !important;
-  border-radius: 6px;
-  border: none;
-  font-weight: 700;
-  background: #ccc;
-  color: #222;
-  padding: 8px 12px;
-  font-size: clamp(14px, 2.4vw, 18px);
-  box-sizing: border-box;
-}
-.payment-toggle button.active {
-  background: #28a745;
-  color: #fff;
-}
 
 /* Make number pad buttons and payment buttons adapt on narrow screens */
 @media (max-width: 900px) {
-  .num-btn { font-size: 1.1rem; border-radius: 10px; }
   .number-pad { gap: 8px; }
-  .payment-toggle button { font-size: 0.95rem; padding: 6px 8px; height: 2rem !important; }
   .right-panel input { min-height: 2rem; max-height: 2.7rem; height: 2.2rem; font-size: 1rem; }
   .btn.checkout { min-height: 1.8rem; max-height: 2.4rem; height: 2rem; font-size: 0.95rem; }
 }
 
 @media (max-width: 480px) {
-  .num-btn { font-size: 0.95rem; border-radius: 8px; }
   .number-pad { gap: 6px; }
   .payment-toggle { gap: 4px; }
-  .payment-toggle button { font-size: 0.85rem; padding: 6px 8px; height: 1.7rem !important; }
   .right-panel input { min-height: 1.6rem; max-height: 2.2rem; height: 1.8rem; font-size: 0.95rem; }
   .btn.checkout { min-height: 1.5rem; max-height: 2rem; height: 1.7rem; font-size: 0.9rem; }
 }
@@ -1759,17 +1636,6 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
     overflow: visible;
   }
 
-  .num-btn {
-    font-size: clamp(14px, 2.2vw, 20px);
-    border-radius: 8px;
-  }
-
-  .payment-toggle button {
-    height: clamp(34px, 3.2vw, 44px)  !important;
-    font-size: clamp(13px, 1.8vw, 16px);
-    padding: 6px 10px;
-  }
-
   .btn.checkout {
     height: clamp(36px, 3.6vw, 44px)  !important;
     font-size: clamp(14px, 1.8vw, 16px);
@@ -1779,8 +1645,6 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
 /* Large screen: increase prominence of payment buttons and inputs */
 @media (min-width: 1200px) {
   .right-panel { width: 420px; }
-  .num-btn { font-size: 1.3rem; }
-  .payment-toggle button { max-width: 220px; font-size: 1.1rem; height: 2.6rem !important; }
   .right-panel input { min-height: 2.6rem; max-height: 3.6rem; height: 3rem; font-size: 1.2rem; }
   .btn.checkout { min-height: 2.2rem; max-height: 3rem; height: 2.6rem; font-size: 1.15rem; }
 }
@@ -1798,18 +1662,6 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
       padding: 8px 12px !important;
     }
 
-    /* Scale back numpad font so inputs are visually comparable */
-    .num-btn {
-      font-size: clamp(14px, 1.8vw, 20px) !important;
-      padding: 0 !important;
-    }
-
-
-
-    .payment-toggle button {
-      height: clamp(44px, 4.5vh, 64px) !important;
-      font-size: clamp(16px, 2.4vh, 20px) !important;
-    }
   }
 
 .dropdown-item-content {
@@ -1952,7 +1804,6 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
   .right-panel input { height: 2.2rem; font-size: 1.05rem; }
   .qty-wrapper input { width: 44px; height: 34px; }
   .number-pad { grid-auto-rows: 48px; }
-  .num-btn { font-size: 18px; }
   table th, table td { padding: 6px; }
   .cart-totals strong { font-size: 18px; }
 }
