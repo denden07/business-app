@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { dbPromise } from '../db'
 import { refreshRoutes } from '../router'
+import Swal from 'sweetalert2'
 
 const props = defineProps({
   pages: {
@@ -20,7 +21,33 @@ const props = defineProps({
 const visibility = ref({})
 const loading = ref(true)
 const saving = ref(false)
-const status = ref('')
+
+async function requirePin() {
+  try {
+    const db = await dbPromise
+    const row = await db.get('app_settings', 'settings-pin')
+    const storedPin = row ? row.value : null
+    if (!storedPin) return true
+    const result = await Swal.fire({
+      title: '🔒 Confirm PIN',
+      text: 'Enter your PIN to save changes',
+      input: 'password',
+      inputPlaceholder: 'Enter PIN',
+      inputAttributes: { maxlength: 8, autocomplete: 'off' },
+      showCancelButton: true,
+      confirmButtonText: 'Confirm',
+      confirmButtonColor: '#1abc9c',
+      cancelButtonColor: '#888',
+      allowOutsideClick: false,
+    })
+    if (!result.isConfirmed) return false
+    if (result.value !== storedPin) {
+      Swal.fire({ icon: 'error', title: 'Incorrect PIN', timer: 1400, showConfirmButton: false })
+      return false
+    }
+    return true
+  } catch { return true }
+}
 
 async function load() {
   loading.value = true
@@ -39,6 +66,7 @@ async function load() {
 }
 
 async function save() {
+  if (!(await requirePin())) return
   saving.value = true
   try {
     const db = await dbPromise
@@ -48,20 +76,19 @@ async function save() {
       await store.put({ name: p.name, visible: !!visibility.value[p.name] })
     }
     await tx.done
-    status.value = 'Saved'
     try { await refreshRoutes() } catch (e) { console.warn(e) }
+    Swal.fire({ icon: 'success', title: 'Saved!', toast: true, position: 'bottom-end', timer: 1800, showConfirmButton: false })
   } catch (err) {
     console.error('save visibility', err)
-    status.value = 'Failed: ' + err.message
+    Swal.fire({ icon: 'error', title: 'Failed to save', text: err.message })
   } finally {
     saving.value = false
-    setTimeout(() => (status.value = ''), 2500)
   }
 }
 
-function resetToDefaults() {
+async function resetToDefaults() {
   props.pages.forEach(p => (visibility.value[p.name] = true))
-  save()
+  await save()
 }
 
 onMounted(load)
@@ -91,9 +118,8 @@ onMounted(load)
       </div>
 
       <div class="pv-actions">
-        <button class="btn primary" @click="save" :disabled="saving">Save</button>
+        <button class="btn primary" @click="save" :disabled="saving">{{ saving ? 'Saving…' : 'Save' }}</button>
         <button class="btn" @click="resetToDefaults" :disabled="saving">Reset to defaults</button>
-        <span class="status">{{ status }}</span>
       </div>
     </div>
   </section>

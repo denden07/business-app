@@ -1,7 +1,7 @@
 import { openDB } from 'idb';
 
 export const DB_NAME = 'pharmacy_pos_db';
-export const DB_VERSION = 16; // 🔼 bump version
+export const DB_VERSION = 17; // 🔼 bump version
 
 export const dbPromise = openDB(DB_NAME, DB_VERSION, {
   upgrade(db, oldVersion, newVersion, transaction) {
@@ -156,6 +156,14 @@ export const dbPromise = openDB(DB_NAME, DB_VERSION, {
       if (!store.indexNames.contains('visible')) {
         store.createIndex('visible', 'visible');
       }
+    }
+
+    /* =========================
+       APP SETTINGS (key-value store)
+    ========================== */
+    if (!db.objectStoreNames.contains('app_settings')) {
+      db.createObjectStore('app_settings', { keyPath: 'key' })
+      // stores documents like { key: 'settings-pin', value: '1234' }
     }
 
     /* =========================

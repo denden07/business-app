@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { dbPromise } from '../db'
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
@@ -7,11 +8,135 @@ import { Device } from '@capacitor/device'
 import { FilePicker } from '@capawesome/capacitor-file-picker'
 import { refreshRoutes } from '../router'
 import PageVisibilitySettings from '../components/PageVisibilitySettings.vue'
+import Swal from 'sweetalert2'
+
+const router = useRouter()
 
 const status = ref('')
 const progress = ref(0)
 const fileName = ref('pharmacy_pos_backup.json')
 const restoreInput = ref(null)
+
+/* ======================
+   PIN GATE
+====================== */
+const pinUnlocked = ref(false)
+
+async function getPin() {
+  try {
+    const db = await dbPromise
+    const row = await db.get('app_settings', 'settings-pin')
+    return row ? row.value : null
+  } catch { return null }
+}
+async function savePin(pin) {
+  const db = await dbPromise
+  await db.put('app_settings', { key: 'settings-pin', value: pin })
+}
+async function deletePin() {
+  const db = await dbPromise
+  await db.delete('app_settings', 'settings-pin')
+}
+
+async function checkPinOnEntry() {
+  const storedPin = await getPin()
+  if (!storedPin) { pinUnlocked.value = true; return }
+  const result = await Swal.fire({
+    title: '🔒 Settings Locked',
+    text: 'Enter your PIN to access Settings',
+    input: 'password',
+    inputPlaceholder: 'Enter PIN',
+    inputAttributes: { maxlength: 8, autocomplete: 'off' },
+    showCancelButton: true,
+    confirmButtonText: 'Unlock',
+    cancelButtonText: 'Go Back',
+    confirmButtonColor: '#1abc9c',
+    cancelButtonColor: '#888',
+    allowOutsideClick: false,
+    allowEscapeKey: false,
+  })
+  if (result.isConfirmed && result.value === storedPin) {
+    pinUnlocked.value = true
+  } else if (result.isConfirmed && result.value !== storedPin) {
+    await Swal.fire({ icon: 'error', title: 'Incorrect PIN', timer: 1400, showConfirmButton: false })
+    router.back()
+  } else {
+    router.back()
+  }
+}
+
+/* ======================
+   PIN MANAGEMENT
+====================== */
+const pinIsSet = ref(false)
+
+async function setOrChangePin() {
+  if (pinIsSet.value) {
+    const verify = await Swal.fire({
+      title: 'Verify current PIN',
+      input: 'password',
+      inputPlaceholder: 'Current PIN',
+      inputAttributes: { maxlength: 8, autocomplete: 'off' },
+      showCancelButton: true,
+      confirmButtonColor: '#1abc9c',
+      cancelButtonColor: '#888',
+    })
+    if (!verify.isConfirmed) return
+    const storedPin = await getPin()
+    if (verify.value !== storedPin) {
+      Swal.fire({ icon: 'error', title: 'Incorrect PIN', text: 'Current PIN does not match.' })
+      return
+    }
+  }
+  const newPinResult = await Swal.fire({
+    title: pinIsSet.value ? 'Enter new PIN' : 'Set a PIN',
+    input: 'password',
+    inputPlaceholder: '4–8 digit PIN',
+    inputAttributes: { maxlength: 8, autocomplete: 'off' },
+    showCancelButton: true,
+    confirmButtonColor: '#1abc9c',
+    cancelButtonColor: '#888',
+    inputValidator: (val) => { if (!val || val.length < 4) return 'PIN must be at least 4 characters' },
+  })
+  if (!newPinResult.isConfirmed) return
+  const confirmResult = await Swal.fire({
+    title: 'Confirm new PIN',
+    input: 'password',
+    inputPlaceholder: 'Re-enter new PIN',
+    inputAttributes: { maxlength: 8, autocomplete: 'off' },
+    showCancelButton: true,
+    confirmButtonColor: '#1abc9c',
+    cancelButtonColor: '#888',
+    inputValidator: (val) => { if (val !== newPinResult.value) return 'PINs do not match' },
+  })
+  if (!confirmResult.isConfirmed) return
+  await savePin(newPinResult.value)
+  pinIsSet.value = true
+  Swal.fire({ icon: 'success', title: 'PIN saved!', timer: 1400, showConfirmButton: false })
+}
+
+async function removePin() {
+  const verify = await Swal.fire({
+    title: 'Remove PIN',
+    text: 'Enter your current PIN to remove it',
+    input: 'password',
+    inputPlaceholder: 'Current PIN',
+    inputAttributes: { maxlength: 8, autocomplete: 'off' },
+    showCancelButton: true,
+    confirmButtonText: 'Remove PIN',
+    confirmButtonColor: '#e74c3c',
+    cancelButtonColor: '#888',
+  })
+  if (!verify.isConfirmed) return
+  const storedPin = await getPin()
+  if (verify.value !== storedPin) {
+    Swal.fire({ icon: 'error', title: 'Incorrect PIN', timer: 1400, showConfirmButton: false })
+    return
+  }
+  await deletePin()
+  pinIsSet.value = false
+  Swal.fire({ icon: 'success', title: 'PIN removed', timer: 1400, showConfirmButton: false })
+}
 
 const pageVisibility = ref({})
 const pagesList = ref([
@@ -161,13 +286,16 @@ async function savePageVisibility() {
 }
 
 onMounted(async () => {
-  // existing onMounted logic is inside the file; ensure we still load visibility
-  await loadPageVisibility()
+  await checkPinOnEntry()
+  if (pinUnlocked.value) {
+    pinIsSet.value = !!(await getPin())
+    await loadPageVisibility()
+  }
 })
 </script>
 
 <template>
-  <div class="settings-grid">
+  <div v-if="pinUnlocked" class="settings-grid">
     <div class="left-col">
       <div class="card">
         <h1>Database Management</h1>
@@ -203,6 +331,23 @@ onMounted(async () => {
       <div class="card" style="margin-top:12px">
         <PageVisibilitySettings :pages="pagesList" />
       </div>
+
+      <div class="card" style="margin-top:12px">
+        <h2>🔒 Security</h2>
+        <p class="muted">Set a PIN to protect Settings access and prevent unauthorized changes.</p>
+        <div class="pin-section">
+          <div class="pin-status-row">
+            <span class="pin-label">PIN status:</span>
+            <span :class="['pin-badge', pinIsSet ? 'pin-active' : 'pin-inactive']">
+              {{ pinIsSet ? '🔒 Active' : '🔓 Not set' }}
+            </span>
+          </div>
+          <div class="pin-btn-row">
+            <button class="btn-set-pin" @click="setOrChangePin">{{ pinIsSet ? 'Change PIN' : 'Set PIN' }}</button>
+            <button v-if="pinIsSet" class="btn-remove-pin" @click="removePin">Remove PIN</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- <div class="right-col">
@@ -221,6 +366,7 @@ onMounted(async () => {
 .left-col { flex: 2 }
 .right-col { flex: 1 }
 .card { background:#fff; padding: 16px; border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,0.06) }
+body.dark-mode .card { background: #1e1e1e; color: #eee; }
 
 /* reuse some existing styles */
 .note { background-color: #e3f2fd; border-left: 4px solid #2196f3; padding: 12px; margin-bottom: 12px; font-size: 0.9rem }
@@ -231,4 +377,20 @@ onMounted(async () => {
 .progress-container { margin-top: 12px; background:#eee; border-radius:10px; height:20px; position:relative }
 .progress-bar { background:#2ecc71; height:100%; transition: width 0.3s }
 .status { margin-top:12px; font-style:italic; color:#666 }
+
+/* PIN management */
+.pin-section { margin-top: 12px; display: flex; flex-direction: column; gap: 14px; }
+.pin-status-row { display: flex; align-items: center; gap: 12px; }
+.pin-label { font-size: 14px; color: #555; }
+body.dark-mode .pin-label { color: #bbb; }
+.pin-badge { font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 20px; }
+.pin-active { background: #d4f5ec; color: #1a8a6e; }
+.pin-inactive { background: #f0f0f0; color: #888; }
+body.dark-mode .pin-active { background: #1a3a2e; color: #1abc9c; }
+body.dark-mode .pin-inactive { background: #2a2a2a; color: #888; }
+.pin-btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn-set-pin { background: #1abc9c; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; cursor: pointer; font-weight: 600; }
+.btn-set-pin:hover { background: #16a085; }
+.btn-remove-pin { background: #e74c3c; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; cursor: pointer; font-weight: 600; }
+.btn-remove-pin:hover { background: #c0392b; }
 </style>
