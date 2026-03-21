@@ -222,18 +222,4 @@ hr {
   justify-content: flex-end;
   margin-top: 16px;
 }
-
-.actions button {
-  background: #1abc9c;
-  color: white;
-  padding: 10px 18px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.actions button:hover {
-  background: #16a085;
-}
 </style>

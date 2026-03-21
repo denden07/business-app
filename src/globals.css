@@ -91,10 +91,73 @@ select {
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
 }
 
+input[type="file"] {
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--field-border);
+  background-color: var(--field-bg);
+  color: var(--field-text);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.2;
+  box-sizing: border-box;
+}
+
+input[type="file"]::file-selector-button {
+  margin-right: 12px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-text-light);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+input[type="file"]::file-selector-button:hover {
+  background: var(--btn-secondary-hover);
+}
+
 textarea {
   min-height: 96px;
   padding-top: 10px;
   resize: vertical;
+}
+
+.modal-form,
+.modal-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modal-form label,
+.modal-stack label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #444;
+}
+
+body.dark-mode .modal-form label,
+body.dark-mode .modal-stack label {
+  color: #ddd;
+}
+
+.modal-form .input,
+.modal-form input,
+.modal-form select,
+.modal-form textarea,
+.modal-stack .input,
+.modal-stack input,
+.modal-stack select,
+.modal-stack textarea {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .input::placeholder,

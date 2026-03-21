@@ -420,8 +420,6 @@ body.dark-mode .modal {
 
 /* STACK INPUTS */
 .modal-form {
-  display: flex;
-  flex-direction: column;
   gap: 12px;
   margin: 14px 0;
 }

@@ -372,6 +372,8 @@ body.dark-mode .card { background: #1e1e1e; color: #eee; }
 .note { background-color: #e3f2fd; border-left: 4px solid #2196f3; padding: 12px; margin-bottom: 12px; font-size: 0.9rem }
 .actions { display:flex; flex-direction:column; gap:12px }
 .restore-section { display:flex; flex-direction:column; gap:10px; padding-top:10px; border-top:1px solid #eee }
+.file-label { display:flex; flex-direction:column; gap:6px; font-weight:600 }
+.file-label input[type="file"] { width: 100% }
 .progress-container { margin-top: 12px; background:#eee; border-radius:10px; height:20px; position:relative }
 .progress-bar { background:#2ecc71; height:100%; transition: width 0.3s }
 .status { margin-top:12px; font-style:italic; color:#666 }

@@ -889,7 +889,7 @@ const getStockIndicator = (med) => {
     <div v-if="showNewCustomerForm">
       <hr/>
       <h4>Add New Customer</h4>
-      <div class="new-customer-form">
+      <div class="new-customer-form modal-form">
         <label>Name<input class="input" v-model="newCustomer.name" /></label>
         <label>Address<input class="input" v-model="newCustomer.address" /></label>
         <label>Phone<input class="input" v-model="newCustomer.phone" /></label>
@@ -1493,29 +1493,6 @@ body.dark-mode tbody tr:hover td { background: #1e2e25; }
 .modal h3, .modal h4 {
   margin: 0;
   text-align: center;
-}
-
-.new-customer-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* Make all modal inputs equal width */
-.modal .input,
-.modal input {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-/* Labels stack cleanly */
-.new-customer-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #444;
 }
 
 /* Customer search field */

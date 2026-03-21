@@ -135,7 +135,7 @@ const submitForm = async () => {
 
 <template>
   <div class="modal">
-    <div class="modal-content">
+    <div class="modal-content modal-form">
       <h2>{{ medicineToEdit ? 'Edit Medicine' : 'Add Medicine' }}</h2>
 
       <label>Brand Name</label>
@@ -165,10 +165,10 @@ const submitForm = async () => {
       <input v-model="expiryDate" type="date" />
 
       <div class="actions">
-        <button :disabled="!isValid" @click="submitForm">
+        <button class="primary" :disabled="!isValid" @click="submitForm">
           {{ medicineToEdit ? 'Save Changes' : 'Add Medicine' }}
         </button>
-        <button @click="$emit('close')">Cancel</button>
+        <button class="secondary" @click="$emit('close')">Cancel</button>
       </div>
     </div>
   </div>
@@ -277,37 +277,7 @@ hr {
 
 .actions button {
   flex: 1;
-  padding: 12px;
   font-size: 16px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-}
-
-/* Primary */
-.actions button:first-child {
-  background: #1abc9c;
-  color: #fff;
-}
-
-.actions button:first-child:hover {
-  background: #17a589;
-}
-
-/* Cancel */
-.actions button:last-child {
-  background: #e0e0e0;
-  color: #333;
-}
-
-.actions button:last-child:hover {
-  background: #cfcfcf;
-}
-
-/* Disabled */
-.actions button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 
