@@ -18,6 +18,9 @@
   --modal-bg: #f8fafc;
   --button-bg: #1abc9c;
   --button-text: #fff;
+  --datepicker-range-trail-bg: #d8f5ee;
+  --datepicker-range-trail-text: #115e59;
+  --datepicker-range-trail-border: #9adfcd;
 }
 
 
@@ -103,5 +106,11 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 input[type="date"]::-moz-calendar-picker-indicator {
   color: #1abc9c; /* any visible color */
   cursor: pointer;
+}
+
+.dp__theme_light {
+  --dp-range-between-dates-background-color: var(--datepicker-range-trail-bg);
+  --dp-range-between-dates-text-color: var(--datepicker-range-trail-text);
+  --dp-range-between-border-color: var(--datepicker-range-trail-border);
 }
 
