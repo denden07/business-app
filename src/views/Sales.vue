@@ -6,6 +6,9 @@ import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
 import { downloadCSV } from '../utils/exportCsv'
 import Pagination from '../components/Pagination.vue'
+import { VueDatePicker } from '@vuepic/vue-datepicker'
+import '@vuepic/vue-datepicker/dist/main.css'
+import { format } from 'date-fns'
 
 
 
@@ -33,6 +36,18 @@ const toggleSort = (field) => {
 const searchKeyword = ref('')
 const startDate = ref('')
 const endDate = ref('')
+const dateRange = ref(null)
+const isDark = ref(localStorage.getItem('darkMode') === 'true')
+
+watch(dateRange, (range) => {
+  if (range && range[0] && range[1]) {
+    startDate.value = format(range[0], 'yyyy-MM-dd')
+    endDate.value = format(range[1], 'yyyy-MM-dd')
+  } else {
+    startDate.value = ''
+    endDate.value = ''
+  }
+})
 
 // const currentPage = ref(1)
 // const itemsPerPage = ref(10)
@@ -236,15 +251,25 @@ const exportCSV = async () => {
     <div class="top-bar">
       <SearchInput v-model="searchKeyword" placeholder="Search sale #..." />
 
-      <label>
-        From
-        <input type="date" v-model="startDate" />
-      </label>
-
-      <label>
-        To
-        <input type="date" v-model="endDate" />
-      </label>
+      <VueDatePicker
+        v-model="dateRange"
+        range
+        :enable-time-picker="false"
+        :dark="isDark"
+        auto-apply
+        teleport
+      >
+        <template #trigger>
+          <button type="button" class="date-icon-btn" :class="{ active: dateRange }" :title="dateRange ? 'Date filter active' : 'Filter by date range'">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.5" fill="none" />
+              <path d="M3 10h18" stroke="currentColor" stroke-width="1.5" />
+              <path d="M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+            <span v-if="dateRange" class="date-clear" @click.stop="dateRange = null" title="Clear date filter">×</span>
+          </button>
+        </template>
+      </VueDatePicker>
 
       <select v-model.number="itemsPerPage">
         <option v-for="o in itemsPerPageOptions" :key="o" :value="o">{{ o }}</option>
@@ -465,6 +490,48 @@ body.dark-mode .sale-meta {
   border-top: 1px dashed #ccc;
 }
 
+/* Make the datepicker root shrink-wrap its trigger so it sits inline */
+:deep(.dp__main) {
+  display: inline-flex;
+  width: auto;
+}
 
+/* Calendar icon trigger */
+.date-icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  width: 40px;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  color: #444;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.2s, background 0.2s;
+}
+.date-icon-btn:hover { border-color: #1abc9c; }
+.date-icon-btn.active { border-color: #1abc9c; color: #1abc9c; }
+body.dark-mode .date-icon-btn { background: #1c1c1c; border-color: #333; color: #ccc; }
+body.dark-mode .date-icon-btn.active { border-color: #1abc9c; color: #1abc9c; }
+
+.date-clear {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  background: #e74c3c;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  font-style: normal;
+  cursor: pointer;
+}
+.date-clear:hover { background: #c0392b; }
 
 </style>

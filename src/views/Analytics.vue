@@ -4,6 +4,8 @@ import { dbPromise } from '../db'
 import MetricCard from '../components/analytics/MetricCard.vue'
 import VueApexCharts from 'vue3-apexcharts'
 import { format } from 'date-fns'
+import { VueDatePicker } from '@vuepic/vue-datepicker'
+import '@vuepic/vue-datepicker/dist/main.css'
 
 // --------------------
 // Metrics
@@ -31,6 +33,18 @@ const isLoading = ref(false)
 const timeRange = ref('today')
 const customStart = ref(null)
 const customEnd = ref(null)
+const dateRange = ref(null)
+const isDark = ref(localStorage.getItem('darkMode') === 'true')
+
+watch(dateRange, (range) => {
+  if (range && range[0] && range[1]) {
+    customStart.value = range[0]
+    customEnd.value = range[1]
+  } else {
+    customStart.value = null
+    customEnd.value = null
+  }
+})
 
 const salesLabel = computed(() => {
   switch (timeRange.value) {
@@ -275,8 +289,14 @@ onMounted(loadAnalytics)
     <button @click="timeRange='year'">This Year</button>
     <button @click="timeRange='custom'">Custom Range</button>
     <div v-if="timeRange==='custom'" class="custom-range">
-      <input type="date" v-model="customStart"/> -
-      <input type="date" v-model="customEnd"/>
+      <VueDatePicker
+        v-model="dateRange"
+        range
+        :enable-time-picker="false"
+        placeholder="Select custom date range"
+        :dark="isDark"
+        auto-apply
+      />
     </div>
   </div>
 
