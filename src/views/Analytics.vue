@@ -127,6 +127,9 @@ const updateCharts = async () => {
   isLoading.value = true
   // Simulate processing time
   await new Promise(resolve => setTimeout(resolve, 300))
+  const analyticsCardText = isDark.value ? '#f8fafc' : '#0f172a'
+  const analyticsMutedText = isDark.value ? '#cbd5e1' : '#64748b'
+  const analyticsGridColor = isDark.value ? '#475569' : '#d9e2ec'
   const startDate = getStartDate()
   const endDate = getEndDate()
 
@@ -168,8 +171,16 @@ const updateCharts = async () => {
   })
   salesTrendSeries.value = [{ name: 'Sales', data: Object.values(trendMap) }]
   salesTrendOptions.value = {
-    chart: { type: 'line', height: 350 },
-    xaxis: { categories: Object.keys(trendMap) },
+    chart: { type: 'line', height: 350, foreColor: analyticsMutedText },
+    xaxis: {
+      categories: Object.keys(trendMap),
+      labels: { style: { colors: analyticsMutedText } },
+    },
+    yaxis: {
+      labels: { style: { colors: [analyticsMutedText] } },
+    },
+    grid: { borderColor: analyticsGridColor },
+    legend: { labels: { colors: analyticsCardText } },
     tooltip: { y: { formatter: val => `₱${val.toLocaleString()}` } },
     colors: [totalSales.value >= DAILY_TARGET ? '#22c55e' : '#ef4444']
   }
@@ -190,8 +201,16 @@ const updateCharts = async () => {
     .slice(0,5)
   topMedicinesSeries.value = topMeds.map(m=>m.value)
   topMedicinesOptions.value = {
-    chart: { type: 'bar', height: 350 },
-    xaxis: { categories: topMeds.map(m=>m.name) },
+    chart: { type: 'bar', height: 350, foreColor: analyticsMutedText },
+    xaxis: {
+      categories: topMeds.map(m=>m.name),
+      labels: { style: { colors: analyticsMutedText } },
+    },
+    yaxis: {
+      labels: { style: { colors: [analyticsMutedText] } },
+    },
+    grid: { borderColor: analyticsGridColor },
+    legend: { labels: { colors: analyticsCardText } },
     tooltip: { y: { formatter: val => `${val} pcs` } }
   }
 
@@ -244,7 +263,7 @@ const updateCharts = async () => {
 
   calendarSeries.value = heatmapSeries
   calendarOptions.value = {
-    chart: { type:'heatmap', height: 260, toolbar:{show:true},width: '100%', // <-- makes chart width reactive
+    chart: { type:'heatmap', height: 260, foreColor: analyticsMutedText, toolbar:{show:true},width: '100%', // <-- makes chart width reactive
     toolbar: { show: false } },
     plotOptions: {
       heatmap: {
@@ -258,8 +277,10 @@ const updateCharts = async () => {
       }
     },
     dataLabels:{enabled:false},
-    xaxis:{type:'category', title:{text:'Day'}},
-    yaxis:{title:{text:'Month/Week'}} ,
+    xaxis:{type:'category', labels: { style: { colors: analyticsMutedText } }, title:{text:'Day', style: { color: analyticsMutedText }}},
+    yaxis:{labels: { style: { colors: [analyticsMutedText] } }, title:{text:'Month/Week', style: { color: analyticsMutedText }}} ,
+    grid:{ borderColor: analyticsGridColor },
+    legend: { labels: { colors: analyticsCardText } },
     tooltip:{y:{formatter: val => `₱${val.toLocaleString()}`}}
   }
   isLoading.value = false
@@ -389,6 +410,7 @@ onMounted(loadAnalytics)
   font-size: 18px;
   line-height: 1.3;
   text-align: left;
+  color: #0f172a;
 }
 
 .chart-card :deep(.apexcharts-canvas),
@@ -400,6 +422,10 @@ body.dark-mode .chart-card {
   background-color: #1c1c1c;
   border-color: #2e2e2e;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+}
+
+body.dark-mode .chart-card h2 {
+  color: #f8fafc;
 }
 
 /* Loading Overlay */

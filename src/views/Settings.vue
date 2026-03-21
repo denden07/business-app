@@ -16,6 +16,50 @@ const status = ref('')
 const progress = ref(0)
 const fileName = ref('pharmacy_pos_backup.json')
 const restoreInput = ref(null)
+const appNameLimit = 40
+const appName = ref('Pharmacy POS')
+const appNameStatus = ref('')
+
+function clampAppName(value) {
+  return String(value || '').slice(0, appNameLimit)
+}
+
+function handleAppNameInput(event) {
+  appName.value = clampAppName(event.target.value)
+}
+
+async function loadAppName() {
+  try {
+    const db = await dbPromise
+    const row = await db.get('app_settings', 'app-name')
+    appName.value = clampAppName(row?.value?.trim() || 'Pharmacy POS')
+  } catch (err) {
+    console.error('Failed to load app name', err)
+    appName.value = 'Pharmacy POS'
+  }
+}
+
+async function saveAppName() {
+  const trimmed = clampAppName(appName.value).trim()
+  const value = trimmed || 'Pharmacy POS'
+
+  try {
+    const db = await dbPromise
+    await db.put('app_settings', { key: 'app-name', value })
+    appName.value = value
+    appNameStatus.value = 'App name saved'
+    await Swal.fire({
+      icon: 'success',
+      title: 'Saved',
+      text: 'Application name updated successfully.',
+      timer: 1400,
+      showConfirmButton: false,
+    })
+  } catch (err) {
+    console.error('Failed to save app name', err)
+    appNameStatus.value = 'Failed to save app name: ' + err.message
+  }
+}
 
 /* ======================
    PIN GATE
@@ -289,6 +333,7 @@ onMounted(async () => {
   await checkPinOnEntry()
   if (pinUnlocked.value) {
     pinIsSet.value = !!(await getPin())
+    await loadAppName()
     await loadPageVisibility()
   }
 })
@@ -297,6 +342,25 @@ onMounted(async () => {
 <template>
   <div v-if="pinUnlocked" class="settings-grid">
     <div class="left-col">
+      <div class="card">
+        <h1>Branding</h1>
+        <p class="muted">Customize the app name shown in the sidebar menu.</p>
+
+        <div class="branding-form">
+          <label for="app-name">Application Name</label>
+          <input id="app-name" :value="appName" @input="handleAppNameInput" class="input" type="text" :maxlength="appNameLimit" placeholder="Pharmacy POS" />
+          <div class="text-limiter" :class="{ warning: appName.length >= appNameLimit }">
+            {{ appName.length }}/{{ appNameLimit }} characters
+          </div>
+          <div class="branding-actions">
+            <button class="primary" @click="saveAppName">Save App Name</button>
+          </div>
+          <p v-if="appNameStatus" class="status" :class="{ error: appNameStatus.includes('Failed') }">
+            {{ appNameStatus }}
+          </p>
+        </div>
+      </div>
+
       <div class="card">
         <h1>Database Management</h1>
         <p class="note">
@@ -369,6 +433,12 @@ onMounted(async () => {
 body.dark-mode .card { background: #1e1e1e; color: #eee; }
 
 /* reuse some existing styles */
+.muted { color: #666; }
+.branding-form { display: flex; flex-direction: column; gap: 10px; }
+.branding-form label { font-weight: 600; color: #555; }
+.text-limiter { align-self: flex-end; font-size: 12px; color: #6b7280; }
+.text-limiter.warning { color: #d97706; font-weight: 600; }
+.branding-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .note { background-color: #e3f2fd; border-left: 4px solid #2196f3; padding: 12px; margin-bottom: 12px; font-size: 0.9rem }
 .actions { display:flex; flex-direction:column; gap:12px }
 .restore-section { display:flex; flex-direction:column; gap:10px; padding-top:10px; border-top:1px solid #eee }
@@ -382,7 +452,11 @@ body.dark-mode .card { background: #1e1e1e; color: #eee; }
 .pin-section { margin-top: 12px; display: flex; flex-direction: column; gap: 14px; }
 .pin-status-row { display: flex; align-items: center; gap: 12px; }
 .pin-label { font-size: 14px; color: #555; }
+body.dark-mode .muted,
+body.dark-mode .branding-form label,
 body.dark-mode .pin-label { color: #bbb; }
+body.dark-mode .text-limiter { color: #94a3b8; }
+body.dark-mode .text-limiter.warning { color: #fbbf24; }
 .pin-badge { font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 20px; }
 .pin-active { background: #d4f5ec; color: #1a8a6e; }
 .pin-inactive { background: #f0f0f0; color: #888; }

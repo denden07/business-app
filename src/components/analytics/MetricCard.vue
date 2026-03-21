@@ -89,10 +89,10 @@ body.dark-mode .metric-card {
 }
 
 body.dark-mode .metric-title {
-  color: #cbd5e1;
+  color: #f8fafc;
 }
 
 body.dark-mode .metric-period {
-  color: #94a3b8;
+  color: #cbd5e1;
 }
 </style>

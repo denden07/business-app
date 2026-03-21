@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { dbPromise } from '../db'
 
@@ -49,6 +49,19 @@ const menuItems = [
 const isActive = (path) => route.path === path
 
 const pageVisibility = ref(null)
+const appName = ref('Pharmacy POS')
+let refreshTimer = null
+
+async function loadAppName() {
+  try {
+    const db = await dbPromise
+    const row = await db.get('app_settings', 'app-name')
+    appName.value = row?.value?.trim() || 'Pharmacy POS'
+  } catch (err) {
+    console.error('Failed to load app name', err)
+    appName.value = 'Pharmacy POS'
+  }
+}
 
 async function loadVisibility() {
   try {
@@ -67,10 +80,18 @@ async function loadVisibility() {
   }
 }
 
+async function refreshSidebarState() {
+  await Promise.all([loadVisibility(), loadAppName()])
+}
+
 onMounted(() => {
-  loadVisibility()
-  // simple polling to refresh visibility if changed in Settings
-  setInterval(loadVisibility, 2500)
+  refreshSidebarState()
+  // simple polling to refresh settings changed in Settings page
+  refreshTimer = setInterval(refreshSidebarState, 2500)
+})
+
+onUnmounted(() => {
+  if (refreshTimer) clearInterval(refreshTimer)
 })
 
 const visibleMenu = () => {
@@ -89,7 +110,7 @@ const visibleMenu = () => {
   <!-- Drawer Menu -->
   <nav :class="['menu-drawer', { open: isOpen }]">
     <div class="menu-header">
-      <h2>Pharmacy POS</h2>
+      <h2 :title="appName">{{ appName }}</h2>
       <button class="close-btn" @click="toggleMenu">✕</button>
     </div>
 
@@ -175,6 +196,7 @@ const visibleMenu = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 20px;
   padding-bottom: 12px;
   border-bottom: 1px solid #3b4c60;
@@ -183,6 +205,11 @@ const visibleMenu = () => {
 .menu-header h2 {
   margin: 0;
   font-size: 18px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .close-btn {
@@ -197,6 +224,7 @@ const visibleMenu = () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .close-btn:hover {

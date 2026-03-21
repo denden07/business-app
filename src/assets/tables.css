@@ -32,7 +32,7 @@
   background: #f0faf7;
   color: #1a8a6e;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: .5px;
   padding: 12px 14px;
@@ -47,7 +47,7 @@
   padding: 11px 14px;
   border-bottom: 1px solid #f0f0f0;
   border-right: 1px solid #efefef;
-  font-size: 14px;
+  font-size: 16px;
   color: #333;
 }
 .table-wrap tbody td:last-child { border-right: none; }
