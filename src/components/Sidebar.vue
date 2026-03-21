@@ -209,7 +209,6 @@ const visibleMenu = () => {
   list-style: none;
   padding: 0;
   margin: 0;
-  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -253,7 +252,7 @@ const visibleMenu = () => {
   align-items: center;
   font-size: 15px;
   width: 100%;
-  margin-top: auto;
+  margin-top: 16px;
   transition: background 0.2s;
 }
 
