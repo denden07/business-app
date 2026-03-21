@@ -104,6 +104,8 @@ function openEdit(c) {
 
 function close() {
   modal.value.close()
+  // reset form when modal closes
+  form.value = { id: null, name: '', phone: '', email: '', address: '' }
 }
 
 /* ======================
@@ -153,6 +155,10 @@ function openPointsModal(c) {
 
 function closePointsModal() {
   pointsModal.value.close()
+  // reset points form
+  pointsForm.customer_id = null
+  pointsForm.points = 0
+  pointsForm.note = ''
 }
 
 async function savePointsAdjustment() {
@@ -198,6 +204,19 @@ onMounted(() => {
   if (q.sortBy) sortBy.value = q.sortBy
   if (q.sortOrder) sortOrder.value = q.sortOrder
   load()
+  // ensure native dialog close resets forms if user dismisses via ESC/outside click
+  if (modal.value) {
+    modal.value.addEventListener('close', () => {
+      form.value = { id: null, name: '', phone: '', email: '', address: '' }
+    })
+  }
+  if (pointsModal.value) {
+    pointsModal.value.addEventListener('close', () => {
+      pointsForm.customer_id = null
+      pointsForm.points = 0
+      pointsForm.note = ''
+    })
+  }
 })
 
 const router = useRouter()

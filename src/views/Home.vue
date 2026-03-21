@@ -501,6 +501,29 @@ const addCustomer = async () => {
   showCustomerModal.value = false
 }
 
+// Clear modal-local inputs when modals are closed
+watch(showCustomerModal, (open) => {
+  if (!open) {
+    customerSearch.value = ''
+    showNewCustomerForm.value = false
+    newCustomer.value = { name: '', phone: '', address: '' }
+    filteredCustomers.value = []
+  }
+})
+
+watch(showRedeemModal, (open) => {
+  if (!open) {
+    redeemMultiplier.value = 1
+    pointsConfirmed.value = false
+  }
+})
+
+watch(showSpecialDiscountModal, (open) => {
+  if (!open) {
+    specialDiscount.value = 0
+  }
+})
+
 const getStockIndicator = (med) => {
   if (!med.quantity || med.quantity <= 0) {
     return { icon: '▲!', color: 'red', text: 'Out of stock', quantity: 0 }
