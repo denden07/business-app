@@ -29,7 +29,28 @@ const sortOrder = ref('desc')
 const currentPage = ref(1)
 const itemsPerPage = ref(10)
 const itemsPerPageOptions = [5, 10, 20, 50]
-
+/* ======================
+   COLUMN VISIBILITY
+====================== */
+const _txDefaultCols = { pt_date: true, pt_points: true, pt_type: true, pt_description: true, pt_sale: true, pu_date: true, pu_id: true, pu_total: true, pu_status: true }
+const colMenuOpen = ref(false)
+const visibleCols = ref({ ..._txDefaultCols, ...JSON.parse(localStorage.getItem('col-vis-transaction') || '{}') })
+watch(visibleCols, v => localStorage.setItem('col-vis-transaction', JSON.stringify(v)), { deep: true })
+const ptCols = [
+  { key: 'pt_date', label: 'Date' },
+  { key: 'pt_points', label: 'Points' },
+  { key: 'pt_type', label: 'Type' },
+  { key: 'pt_description', label: 'Notes' },
+  { key: 'pt_sale', label: 'Sale #' },
+]
+const puCols = [
+  { key: 'pu_date', label: 'Date' },
+  { key: 'pu_id', label: 'Sale #' },
+  { key: 'pu_total', label: 'Total' },
+  { key: 'pu_status', label: 'Status' },
+]
+const activeCols = computed(() => activeTab.value === 'points' ? ptCols : puCols)
+const toggleCol = (key) => { visibleCols.value[key] = !visibleCols.value[key] }
 const showSaleModal = ref(false)
 const selectedSale = ref(null)
 
@@ -260,25 +281,36 @@ const closeSaleModal = () => {
     </div>
 
     <!-- POINTS HISTORY -->
-    <table v-if="activeTab === 'points'">
+    <div v-if="activeTab === 'points'" class="table-wrap">
+    <table>
       <thead>
         <tr>
-          <th>Date</th>
-          <th>Points</th>
-          <th>Type</th>
-          <th>Notes</th>
-          <th>Sale #</th>
+          <th v-if="visibleCols.pt_date">Date</th>
+          <th v-if="visibleCols.pt_points">Points</th>
+          <th v-if="visibleCols.pt_type">Type</th>
+          <th v-if="visibleCols.pt_description">Notes</th>
+          <th v-if="visibleCols.pt_sale">Sale #</th>
+          <th class="col-actions">
+            <div class="col-toggle-wrap">
+              <button class="col-icon-btn" @click.stop="colMenuOpen = !colMenuOpen" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+              <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+              <div v-if="colMenuOpen" class="col-menu">
+                <div class="col-menu-title">Columns</div>
+                <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+              </div>
+            </div>
+          </th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="p in paginatedData" :key="p.id">
-          <td>{{ new Date(p.date).toLocaleString() }}</td>
-          <td :class="p.points > 0 ? 'points-plus' : 'points-minus'">
+          <td v-if="visibleCols.pt_date">{{ new Date(p.date).toLocaleString() }}</td>
+          <td v-if="visibleCols.pt_points" :class="p.points > 0 ? 'points-plus' : 'points-minus'">
             {{ p.points > 0 ? '+' : '' }}{{ p.points }}
           </td>
-          <td>{{ p.type }}</td>
-          <td>{{ p.description || '-' }}</td>
-          <td>
+          <td v-if="visibleCols.pt_type">{{ p.type }}</td>
+          <td v-if="visibleCols.pt_description">{{ p.description || '-' }}</td>
+          <td v-if="visibleCols.pt_sale">
             <span
               v-if="p.related_sale_id"
               class="sale-link"
@@ -288,18 +320,31 @@ const closeSaleModal = () => {
             </span>
             <span v-else>—</span>
           </td>
+          <td class="col-actions"></td>
         </tr>
       </tbody>
     </table>
+    </div>
 
     <!-- PURCHASE HISTORY -->
-    <table v-if="activeTab === 'purchases'">
+    <div v-if="activeTab === 'purchases'" class="table-wrap">
+    <table>
       <thead>
         <tr>
-          <th>Date</th>
-          <th>Sale #</th>
-          <th>Total</th>
-          <th>Status</th>
+          <th v-if="visibleCols.pu_date">Date</th>
+          <th v-if="visibleCols.pu_id">Sale #</th>
+          <th v-if="visibleCols.pu_total">Total</th>
+          <th v-if="visibleCols.pu_status">Status</th>
+          <th class="col-actions">
+            <div class="col-toggle-wrap">
+              <button class="col-icon-btn" @click.stop="colMenuOpen = !colMenuOpen" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+              <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+              <div v-if="colMenuOpen" class="col-menu">
+                <div class="col-menu-title">Columns</div>
+                <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+              </div>
+            </div>
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -309,10 +354,10 @@ const closeSaleModal = () => {
           @click="openSaleModal(s)"
           style="cursor:pointer"
         >
-          <td>{{ new Date(s.created_at).toLocaleString() }}</td>
-          <td>#{{ s.id }}</td>
-          <td>₱{{ (s.final_total || 0).toFixed(2) }}</td>
-          <td>
+          <td v-if="visibleCols.pu_date">{{ new Date(s.created_at).toLocaleString() }}</td>
+          <td v-if="visibleCols.pu_id">#{{ s.id }}</td>
+          <td v-if="visibleCols.pu_total">₱{{ (s.final_total || 0).toFixed(2) }}</td>
+          <td v-if="visibleCols.pu_status">
             <span
               :class="{
                 'status-success': s.status === 'completed',
@@ -322,9 +367,11 @@ const closeSaleModal = () => {
               {{ s.status }}
             </span>
           </td>
+          <td class="col-actions"></td>
         </tr>
       </tbody>
     </table>
+    </div>
 
     <!-- PAGINATION -->
     <Pagination v-model:page="currentPage" :total-pages="totalPages" :max-pages="5" />
@@ -445,40 +492,6 @@ body.dark-mode .top-bar select {
   background: #1c1c1c;
   border-color: #333;
   color: #eee;
-}
-
-/* ======================
-   TABLE
-====================== */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  white-space: nowrap;
-  background: #fff;
-}
-
-body.dark-mode table {
-  background: #181818;
-}
-
-th,
-td {
-  border: 1px solid #ccc;
-  padding: 8px;
-  text-align: left;
-}
-
-body.dark-mode th,
-body.dark-mode td {
-  border-color: #333;
-}
-
-tbody tr:hover {
-  background: #f5f5f5;
-}
-
-body.dark-mode tbody tr:hover {
-  background: #222;
 }
 
 /* ======================

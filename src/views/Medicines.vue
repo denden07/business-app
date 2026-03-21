@@ -28,6 +28,22 @@ const itemsPerPageOptions = [5, 10, 20, 50]
 const sortBy = ref('') // '', 'name', 'stock'
 const sortOrder = ref('asc') // 'asc' | 'desc'
 
+/* ======================
+   COLUMN VISIBILITY
+====================== */
+const _medsDefaultCols = { name: true, generic_name: true, price1: true, price2: true, stock: true }
+const colMenuOpen = ref(false)
+const visibleCols = ref({ ..._medsDefaultCols, ...JSON.parse(localStorage.getItem('col-vis-medicines') || '{}') })
+watch(visibleCols, v => localStorage.setItem('col-vis-medicines', JSON.stringify(v)), { deep: true })
+const allCols = [
+  { key: 'name', label: 'Brand' },
+  { key: 'generic_name', label: 'Generic' },
+  { key: 'price1', label: 'Regular Price' },
+  { key: 'price2', label: 'Discount Price' },
+  { key: 'stock', label: 'Stock' },
+]
+const toggleCol = (key) => { visibleCols.value[key] = !visibleCols.value[key] }
+
 // Vuex state
 const medicines = computed(() => store.state.medicines.medicines)
 const stockMap = computed(() => store.state.medicines.stockMap)
@@ -164,32 +180,45 @@ const restoreMedicine = async med => {
       </div>
     </div>
 
+    <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th @click="toggleSort('name')" style="cursor:pointer">
+          <th v-if="visibleCols.name" @click="toggleSort('name')" style="cursor:pointer">
             Brand
             <span v-if="sortBy === 'name'">{{ sortOrder === 'asc' ? ' ↑' : ' ↓' }}</span>
           </th>
-          <th>Generic</th>
-          <th>Regular price</th>
-          <th>Discount price</th>
-          <th @click="toggleSort('stock')" style="cursor:pointer">
+          <th v-if="visibleCols.generic_name">Generic</th>
+          <th v-if="visibleCols.price1">Regular price</th>
+          <th v-if="visibleCols.price2">Discount price</th>
+          <th v-if="visibleCols.stock" @click="toggleSort('stock')" style="cursor:pointer">
             Stock
             <span v-if="sortBy === 'stock'">{{ sortOrder === 'asc' ? ' ↑' : ' ↓' }}</span>
           </th>
-          <th>Actions</th>
+          <th class="col-actions">
+            <div class="th-actions-head">
+              Actions
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="colMenuOpen = !colMenuOpen" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in allCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+          </th>
         </tr>
       </thead>
 
       <tbody>
         <tr v-for="med in medicines" :key="med.id">
-          <td>{{ med.name }}</td>
-          <td>{{ med.generic_name || '—' }}</td>
-          <td>₱{{ med.price1 }}</td>
-          <td>₱{{ med.price2 }}</td>
-          <td>{{ stockMap[med.id] || 0 }}</td>
-          <td class="actions-td">
+          <td v-if="visibleCols.name">{{ med.name }}</td>
+          <td v-if="visibleCols.generic_name">{{ med.generic_name || '—' }}</td>
+          <td v-if="visibleCols.price1">₱{{ med.price1 }}</td>
+          <td v-if="visibleCols.price2">₱{{ med.price2 }}</td>
+          <td v-if="visibleCols.stock">{{ stockMap[med.id] || 0 }}</td>
+          <td class="col-actions actions-td">
             <button @click="editMedicine(med)">Edit</button>
             <button @click="viewMedicine(med)">View</button>
 
@@ -213,6 +242,7 @@ const restoreMedicine = async med => {
       </tbody>
 
     </table>
+    </div>
 
     <!-- Pagination -->
     <Pagination v-model:page="currentPage" :total-pages="totalPages" :max-pages="5" />
@@ -331,30 +361,6 @@ button:active {
 
 body.dark-mode button {
   background-color: #16a085 !important;
-}
-
-/* ===========================
-   TABLE (ANDROID SAFE)
-=========================== */
-table {
-  width: 100% !important;
-  margin-top: 10px !important;
-  border-collapse: collapse !important;
-  overflow-x: auto !important;
-  white-space: nowrap !important;
-  -webkit-overflow-scrolling: touch !important;
-}
-
-th, td {
-  border: 1px solid #ccc !important;
-  padding: 8px !important;
-  text-align: left !important;
-}
-
-body.dark-mode table,
-body.dark-mode th,
-body.dark-mode td {
-  border-color: #333 !important;
 }
 
 /* ===========================

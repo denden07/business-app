@@ -31,6 +31,25 @@ const toggleSort = (field) => {
 }
 
 /* ======================
+   COLUMN VISIBILITY
+====================== */
+const _salesDefaultCols = { id: true, purchased_date: true, total_amount: true, discount: true, professional_fee: true, final_total: true, payment_method: true, status: true }
+const colMenuOpen = ref(false)
+const visibleCols = ref({ ..._salesDefaultCols, ...JSON.parse(localStorage.getItem('col-vis-sales') || '{}') })
+watch(visibleCols, v => localStorage.setItem('col-vis-sales', JSON.stringify(v)), { deep: true })
+const allCols = [
+  { key: 'id', label: 'Sale #' },
+  { key: 'purchased_date', label: 'Purchased Date' },
+  { key: 'total_amount', label: 'Subtotal' },
+  { key: 'discount', label: 'Discount' },
+  { key: 'professional_fee', label: 'Prof Fee' },
+  { key: 'final_total', label: 'Total' },
+  { key: 'payment_method', label: 'Payment' },
+  { key: 'status', label: 'Status' },
+]
+const toggleCol = (key) => { visibleCols.value[key] = !visibleCols.value[key] }
+
+/* ======================
    FILTERS & PAGINATION
 ====================== */
 const searchKeyword = ref('')
@@ -286,41 +305,55 @@ const exportCSV = async () => {
 
 
     <!-- TABLE -->
+    <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>Sale #</th>
-          <th>Purchased Date</th>
-          <th>Subtotal</th>
-          <th>Discount</th>
-          <th>Prof Fee</th>
-          <th>Total</th>
-          <th @click="toggleSort('payment_method')" style="cursor: pointer; user-select: none;">
+          <th v-if="visibleCols.id">Sale #</th>
+          <th v-if="visibleCols.purchased_date">Purchased Date</th>
+          <th v-if="visibleCols.total_amount">Subtotal</th>
+          <th v-if="visibleCols.discount">Discount</th>
+          <th v-if="visibleCols.professional_fee">Prof Fee</th>
+          <th v-if="visibleCols.final_total">Total</th>
+          <th v-if="visibleCols.payment_method" @click="toggleSort('payment_method')" style="cursor: pointer; user-select: none;">
             Payment {{ sortBy === 'payment_method' ? (sortOrder === 'asc' ? '↑' : '↓') : '' }}
           </th>
-          <th @click="toggleSort('status')" style="cursor: pointer; user-select: none;">
+          <th v-if="visibleCols.status" @click="toggleSort('status')" style="cursor: pointer; user-select: none;">
             Status {{ sortBy === 'status' ? (sortOrder === 'asc' ? '↑' : '↓') : '' }}
           </th>
-          <th>Actions</th>
+          <th class="col-actions">
+            <div class="th-actions-head">
+              Actions
+              <div class="col-toggle-wrap">
+                <button class="col-icon-btn" @click.stop="colMenuOpen = !colMenuOpen" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                <div v-if="colMenuOpen" class="col-menu">
+                  <div class="col-menu-title">Columns</div>
+                  <label v-for="col in allCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                </div>
+              </div>
+            </div>
+          </th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="sale in sales" :key="sale.id">
-          <td>#{{ sale.id }}</td>
-          <td>{{ new Date(sale.purchased_date).toLocaleString() }}</td>
-          <td>₱{{ fmt(sale.total_amount) }}</td>
-          <td>₱{{ fmt(sale.discount) }}</td>
-          <td>₱{{ fmt(sale.professional_fee) }}</td>
-          <td><strong>₱{{ fmt(sale.final_total) }}</strong></td>
-          <td>{{ sale.payment_method || 'Cash' }}</td>
-          <td :class="sale.status === 'voided' ? 'status-voided' : 'status-ok'">{{ sale.status }}</td>
-          <td style="display: flex;gap:8px">
+          <td v-if="visibleCols.id">#{{ sale.id }}</td>
+          <td v-if="visibleCols.purchased_date">{{ new Date(sale.purchased_date).toLocaleString() }}</td>
+          <td v-if="visibleCols.total_amount">₱{{ fmt(sale.total_amount) }}</td>
+          <td v-if="visibleCols.discount">₱{{ fmt(sale.discount) }}</td>
+          <td v-if="visibleCols.professional_fee">₱{{ fmt(sale.professional_fee) }}</td>
+          <td v-if="visibleCols.final_total"><strong>₱{{ fmt(sale.final_total) }}</strong></td>
+          <td v-if="visibleCols.payment_method">{{ sale.payment_method || 'Cash' }}</td>
+          <td v-if="visibleCols.status" :class="sale.status === 'voided' ? 'status-voided' : 'status-ok'">{{ sale.status }}</td>
+          <td class="col-actions actions-td">
             <button @click="openSaleModal(sale)">View</button>
             <button v-if="sale.status === 'completed'" class="danger" @click="voidSale(sale)">Void</button>
           </td>
         </tr>
       </tbody>
     </table>
+    </div>
 
     <!-- PAGINATION -->
     <Pagination v-model:page="currentPage" :total-pages="totalPages" :max-pages="5" />
@@ -350,6 +383,7 @@ const exportCSV = async () => {
           </span>
         </div>
 
+        <div class="table-wrap">
         <table>
           <thead>
             <tr>
@@ -368,6 +402,7 @@ const exportCSV = async () => {
             </tr>
           </tbody>
         </table>
+        </div>
         <div class="sale-summary">
           <div>Subtotal: ₱{{ selectedSale.total_amount.toFixed(2) }}</div>
           <div>Professional Fee: ₱{{ selectedSale.professional_fee.toFixed(2) }}</div>
@@ -398,10 +433,6 @@ body.dark-mode .medicines-page { background-color: #121212; color: #eee; }
 body.dark-mode .top-bar input, body.dark-mode .top-bar select { background-color: #1c1c1c; border-color: #333; color: #eee; }
 
 .items-per-page { display: flex; align-items: center; gap: 4px; }
-
-table { width: 100%; border-collapse: collapse; white-space: nowrap; }
-th, td { border: 1px solid #ccc; padding: 8px; }
-body.dark-mode table, body.dark-mode th, body.dark-mode td { border-color: #333; }
 
 button { min-height: 40px; padding: 8px 14px; border-radius: 8px; border: none; background-color: #1abc9c; color: #fff; cursor: pointer; }
 body.dark-mode button { background-color: #16a085; }

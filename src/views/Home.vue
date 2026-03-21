@@ -1180,12 +1180,29 @@ const getStockIndicator = (med) => {
 table {
   width: 100%;
   border-collapse: collapse;
+  background: #fff;
 }
-th, td {
-  padding: 8px;
-  border-bottom: 1px solid #ddd;
+thead th {
+  background: #f0faf7;
+  color: #1a8a6e;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 8px;
+  border-bottom: 2px solid #c8ede3;
   text-align: center;
 }
+tbody td {
+  padding: 8px;
+  border-bottom: 1px solid #efefef;
+  text-align: center;
+  color: #333;
+}
+tbody tr:hover td { background: #f5fef9; }
+tbody tr:last-child td { border-bottom: none; }
+body.dark-mode table { background: #1e1e1e; }
+body.dark-mode thead th { background: #162520; color: #1abc9c; border-bottom-color: #2a4a3a; }
+body.dark-mode tbody td { border-bottom-color: #252525; color: #ddd; }
+body.dark-mode tbody tr:hover td { background: #1e2e25; }
 
 /* Totals below table */
 .cart-totals {

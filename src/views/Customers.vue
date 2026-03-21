@@ -20,6 +20,20 @@ const search = ref('')
 const sortBy = ref('id')    // created_at | name
 const sortOrder = ref('desc')        // asc | desc
 
+/* ======================
+   COLUMN VISIBILITY
+====================== */
+const _custDefaultCols = { name: true, address: true, points: true }
+const colMenuOpen = ref(false)
+const visibleCols = ref({ ..._custDefaultCols, ...JSON.parse(localStorage.getItem('col-vis-customers') || '{}') })
+watch(visibleCols, v => localStorage.setItem('col-vis-customers', JSON.stringify(v)), { deep: true })
+const allCols = [
+  { key: 'name', label: 'Name' },
+  { key: 'address', label: 'Address' },
+  { key: 'points', label: 'Points' },
+]
+const toggleCol = (key) => { visibleCols.value[key] = !visibleCols.value[key] }
+
 const modal = ref(null)
 const pointsModal = ref(null)
 
@@ -269,23 +283,30 @@ function goToTransactionHistory(customerId) {
       <table class="table w-full">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Address</th>
-            <th>Points</th>
-            <th class="w-48">Actions</th>
+            <th v-if="visibleCols.name">Name</th>
+            <th v-if="visibleCols.address">Address</th>
+            <th v-if="visibleCols.points">Points</th>
+            <th class="col-actions">
+              <div class="th-actions-head">
+                Actions
+                <div class="col-toggle-wrap">
+                  <button class="col-icon-btn" @click.stop="colMenuOpen = !colMenuOpen" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                  <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
+                  <div v-if="colMenuOpen" class="col-menu">
+                    <div class="col-menu-title">Columns</div>
+                    <label v-for="col in allCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
+                  </div>
+                </div>
+              </div>
+            </th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="c in paginated" :key="c.id"   @click="goToTransactionHistory(c.id)"
-  style="cursor: pointer;">
-            <td>{{ c.name }}</td>
-            <td>{{ c.address || '-' }}</td>
-            <td class="font-semibold">{{ c.points }}</td>
-            <td class="flex gap-1" style="
-                    display: flex;
-                    justify-content: center;
-                    gap: 8px;
-                ">
+          <tr v-for="c in paginated" :key="c.id" @click="goToTransactionHistory(c.id)" style="cursor: pointer;">
+            <td v-if="visibleCols.name">{{ c.name }}</td>
+            <td v-if="visibleCols.address">{{ c.address || '-' }}</td>
+            <td v-if="visibleCols.points">{{ c.points }}</td>
+            <td class="col-actions actions-td">
               <button class="btn-sm" @click.stop="openEdit(c)">Edit</button>
               <button class="btn-sm danger" @click.stop="remove(c)">Delete</button>
               <button class="secondary" @click.stop="openPointsModal(c)">Adjust Points</button>
@@ -429,30 +450,6 @@ body.dark-mode button {
 
 .danger {
   background-color: #e74c3c;
-}
-
-/* ======================
-   TABLE
-====================== */
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th,
-td {
-  border: 1px solid #ccc;
-  padding: 8px;
-}
-
-body.dark-mode th,
-body.dark-mode td {
-  border-color: #333;
-}
-
-.actions-td {
-  display: flex;
-  gap: 6px;
 }
 
 /* ======================
