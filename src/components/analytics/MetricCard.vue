@@ -49,33 +49,50 @@ const periodLabel = computed(() => {
 <style scoped>
 .metric-card {
   background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  padding: 16px;
-  flex: 1 1 150px;
-  text-align: center;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  padding: 18px;
+  min-height: 140px;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-align: left;
 }
 
 .metric-title {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: #555;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
 }
 
 .metric-value {
-  font-size: 26px;
+  font-size: clamp(28px, 4vw, 36px);
   font-weight: bold;
-  margin-bottom: 4px;
+  line-height: 1.1;
+  margin-bottom: 12px;
 }
 
 .metric-period {
   font-size: 12px;
   color: #888;
+  margin-top: auto;
 }
 
 body.dark-mode .metric-card {
   background-color: #1c1c1c;
+  border-color: #2e2e2e;
   color: #eee;
+}
+
+body.dark-mode .metric-title {
+  color: #cbd5e1;
+}
+
+body.dark-mode .metric-period {
+  color: #94a3b8;
 }
 </style>

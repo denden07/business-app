@@ -301,14 +301,14 @@ onMounted(loadAnalytics)
   </div>
 
   <!-- Metrics -->
-  <div class="metrics-cards top-bar">
+  <div class="metrics-cards">
     <MetricCard :title="salesLabel" :value="totalSales" type="currency" />
     <MetricCard :title="itemsLabel" :value="totalItems" type="number" />
     <MetricCard title="Voided Sales" :value="voidedSalesCount" type="number" />
   </div>
 
   <!-- Charts -->
-  <div class="charts-section top-bar">
+  <div class="charts-section">
     <div class="chart-card">
       <h2>Sales Quota Calendar (₱40,000/day)</h2>
       <VueApexCharts type="heatmap" :options="calendarOptions" :series="calendarSeries" height="260"/>
@@ -330,8 +330,11 @@ onMounted(loadAnalytics)
 
 <style scoped>
 .analytics-page {
-  margin: auto;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
   padding: 20px;
+  box-sizing: border-box;
 }
 
 /* Header */
@@ -344,37 +347,59 @@ onMounted(loadAnalytics)
 /* Time Range Selector */
 .time-range-selector {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-bottom: 16px;
 }
 
-.custom-range input {
-  margin-left: 4px;
+.custom-range {
+  min-width: min(100%, 320px);
+  flex: 1 1 320px;
 }
 
 /* Metrics Cards */
 .metrics-cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
   margin-bottom: 20px;
+  align-items: stretch;
 }
 
 /* Charts Section */
 .charts-section {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
 }
 
 .chart-card {
   background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  padding: 16px;
-  flex: 1 1 300px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  padding: 18px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.chart-card h2 {
+  margin: 0 0 14px;
+  font-size: 18px;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.chart-card :deep(.apexcharts-canvas),
+.chart-card :deep(.apexcharts-svg) {
+  max-width: 100%;
+}
+
+body.dark-mode .chart-card {
+  background-color: #1c1c1c;
+  border-color: #2e2e2e;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
 }
 
 /* Loading Overlay */
@@ -408,5 +433,20 @@ onMounted(loadAnalytics)
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+  .analytics-page {
+    padding: 16px;
+  }
+
+  .metrics-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .custom-range {
+    min-width: 100%;
+    flex-basis: 100%;
+  }
 }
 </style>
