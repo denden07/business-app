@@ -194,10 +194,16 @@ function goBack() {
 ====================== */
 const selectedSaleItems = ref([]) // for medicines in modal
 
-const openSaleModal = async (sale) => {
-  if (!sale) return
+const openSaleModal = async (saleOrId) => {
+  if (!saleOrId) return
 
   const db = await dbPromise
+  const saleId = typeof saleOrId === 'object' ? saleOrId.id : saleOrId
+  const sale = typeof saleOrId === 'object'
+    ? saleOrId
+    : await db.get('sales', saleId)
+
+  if (!sale) return
 
   // single transaction for items and medicines
   const tx = db.transaction(['sale_items', 'medicines'], 'readonly')
@@ -427,7 +433,7 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
             <span
               v-if="p.related_sale_id"
               class="sale-link"
-              @click="openSaleModal(sales.find(s => s.id === p.related_sale_id))"
+              @click.stop="openSaleModal(p.related_sale_id)"
             >
               #{{ p.related_sale_id }}
             </span>

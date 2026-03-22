@@ -75,14 +75,20 @@ export default {
      *                               pointsConfirmed, redeemMultiplier, customerPoints,
      *                               specialDiscount, paymentMethod }
      */
-    async save({ dispatch }, { name, snapshot }) {
+    async save({ dispatch }, { id = null, name, snapshot }) {
       const db = await dbPromise
-      await db.add('draft_sales', {
-        name: name || 'Draft',
-        created_at: new Date().toISOString(),
+      const existingDraft = id ? await db.get('draft_sales', id) : null
+
+      const savedId = await db.put('draft_sales', {
+        ...(existingDraft || {}),
+        ...(id ? { id } : {}),
+        name: name || existingDraft?.name || 'Draft',
+        created_at: existingDraft?.created_at || new Date().toISOString(),
         ...snapshot
       })
+
       await dispatch('loadPage', { page: 1 })
+      return savedId
     },
 
     /** Delete a draft by id and refresh the list. */

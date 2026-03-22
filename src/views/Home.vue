@@ -65,13 +65,15 @@ const saveSaleAsDraft = async () => {
     })
     if (name === undefined) return
 
-    await store.dispatch('drafts/save', {
+    const savedDraftId = await store.dispatch('drafts/save', {
+      id: activeDraftId.value,
       name: name || `Draft ${new Date().toLocaleTimeString()}`,
       snapshot: {
         cart: JSON.parse(JSON.stringify(cart.value)),
         medicinesMap: JSON.parse(JSON.stringify(medicinesMap.value)),
         customer: selectedCustomer.value ? JSON.parse(JSON.stringify(selectedCustomer.value)) : null,
         professionalFee: professionalFee.value,
+        moneyGiven: moneyGiven.value,
         pointsConfirmed: pointsConfirmed.value,
         redeemMultiplier: redeemMultiplier.value,
         customerPoints: customerPoints.value,
@@ -80,10 +82,7 @@ const saveSaleAsDraft = async () => {
       }
     })
 
-    if (activeDraftId.value !== null) {
-      await store.dispatch('drafts/remove', activeDraftId.value)
-      activeDraftId.value = null
-    }
+    activeDraftId.value = savedDraftId ?? null
 
     cart.value = []
     professionalFee.value = 0
@@ -94,6 +93,7 @@ const saveSaleAsDraft = async () => {
     specialDiscount.value = 0
     customerPoints.value = 0
     paymentMethod.value = 'cash'
+    activeDraftId.value = null
 
     await Swal.fire({ icon: 'success', title: 'Saved as draft!', timer: 1200, showConfirmButton: false })
   } catch (err) {
@@ -111,12 +111,12 @@ const resumeDraft = (draft) => {
   Object.assign(medicinesMap.value, draft.medicinesMap || {})
   selectedCustomer.value = draft.customer || null
   professionalFee.value = draft.professionalFee || 0
+  moneyGiven.value = draft.moneyGiven || 0
   pointsConfirmed.value = draft.pointsConfirmed || false
   redeemMultiplier.value = draft.redeemMultiplier || 1
   customerPoints.value = draft.customerPoints || 0
   specialDiscount.value = draft.specialDiscount || 0
   paymentMethod.value = draft.paymentMethod || 'cash'
-  moneyGiven.value = 0
   activeDraftId.value = draft.id
 }
 
@@ -654,7 +654,9 @@ const checkout = async () => {
     html: itemsTable,
     icon: 'question',
     showCancelButton: true,
+    showDenyButton: true,
     confirmButtonText: 'Yes, Save Sale',
+    denyButtonText: 'Save as Draft',
     cancelButtonText: 'Cancel',
     width: '96%',
     heightAuto: true,
@@ -663,6 +665,11 @@ const checkout = async () => {
       popup: 'swal-wide'
     }
   })
+
+  if (confirmResult.isDenied) {
+    await saveSaleAsDraft()
+    return
+  }
 
   if (!confirmResult.isConfirmed) return
 
@@ -1623,9 +1630,9 @@ tbody tr:last-child td { border-bottom: none; }
 /* =========================
    MED NAMES
 ========================= */
-.med-name { font-size: 20px;}
+.med-name { font-size: 20px; text-align: left;}
 .med-name-table { font-weight:700; }
-.med-generic { font-size:16px; color:#888; }
+.med-generic { font-size:16px; color:#888; text-align: left; }
 
 /* =========================
    CUSTOMER MODAL FIX

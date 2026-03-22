@@ -20,6 +20,8 @@ const itemsPerPage = computed({
 const totalCount = computed(() => store.state.drafts.totalCount)
 const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / itemsPerPage.value)))
 const itemsPerPageOptions = [5, 10, 20, 50]
+const showDetailsModal = ref(false)
+const selectedDraft = ref(null)
 
 onMounted(() => {
   store.dispatch('drafts/loadPage')
@@ -34,6 +36,26 @@ watch([currentPage, itemsPerPage], () => {
 
 const resumeDraft = (draft) => {
   router.push({ path: '/', query: { draft: draft.id } })
+}
+
+const selectedDraftItems = computed(() => selectedDraft.value?.cart || [])
+const selectedDraftCustomer = computed(() => selectedDraft.value?.customer || null)
+const selectedDraftSubtotal = computed(() =>
+  selectedDraftItems.value.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.qty || 0)), 0)
+)
+const selectedDraftDiscount = computed(() => Number(selectedDraft.value?.specialDiscount || 0) + Number(selectedDraft.value?.pointsConfirmed ? selectedDraft.value?.customerPoints * selectedDraft.value?.redeemMultiplier : 0))
+const selectedDraftGrandTotal = computed(() =>
+  Math.max(selectedDraftSubtotal.value + Number(selectedDraft.value?.professionalFee || 0) - selectedDraftDiscount.value, 0)
+)
+
+const openDetailsModal = (draft) => {
+  selectedDraft.value = draft
+  showDetailsModal.value = true
+}
+
+const closeDetailsModal = () => {
+  showDetailsModal.value = false
+  selectedDraft.value = null
 }
 
 /* ======================
@@ -123,6 +145,7 @@ const goPage = (page) => {
           <td v-if="visibleCols.customer">{{ draft.customer?.name ?? 'Walk-in' }}</td>
           <td v-if="visibleCols.created_at">{{ new Date(draft.created_at).toLocaleString() }}</td>
           <td class="col-actions actions-td">
+            <button class="secondary btn" @click="openDetailsModal(draft)">View</button>
             <button class="primary btn" @click="resumeDraft(draft)">▶ Resume</button>
             <button class="danger btn" @click="deleteDraft(draft)">Delete</button>
           </td>
@@ -138,6 +161,76 @@ const goPage = (page) => {
       :max-pages="5"
       @update:page="goPage"
     />
+
+    <div v-if="showDetailsModal && selectedDraft" class="modal-backdrop app-modal-backdrop draft-modal-backdrop">
+      <div class="modal app-modal-panel modal-lg draft-details-modal">
+        <div class="sale-header">
+          <div>
+            <h2>{{ selectedDraft.name || `Draft #${selectedDraft.id}` }}</h2>
+            <div class="sale-meta">
+              Saved {{ new Date(selectedDraft.created_at).toLocaleString() }}
+            </div>
+            <div class="sale-meta">
+              Customer: {{ selectedDraftCustomer ? selectedDraftCustomer.name : 'Walk-in' }}
+            </div>
+            <div class="sale-meta">
+              Payment: {{ selectedDraft.paymentMethod || 'Cash' }}
+            </div>
+            <div v-if="selectedDraftCustomer?.address || selectedDraftCustomer?.phone" class="sale-meta">
+              {{ selectedDraftCustomer?.address || 'No address' }}<span v-if="selectedDraftCustomer?.address && selectedDraftCustomer?.phone"> • </span>{{ selectedDraftCustomer?.phone || '' }}
+            </div>
+          </div>
+
+          <span class="badge badge-draft">
+            DRAFT
+          </span>
+        </div>
+
+        <div class="table-wrap draft-items-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Medicine</th>
+                <th>Qty</th>
+                <th>Price</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in selectedDraftItems" :key="`${selectedDraft.id}-${item.id}-${item.priceType}`">
+                <td>
+                  <div class="med-name">{{ item.name }}</div>
+                  <div v-if="item.generic_name" class="med-generic">{{ item.generic_name }}</div>
+                  <div class="med-meta">{{ item.priceType || 'regular' }}</div>
+                </td>
+                <td>{{ item.qty }}</td>
+                <td>₱{{ Number(item.price || 0).toFixed(2) }}</td>
+                <td>₱{{ (Number(item.price || 0) * Number(item.qty || 0)).toFixed(2) }}</td>
+              </tr>
+              <tr v-if="!selectedDraftItems.length">
+                <td colspan="4" class="empty-state-cell">No medicines saved in this draft.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="sale-summary">
+          <div>Subtotal: ₱{{ selectedDraftSubtotal.toFixed(2) }}</div>
+          <div>Professional Fee: ₱{{ Number(selectedDraft.professionalFee || 0).toFixed(2) }}</div>
+          <div>Discount: ₱{{ selectedDraftDiscount.toFixed(2) }}</div>
+          <div><strong>Total: ₱{{ selectedDraftGrandTotal.toFixed(2) }}</strong></div>
+
+          <hr />
+
+          <div>Money Given: ₱{{ Number(selectedDraft.moneyGiven || 0).toFixed(2) }}</div>
+        </div>
+
+        <div class="modal-actions draft-details-actions">
+          <button class="primary btn" @click="resumeDraft(selectedDraft)">▶ Resume Draft</button>
+          <button class="secondary btn" @click="closeDetailsModal">Close</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -155,7 +248,89 @@ h1 { margin-bottom: 16px; }
 
 .actions-td { display: flex; gap: 8px; }
 
+.draft-details-modal {
+  margin: 20px 0;
+}
+
+.draft-modal-backdrop {
+  align-items: flex-start;
+}
+
+.sale-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.sale-header h2 {
+  margin: 0;
+}
+
+.sale-meta {
+  margin-top: 4px;
+  color: #64748b;
+}
+
+.badge-draft {
+  background: #eef8f4;
+  color: #166a5e;
+  border: 1px solid #cfe8de;
+}
+
+.draft-items-wrap {
+  margin-bottom: 16px;
+}
+
+.draft-items-wrap small {
+  color: #64748b;
+}
+
+.med-name {
+  font-weight: 600;
+}
+
+.med-generic {
+  font-size: 13px;
+  color: #ffff;
+}
+
+.med-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: #1a8a6e;
+}
+
+.sale-summary {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid #dbe6e2;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fffc 100%);
+  margin-bottom: 16px;
+}
+
+.sale-summary hr {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid #dbe6e2;
+  margin: 4px 0;
+}
+
+.draft-details-actions {
+  justify-content: flex-end;
+}
+
 @media (max-width: 768px) {
   .actions-td { flex-direction: column; }
+
+  .sale-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 </style>
