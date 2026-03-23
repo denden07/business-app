@@ -4,8 +4,8 @@ import Swal from 'sweetalert2'
 
 // Import pages (views)
 import Home from '../views/Home.vue'
-import Medicines from '../views/Medicines.vue'
-import MedicineDetails from '../views/MedicineDetails.vue'
+import Items from '../views/Items.vue'
+import ItemDetails from '../views/ItemDetails.vue'
 import Inventory from '../views/Inventory.vue'
 import Sales from '../views/Sales.vue'
 import Customers from '../views/Customers.vue'
@@ -17,8 +17,10 @@ import Drafts from '../views/Drafts.vue'
 
 let allRoutes = [
   { path: '/', name: 'Home', component: Home },
-  { path: '/medicines', name: 'Medicines', component: Medicines },
-  { path: '/medicines/:id', name: 'MedicineDetails', component: MedicineDetails },
+  { path: '/items', name: 'Items', component: Items },
+  { path: '/items/:id', name: 'ItemDetails', component: ItemDetails },
+  { path: '/medicines', redirect: '/items' },
+  { path: '/medicines/:id', redirect: to => ({ path: `/items/${to.params.id}`, query: to.query }) },
   { path: '/inventory', name: 'Inventory', component: Inventory },
   { path: '/sales', name: 'Sales', component: Sales },
   { path: '/customers', name: 'Customers', component: Customers },

@@ -94,7 +94,7 @@ const goPage = (page) => {
 </script>
 
 <template>
-  <div class="medicines-page">
+  <div class="page-shell">
     <h1>Drafts</h1>
 
     <div class="top-bar">
@@ -190,7 +190,7 @@ const goPage = (page) => {
           <table>
             <thead>
               <tr>
-                <th>Medicine</th>
+                <th>Item</th>
                 <th>Qty</th>
                 <th>Price</th>
                 <th>Total</th>
@@ -199,16 +199,16 @@ const goPage = (page) => {
             <tbody>
               <tr v-for="item in selectedDraftItems" :key="`${selectedDraft.id}-${item.id}-${item.priceType}`">
                 <td>
-                  <div class="med-name">{{ item.name }}</div>
-                  <div v-if="item.generic_name" class="med-generic">{{ item.generic_name }}</div>
-                  <div class="med-meta">{{ item.priceType || 'regular' }}</div>
+                  <div class="item-name">{{ item.name }}</div>
+                  <div v-if="item.generic_name" class="item-secondary">{{ item.generic_name }}</div>
+                  <div class="item-meta">{{ item.priceType || 'regular' }}</div>
                 </td>
                 <td>{{ item.qty }}</td>
                 <td>₱{{ Number(item.price || 0).toFixed(2) }}</td>
                 <td>₱{{ (Number(item.price || 0) * Number(item.qty || 0)).toFixed(2) }}</td>
               </tr>
               <tr v-if="!selectedDraftItems.length">
-                <td colspan="4" class="empty-state-cell">No medicines saved in this draft.</td>
+                <td colspan="4" class="empty-state-cell">No items saved in this draft.</td>
               </tr>
             </tbody>
           </table>
@@ -235,7 +235,7 @@ const goPage = (page) => {
 </template>
 
 <style scoped>
-.medicines-page { margin: auto; padding: 20px; overflow-x: hidden; }
+.page-shell { margin: auto; padding: 20px; overflow-x: hidden; }
 
 h1 { margin-bottom: 16px; }
 
@@ -246,7 +246,7 @@ h1 { margin-bottom: 16px; }
   font-size: 16px;
 }
 
-.actions-td { display: flex; gap: 8px; }
+.actions-td > button { margin: 3px; }
 
 .draft-details-modal {
   margin: 20px 0;
@@ -287,16 +287,16 @@ h1 { margin-bottom: 16px; }
   color: #64748b;
 }
 
-.med-name {
+.item-name {
   font-weight: 600;
 }
 
-.med-generic {
+.item-secondary {
   font-size: 13px;
   color: #ffff;
 }
 
-.med-meta {
+.item-meta {
   margin-top: 4px;
   font-size: 12px;
   font-weight: 600;
@@ -326,7 +326,15 @@ h1 { margin-bottom: 16px; }
 }
 
 @media (max-width: 768px) {
-  .actions-td { flex-direction: column; }
+  .actions-td > button {
+    display: block;
+    width: 100%;
+    margin: 0 0 8px;
+  }
+
+  .actions-td > button:last-child {
+    margin-bottom: 0;
+  }
 
   .sale-header {
     flex-direction: column;

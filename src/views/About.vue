@@ -32,10 +32,10 @@ const responsibilities = [
   <div class="about-page">
     <section class="hero-card">
       <span class="eyebrow">About This Application</span>
-      <h1>Offline Inventory And Sales Tracker</h1>
+      <h1>Offline Business Operations Companion</h1>
       <p class="hero-copy">
         This application is built to help small businesses monitor stock, review internal sales activity,
-        and keep a simple operational history even without a live internet connection.
+        manage customer activity, and keep a simple operational history even without a live internet connection.
       </p>
     </section>
 
@@ -65,12 +65,12 @@ const responsibilities = [
       </article>
 
       <article class="content-card">
-        <h2>Why This Is Not A POS</h2>
+        <h2>Why This Is Not An Official POS</h2>
         <ul>
           <li v-for="item in limitations" :key="item">{{ item }}</li>
         </ul>
         <p class="muted-copy">
-          In practical terms, this app is best used as an operations companion for stock monitoring and reference only.
+          In practical terms, this app is best used as an operations companion for stock monitoring, sales reference, and day-to-day internal tracking.
           If your business needs official POS compliance, tax reporting, or receipt issuance, those functions should be handled by a properly registered and compliant system.
         </p>
       </article>

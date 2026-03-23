@@ -11,12 +11,16 @@ const count = ref(0)
 const store = useStore()
 
 onMounted(() => {
-  store.dispatch('medicines/addMedicine', {
-  name: 'Biogesic1',
-  generic_name: 'Paracetamo1l',
-  price_1: 15,
-  price_2: 13
-})
+  store.dispatch('items/addItem', {
+    name: 'Sample Item',
+    description: 'Seeded from HelloWorld',
+    item_type: 'product',
+    price1: 15,
+    price2: 13,
+    track_stock: true,
+    track_batches: false,
+    track_expiry: false,
+  })
 })
 
 

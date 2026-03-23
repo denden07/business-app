@@ -71,7 +71,7 @@ export default {
     /**
      * Save current cart state as a draft. Does NOT touch inventory.
      * @param {string} name       - Label for the draft
-     * @param {object} snapshot   - { cart, medicinesMap, customer, professionalFee,
+      * @param {object} snapshot   - { cart, catalogMap, customer, professionalFee,
      *                               pointsConfirmed, redeemMultiplier, customerPoints,
      *                               specialDiscount, paymentMethod }
      */

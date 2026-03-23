@@ -712,7 +712,7 @@ button:disabled,
   background: var(--btn-info-hover);
 }
 
-.button-remove-med {
+.remove-cart-item-btn {
   min-height: 24px;
   padding: 2px 5px;
   box-shadow: 0 6px 12px rgba(231, 76, 60, 0.18);

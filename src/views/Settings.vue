@@ -20,10 +20,10 @@ const router = useRouter()
 
 const status = ref('')
 const progress = ref(0)
-const fileName = ref('pharmacy_pos_backup.json')
+const fileName = ref('business_companion_backup.json')
 const restoreInput = ref(null)
 const appNameLimit = 40
-const appName = ref('Pharmacy POS')
+const appName = ref('Business Companion')
 const appNameStatus = ref('')
 const isDarkMode = ref(localStorage.getItem('darkMode') === 'true')
 const interactionSettings = ref({ ...defaultInteractionSettings })
@@ -41,16 +41,16 @@ async function loadAppName() {
   try {
     const db = await dbPromise
     const row = await db.get('app_settings', 'app-name')
-    appName.value = clampAppName(row?.value?.trim() || 'Pharmacy POS')
+    appName.value = clampAppName(row?.value?.trim() || 'Business Companion')
   } catch (err) {
     console.error('Failed to load app name', err)
-    appName.value = 'Pharmacy POS'
+    appName.value = 'Business Companion'
   }
 }
 
 async function saveAppName() {
   const trimmed = clampAppName(appName.value).trim()
-  const value = trimmed || 'Pharmacy POS'
+  const value = trimmed || 'Business Companion'
 
   try {
     const db = await dbPromise
@@ -247,7 +247,7 @@ async function removePin() {
 const pageVisibility = ref({})
 const pagesList = ref([
   { name: 'Home', label: 'Home' },
-  { name: 'Medicines', label: 'Medicines' },
+  { name: 'Items', label: 'Items' },
   { name: 'Sales', label: 'Sales' },
   { name: 'Customers', label: 'Customers' },
   { name: 'Analytics', label: 'Analytics' },
@@ -292,7 +292,7 @@ async function backupDB() {
       })
 
       await Share.share({
-        title: 'Pharmacy POS Backup',
+        title: 'Business Companion Backup',
         text: 'Your backup is ready!',
         url: writeResult.uri,
       })
@@ -444,7 +444,7 @@ onMounted(async () => {
 
         <div class="branding-form">
           <label for="app-name">Application Name</label>
-          <input id="app-name" :value="appName" @input="handleAppNameInput" class="input" type="text" :maxlength="appNameLimit" placeholder="Pharmacy POS" />
+          <input id="app-name" :value="appName" @input="handleAppNameInput" class="input" type="text" :maxlength="appNameLimit" placeholder="Business Companion" />
           <div class="text-limiter" :class="{ warning: appName.length >= appNameLimit }">
             {{ appName.length }}/{{ appNameLimit }} characters
           </div>

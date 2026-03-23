@@ -20,8 +20,8 @@ const voidedSalesCount = ref(0)
 // --------------------
 const salesTrendOptions = ref({})
 const salesTrendSeries = ref([])
-const topMedicinesOptions = ref({})
-const topMedicinesSeries = ref([])
+const topItemsOptions = ref({})
+const topItemsSeries = ref([])
 const calendarOptions = ref({})
 const calendarSeries = ref([])
 
@@ -119,14 +119,19 @@ const updateCharts = async () => {
   const startDate = getStartDate()
   const endDate = getEndDate()
   const db = await dbPromise
-  const [sales, saleItems, medicines] = await Promise.all([
+  const [sales, saleItems, items] = await Promise.all([
     db.getAll('sales'),
     db.getAll('sale_items'),
-    db.getAll('medicines')
+    db.getAll('items')
   ])
   const includedSaleIds = new Set()
   const dailySalesMap = new Map()
-  const medicinesMap = new Map(medicines.map(medicine => [medicine.id, medicine]))
+  const itemsMap = new Map(items.map(item => [item.id, item]))
+  const legacyItemIds = new Map(
+    items
+      .filter(item => item.legacy_medicine_id !== undefined && item.legacy_medicine_id !== null)
+      .map(item => [Number(item.legacy_medicine_id), item.id])
+  )
 
   totalSales.value = 0
   totalItems.value = 0
@@ -149,14 +154,18 @@ const updateCharts = async () => {
     dailySalesMap.set(dayKey, (dailySalesMap.get(dayKey) || 0) + saleTotal)
   }
 
-  const medicineTotals = new Map()
+  const itemTotals = new Map()
   for (const item of saleItems) {
     if (!includedSaleIds.has(item.sale_id)) continue
 
     totalItems.value += Number(item.quantity || 0)
-    medicineTotals.set(
-      item.medicine_id,
-      (medicineTotals.get(item.medicine_id) || 0) + Number(item.quantity || 0)
+    const itemId = Number(item.item_id || legacyItemIds.get(Number(item.medicine_id)))
+    if (!Number.isFinite(itemId)) continue
+
+    const sourceKey = `item:${itemId}`
+    itemTotals.set(
+      sourceKey,
+      (itemTotals.get(sourceKey) || 0) + Number(item.quantity || 0)
     )
   }
 
@@ -196,22 +205,28 @@ const updateCharts = async () => {
   }
 
   // --------------------
-  // Top Medicines
+  // Top Items
   // --------------------
-  const topMeds = await Promise.all(
-    Array.from(medicineTotals.entries())
+  const topItems = await Promise.all(
+    Array.from(itemTotals.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
-      .map(async ([id, qty]) => {
-        const med = medicinesMap.get(id)
-        return { name: med?.name || id, value: qty }
+      .map(async ([sourceKey, qty]) => {
+        const [, rawId] = sourceKey.split(':')
+        const sourceId = Number(rawId)
+        const source = itemsMap.get(sourceId)
+
+        return {
+          name: source?.name || sourceKey,
+          value: qty
+        }
       })
   )
-  topMedicinesSeries.value = topMeds.map(m=>m.value)
-  topMedicinesOptions.value = {
+  topItemsSeries.value = topItems.map(item => item.value)
+  topItemsOptions.value = {
     chart: { type: 'bar', height: 350, foreColor: analyticsMutedText },
     xaxis: {
-      categories: topMeds.map(m=>m.name),
+      categories: topItems.map(item => item.name),
       labels: { style: { colors: analyticsMutedText } },
     },
     yaxis: {
@@ -343,8 +358,8 @@ onMounted(updateCharts)
     </div>
 
     <div class="chart-card">
-      <h2>Top Medicines</h2>
-      <VueApexCharts type="bar" :options="topMedicinesOptions" :series="[{ name:'Quantity Sold', data:topMedicinesSeries }] " height="350"/>
+      <h2>Top Items</h2>
+      <VueApexCharts type="bar" :options="topItemsOptions" :series="[{ name:'Quantity Sold', data:topItemsSeries }] " height="350"/>
     </div>
   </div>
 </div>

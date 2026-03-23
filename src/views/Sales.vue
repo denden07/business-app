@@ -265,7 +265,7 @@ const exportCSV = async () => {
 </script>
 
 <template>
-  <div class="medicines-page">
+  <div class="page-shell">
     <h1>Sales</h1>
 
     <!-- TOP BAR -->
@@ -392,7 +392,7 @@ const exportCSV = async () => {
         <table>
           <thead>
             <tr>
-              <th>Medicine</th>
+              <th>Item</th>
               <th>Qty</th>
               <th>Price</th>
               <th>Subtotal</th>
@@ -400,7 +400,7 @@ const exportCSV = async () => {
           </thead>
           <tbody>
             <tr v-for="item in saleItems" :key="item.id">
-              <td>{{ item.medicine_name }}</td>
+              <td>{{ item.display_name || item.medicine_name }}</td>
               <td>{{ item.quantity }}</td>
               <td>₱{{ item.price_at_sale.toFixed(2) }}</td>
               <td>₱{{ (item.quantity * item.price_at_sale).toFixed(2) }}</td>
@@ -433,16 +433,12 @@ const exportCSV = async () => {
 
 <style scoped>
 /* Reuse previous styles + voided status */
-.medicines-page { margin: auto; padding: 20px; overflow-x: hidden; }
+.page-shell { margin: auto; padding: 20px; overflow-x: hidden; }
 
 .actions-td button { padding: 6px 10px; }
 
 .status-ok { color: #1abc9c; font-weight: 600; }
 .status-voided { color: #e74c3c; font-weight: 700; }
-
-.med-name { font-weight: 600; }
-.med-generic { font-size: 13px; color: #666; }
-body.dark-mode .med-generic { color: #aaa; }
 
 @media (max-width: 768px) {
   .top-bar > :deep(.date-icon-btn) { width: 100%; }

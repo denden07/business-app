@@ -1,0 +1,242 @@
+import { dbPromise } from '../db'
+import { reduceFromSource } from '../db/query'
+
+export default {
+  namespaced: true,
+
+  state: () => ({
+    items: [],
+    stockMap: {},
+    currentPage: 1,
+    itemsPerPage: 10,
+    totalCount: 0,
+    loading: false
+  }),
+
+  getters: {
+    totalPages: state => Math.ceil(state.totalCount / state.itemsPerPage)
+  },
+
+  mutations: {
+    SET_ITEMS(state, list) {
+      state.items = list
+    },
+    SET_STOCK_MAP(state, map) {
+      state.stockMap = map
+    },
+    SET_TOTAL_COUNT(state, count) {
+      state.totalCount = count
+    },
+    SET_CURRENT_PAGE(state, page) {
+      state.currentPage = page
+    },
+    SET_LOADING(state, val) {
+      state.loading = val
+    }
+  },
+
+  actions: {
+    async loadItemsPage(
+      { commit, dispatch },
+      { page, itemsPerPage, filter, keyword, sortBy, sortOrder }
+    ) {
+      commit('SET_LOADING', true)
+
+      const db = await dbPromise
+      const store = db.transaction('items').objectStore('items')
+      const normalizedKeyword = (keyword || '').trim().toLowerCase()
+      const all = []
+
+      let cursor = await store.openCursor()
+      while (cursor) {
+        const item = { is_archived: false, ...cursor.value }
+
+        if (!matchesFilter(item, filter)) {
+          cursor = await cursor.continue()
+          continue
+        }
+
+        if (normalizedKeyword) {
+          const name = (item.name || '').toLowerCase()
+          const description = (item.description || '').toLowerCase()
+          if (!name.includes(normalizedKeyword) && !description.includes(normalizedKeyword)) {
+            cursor = await cursor.continue()
+            continue
+          }
+        }
+
+        all.push(item)
+        cursor = await cursor.continue()
+      }
+
+      if (sortBy === 'name') {
+        all.sort((a, b) => {
+          const left = (a.name || '').toLowerCase()
+          const right = (b.name || '').toLowerCase()
+          if (left === right) return 0
+          if (sortOrder === 'asc') return left < right ? -1 : 1
+          return left > right ? -1 : 1
+        })
+      } else if (sortBy === 'stock') {
+        const stockMap = await buildItemStockMap(db)
+        all.sort((a, b) => {
+          const left = stockMap[a.id] || 0
+          const right = stockMap[b.id] || 0
+          return sortOrder === 'asc' ? left - right : right - left
+        })
+      } else {
+        all.sort((a, b) => {
+          const soldA = a.last_sold_at ? new Date(a.last_sold_at).getTime() : 0
+          const soldB = b.last_sold_at ? new Date(b.last_sold_at).getTime() : 0
+          const updatedA = a.updated_at ? new Date(a.updated_at).getTime() : 0
+          const updatedB = b.updated_at ? new Date(b.updated_at).getTime() : 0
+          const latestA = Math.max(soldA, updatedA)
+          const latestB = Math.max(soldB, updatedB)
+
+          if (latestB !== latestA) return latestB - latestA
+          return b.id - a.id
+        })
+      }
+
+      commit('SET_TOTAL_COUNT', all.length)
+
+      const offset = (page - 1) * itemsPerPage
+      commit('SET_ITEMS', all.slice(offset, offset + itemsPerPage))
+      commit('SET_CURRENT_PAGE', page)
+
+      await dispatch('loadStockForPage')
+      commit('SET_LOADING', false)
+    },
+
+    async loadStockForPage({ state, commit }) {
+      const db = await dbPromise
+      const index = db.transaction('item_batches').objectStore('item_batches').index('item_id')
+      const map = {}
+
+      for (const item of state.items) {
+        if (!item.track_stock) continue
+
+        const total = await reduceFromSource(
+          index,
+          (sum, batch) => sum + Number(batch.quantity || 0),
+          0,
+          { query: item.id }
+        )
+
+        if (total) {
+          map[item.id] = total
+        }
+      }
+
+      commit('SET_STOCK_MAP', map)
+    },
+
+    async addItem(_, item) {
+      const db = await dbPromise
+      const now = new Date().toISOString()
+      const data = {
+        ...normalizeItemPayload(item),
+        is_archived: false,
+        created_at: now,
+        updated_at: now,
+        last_sold_at: null
+      }
+
+      const itemId = await db.add('items', data)
+      await recordItemPriceHistory(db, itemId, data.price1, data.price2, now)
+      return itemId
+    },
+
+    async updateItem(_, item) {
+      const db = await dbPromise
+      const current = await db.get('items', item.id)
+      const normalized = normalizeItemPayload(item)
+      const now = new Date().toISOString()
+      const priceChanged =
+        Number(current?.price1 || 0) !== normalized.price1 ||
+        Number(current?.price2 || 0) !== normalized.price2
+
+      await db.put('items', {
+        ...current,
+        ...normalized,
+        updated_at: now
+      })
+
+      if (priceChanged) {
+        await recordItemPriceHistory(db, item.id, normalized.price1, normalized.price2, now)
+      }
+    },
+
+    async archiveItem(_, item) {
+      const db = await dbPromise
+      await db.put('items', {
+        ...item,
+        is_archived: true,
+        updated_at: new Date().toISOString()
+      })
+    },
+
+    async restoreItem(_, item) {
+      const db = await dbPromise
+      await db.put('items', {
+        ...item,
+        is_archived: false,
+        updated_at: new Date().toISOString()
+      })
+    }
+  }
+}
+
+function matchesFilter(item, filter) {
+  if (filter === 'active') return !item.is_archived
+  if (filter === 'archived') return !!item.is_archived
+  return true
+}
+
+function normalizeItemPayload(item) {
+  const itemType = item.item_type === 'service' ? 'service' : 'product'
+  const trackStock = itemType === 'product' ? !!item.track_stock : false
+  const trackBatches = trackStock ? !!item.track_batches : false
+  const trackExpiry = trackBatches ? !!item.track_expiry : false
+
+  const normalized = {
+    name: String(item.name || '').trim(),
+    description: String(item.description || '').trim(),
+    item_type: itemType,
+    price1: Number(item.price1 || 0),
+    price2: Number(item.price2 || 0),
+    track_stock: trackStock,
+    track_batches: trackBatches,
+    track_expiry: trackExpiry,
+    is_archived: !!item.is_archived,
+  }
+
+  if (item.id !== undefined && item.id !== null) {
+    normalized.id = item.id
+  }
+
+  return normalized
+}
+
+async function buildItemStockMap(db) {
+  const stockMap = {}
+  let cursor = await db.transaction('item_batches').objectStore('item_batches').openCursor()
+
+  while (cursor) {
+    const batch = cursor.value
+    if (!stockMap[batch.item_id]) stockMap[batch.item_id] = 0
+    stockMap[batch.item_id] += Number(batch.quantity || 0)
+    cursor = await cursor.continue()
+  }
+
+  return stockMap
+}
+
+async function recordItemPriceHistory(db, itemId, price1, price2, changedAt) {
+  await db.add('item_price_history', {
+    item_id: itemId,
+    price1: Number(price1 || 0),
+    price2: Number(price2 || 0),
+    changed_at: changedAt || new Date().toISOString()
+  })
+}

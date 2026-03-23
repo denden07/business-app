@@ -198,7 +198,7 @@ function goBack() {
 /* ======================
    MODAL
 ====================== */
-const selectedSaleItems = ref([]) // for medicines in modal
+const selectedSaleItems = ref([])
 
 const openSaleModal = async (saleOrId) => {
   if (!saleOrId) return
@@ -211,17 +211,22 @@ const openSaleModal = async (saleOrId) => {
 
   if (!sale) return
 
-  // single transaction for items and medicines
-  const tx = db.transaction(['sale_items', 'medicines'], 'readonly')
+  // single transaction for sale lines and the unified item catalog
+  const tx = db.transaction(['sale_items', 'items'], 'readonly')
   const itemsStore = tx.objectStore('sale_items')
-  const medsStore = tx.objectStore('medicines')
+  const itemCatalogStore = tx.objectStore('items')
+  const legacyIndex = itemCatalogStore.index('legacy_medicine_id')
 
   const items = await collectFromSource(itemsStore.index('sale_id'), { query: sale.id })
 
   for (const item of items) {
-    const med = await medsStore.get(item.medicine_id)
-    item.medicine_name = med?.name || 'Unknown'
-    item.generic_name = med?.generic_name || ''
+    const source = item.item_id
+      ? await itemCatalogStore.get(item.item_id)
+      : await legacyIndex.get(item.medicine_id)
+    item.display_name = source?.name || 'Unknown'
+    item.secondary_name = source?.description || ''
+    item.medicine_name = item.display_name
+    item.generic_name = item.secondary_name
   }
 
   if (sale.customer_id) {
@@ -270,7 +275,7 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
 </script>
 
 <template>
-  <div class="medicines-page">
+  <div class="page-shell">
     <div class="page-header">
       <div>
         <h1>Customer Transactions</h1>
@@ -576,7 +581,7 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
           <table>
             <thead>
               <tr>
-                <th>Medicine</th>
+                <th>Item</th>
                 <th>Qty</th>
                 <th>Price</th>
                 <th>Subtotal</th>
@@ -584,7 +589,7 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
             </thead>
             <tbody>
               <tr v-for="item in selectedSaleItems" :key="item.id">
-                <td>{{ item.medicine_name }}</td>
+                <td>{{ item.display_name || item.medicine_name }}</td>
                 <td>{{ item.quantity }}</td>
                 <td>₱{{ item.price_at_sale.toFixed(2) }}</td>
                 <td>₱{{ (item.quantity * item.price_at_sale).toFixed(2) }}</td>
@@ -620,7 +625,7 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
   /* ======================
    PAGE
 ====================== */
-.medicines-page {
+.page-shell {
   margin: auto;
   padding: 20px;
   overflow-x: hidden;

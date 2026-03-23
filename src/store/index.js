@@ -1,5 +1,5 @@
 import { createStore } from 'vuex'
-import medicines from './medicines'
+import items from './items'
 import sales from './sales'
 import customers from './customer'
 import transaction from './transaction'
@@ -9,7 +9,7 @@ export default createStore({
   modules: {
     transaction,
     customers,
-    medicines,
+    items,
     sales,
     drafts
   }

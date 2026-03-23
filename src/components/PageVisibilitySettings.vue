@@ -9,7 +9,7 @@ const props = defineProps({
     type: Array,
     default: () => [
       { name: 'Home', label: 'Home' },
-      { name: 'Medicines', label: 'Medicines' },
+      { name: 'Items', label: 'Items' },
       { name: 'Sales', label: 'Sales' },
       { name: 'Customers', label: 'Customers' },
       { name: 'Analytics', label: 'Analytics' },

@@ -88,8 +88,20 @@
   text-align: right;
 }
 
-/* ── Actions td flex layout ───────────────────── */
-.table-wrap .actions-td { display: flex; gap: 6px; align-items: center; justify-content: center;}
+/* ── Actions td layout ────────────────────────── */
+.table-wrap td.actions-td {
+  text-align: center;
+  white-space: normal;
+}
+
+.table-wrap td.actions-td > button,
+.table-wrap td.actions-td > .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  margin: 3px;
+}
 
 /* ── th row: "Actions" text + gear icon ──────── */
 .th-actions-head {

@@ -171,7 +171,7 @@ body.dark-mode .section-header {
   background: #3a434d;
 }
 
-body.dark-mode .medicines-page {
+body.dark-mode .page-shell {
   /* background-color: #262d34; */
   color: #f1f5f9;
 }
@@ -432,7 +432,7 @@ body.dark-mode .home-view .cart-totals span {
 
 body.dark-mode .home-view .cart-totals strong,
 body.dark-mode .home-view .right-panel label,
-body.dark-mode .home-view .med-name-table {
+body.dark-mode .home-view .cart-item-name {
   color: #f8fafc;
 }
 
@@ -444,7 +444,7 @@ body.dark-mode .home-view .cart-totals .change strong {
   color: #f87171;
 }
 
-body.dark-mode .home-view .med-generic,
+body.dark-mode .home-view .catalog-meta,
 body.dark-mode .home-view .customer-name .separator {
   color: #94a3b8;
 }

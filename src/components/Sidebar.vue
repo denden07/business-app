@@ -30,14 +30,14 @@ const navigateTo = (path) => {
 
 // Menu
 const menuItems = [
-  { name: 'Home', path: '/', icon: '🏠' },
-  { name: 'Medicines', path: '/medicines', icon: '💊' },
-  { name: 'Sales', path: '/sales', icon: '💰' },
-  { name: 'Drafts', path: '/drafts', icon: '📝' },
-  { name: 'Customers', path: '/customers', icon: '🧑‍🤝‍🧑' },
-  { name: 'Analytics', path: '/analytics', icon: '📊' },
-  { name: 'About', path: '/about', icon: 'ℹ️' },
-  { name: 'Settings', path: '/settings', icon: '⚙️' },
+  { name: 'Home', label: 'Home', path: '/', icon: '🏠' },
+  { name: 'Items', label: 'Items', path: '/items', icon: '📦' },
+  { name: 'Sales', label: 'Sales', path: '/sales', icon: '💰' },
+  { name: 'Drafts', label: 'Drafts', path: '/drafts', icon: '📝' },
+  { name: 'Customers', label: 'Customers', path: '/customers', icon: '🧑‍🤝‍🧑' },
+  { name: 'Analytics', label: 'Analytics', path: '/analytics', icon: '📊' },
+  { name: 'About', label: 'About', path: '/about', icon: 'ℹ️' },
+  { name: 'Settings', label: 'Settings', path: '/settings', icon: '⚙️' },
 ]
 
 const isActive = (path) => {
@@ -46,17 +46,17 @@ const isActive = (path) => {
 }
 
 const pageVisibility = ref(null)
-const appName = ref('Pharmacy POS')
+const appName = ref('Business Companion')
 let refreshTimer = null
 
 async function loadAppName() {
   try {
     const db = await dbPromise
     const row = await db.get('app_settings', 'app-name')
-    appName.value = row?.value?.trim() || 'Pharmacy POS'
+    appName.value = row?.value?.trim() || 'Business Companion'
   } catch (err) {
     console.error('Failed to load app name', err)
-    appName.value = 'Pharmacy POS'
+    appName.value = 'Business Companion'
   }
 }
 
@@ -125,7 +125,7 @@ const visibleMenu = () => {
           @click="navigateTo(item.path)"
         >
           <span class="icon">{{ item.icon }}</span>
-          <span>{{ item.name }}</span>
+          <span>{{ item.label || item.name }}</span>
         </button>
       </li>
     </ul>

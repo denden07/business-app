@@ -306,7 +306,7 @@ function goToTransactionHistory(customerId) {
 </script>
 
 <template>
-  <div class="medicines-page">
+  <div class="page-shell">
     <h1>Customers</h1>
 
     <!-- Top bar -->
@@ -420,7 +420,7 @@ function goToTransactionHistory(customerId) {
 /* ======================
    PAGE
 ====================== */
-.medicines-page {
+.page-shell {
   padding: 20px;
 }
 

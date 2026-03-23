@@ -70,7 +70,7 @@ const saveSaleAsDraft = async () => {
       name: name || `Draft ${new Date().toLocaleTimeString()}`,
       snapshot: {
         cart: JSON.parse(JSON.stringify(cart.value)),
-        medicinesMap: JSON.parse(JSON.stringify(medicinesMap.value)),
+        catalogMap: JSON.parse(JSON.stringify(catalogMap.value)),
         customer: selectedCustomer.value ? JSON.parse(JSON.stringify(selectedCustomer.value)) : null,
         professionalFee: professionalFee.value,
         moneyGiven: moneyGiven.value,
@@ -107,8 +107,8 @@ const saveSaleAsDraft = async () => {
 }
 
 const resumeDraft = (draft) => {
-  cart.value = draft.cart
-  Object.assign(medicinesMap.value, draft.medicinesMap || {})
+  cart.value = (draft.cart || []).map(normalizeDraftCartItem)
+  Object.assign(catalogMap.value, normalizeDraftCatalogMap(draft))
   selectedCustomer.value = draft.customer || null
   professionalFee.value = draft.professionalFee || 0
   moneyGiven.value = draft.moneyGiven || 0
@@ -307,81 +307,89 @@ const selectItemPriceType = (item, type) => {
 const SEARCH_RESULT_LIMIT = 20
 
 // ======================
-// MEDICINES SEARCH (WITH LATEST PRICE)
+// ITEM SEARCH + MASTER CATALOG CACHE
 // ======================
-// ======================
-// MASTER MEDICINES CACHE
-// ======================
-const medicinesMap = ref({}) // id => medicine object
-let filteredMedicines = ref ({})
+const catalogMap = ref({})
+const filteredCatalog = ref([])
+let catalogSearchRequestId = 0
 
 watch(search, async (val) => {
+  const requestId = ++catalogSearchRequestId
   const q = val.trim().toLowerCase()
   if (!q) {
-    filteredMedicines.value = []
+    filteredCatalog.value = []
     return
   }
 
   const db = await dbPromise
-  const tx = db.transaction(['medicines', 'inventory_batches'], 'readonly')
-  const medsStore = tx.objectStore('medicines')
-  const batchIndex = tx.objectStore('inventory_batches').index('medicine_id')
+  const tx = db.transaction(['items', 'item_batches'], 'readonly')
+  const itemsStore = tx.objectStore('items')
+  const itemBatchIndex = tx.objectStore('item_batches').index('item_id')
   const matches = []
+  const nextCatalogEntries = {}
 
-  let cursor = await medsStore.openCursor()
+  let cursor = await itemsStore.openCursor()
   while (cursor) {
-    const medicine = cursor.value
-    const name = (medicine.name || '').toLowerCase()
-    const generic = (medicine.generic_name || '').toLowerCase()
-    const matchesQuery = name.startsWith(q) || generic.startsWith(q)
+    const item = cursor.value
+    const name = (item.name || '').toLowerCase()
+    const description = (item.description || '').toLowerCase()
+    const matchesQuery = name.startsWith(q) || description.startsWith(q)
 
     if (matchesQuery) {
-      if (matches.length < SEARCH_RESULT_LIMIT) {
-        matches.push({ ...medicine })
+      const totalStock = item.track_stock
+        ? await reduceFromSource(
+            itemBatchIndex,
+            (sum, batch) => sum + Number(batch.quantity || 0),
+            0,
+            { query: item.id }
+          )
+        : null
+
+      const entry = {
+        ...item,
+        sourceType: 'item',
+        sourceId: item.id,
+        cartKey: `item:${item.id}`,
+        quantity: totalStock,
+        generic_name: '',
+        stockIndicator: getStockIndicator({
+          quantity: totalStock,
+          track_stock: item.track_stock,
+          item_type: item.item_type
+        })
       }
+
+      matches.push(entry)
+      nextCatalogEntries[entry.cartKey] = entry
     }
 
     cursor = await cursor.continue()
   }
 
-  for (const m of matches) {
-    const totalStock = await reduceFromSource(
-      batchIndex,
-      (sum, batch) => sum + Number(batch.quantity || 0),
-      0,
-      { query: m.id }
-    )
-
-    m.quantity = totalStock
-    m.stockIndicator = getStockIndicator({ quantity: totalStock })
-    medicinesMap.value[m.id] = m
-  }
-
-  // Sort exact prefix matches by brand first, then generic name.
+  // Sort exact prefix matches by name first, then secondary label.
   matches.sort((a, b) => {
     const aName = a.name.toLowerCase()
     const bName = b.name.toLowerCase()
-    const aGeneric = (a.generic_name || '').toLowerCase()
-    const bGeneric = (b.generic_name || '').toLowerCase()
+    const aSecondary = (a.generic_name || a.description || '').toLowerCase()
+    const bSecondary = (b.generic_name || b.description || '').toLowerCase()
     
-    const aStartsWithName = aName.startsWith(q)
-    const bStartsWithName = bName.startsWith(q)
-    const aStartsWithGeneric = aGeneric.startsWith(q)
-    const bStartsWithGeneric = bGeneric.startsWith(q)
+    const aStartsWithSearch = aName.startsWith(q) || aSecondary.startsWith(q)
+    const bStartsWithSearch = bName.startsWith(q) || bSecondary.startsWith(q)
     
-    // Both start with search term or neither starts
-    if ((aStartsWithName || aStartsWithGeneric) && (bStartsWithName || bStartsWithGeneric)) {
+    if (aStartsWithSearch && bStartsWithSearch) {
       return aName.localeCompare(bName)
     }
-    if (!(aStartsWithName || aStartsWithGeneric) && !(bStartsWithName || bStartsWithGeneric)) {
+    if (!aStartsWithSearch && !bStartsWithSearch) {
       return aName.localeCompare(bName)
     }
     
-    // One starts with search term, prioritize it
-    return (aStartsWithName || aStartsWithGeneric) ? -1 : 1
+    return aStartsWithSearch ? -1 : 1
   })
 
-  filteredMedicines.value = matches
+  if (requestId !== catalogSearchRequestId) return
+
+  Object.assign(catalogMap.value, nextCatalogEntries)
+  filteredCatalog.value = matches.slice(0, SEARCH_RESULT_LIMIT)
 })
 
 // ======================
@@ -431,22 +439,21 @@ watch(customerSearch, async (val) => {
 // ======================
 // CART LOGIC
 // ======================
-const addToCart = async (med) => {
+const addToCart = async (catalogItem) => {
   const price = selectedPriceType.value === 'regular'
-    ? med.price1
-    : med.price2
+    ? catalogItem.price1
+    : catalogItem.price2 || catalogItem.price1
 
-  const existing = cart.value.find(i => i.id === med.id && i.priceType === selectedPriceType.value)
-  const currentStock = medicinesMap.value[med.id]?.quantity || 0
+  const existing = cart.value.find(i => i.cartKey === catalogItem.cartKey && i.priceType === selectedPriceType.value)
+  const currentStock = getAvailableStock(catalogItem)
   const cartQty = existing ? existing.qty : 0
   const newQty = cartQty + 1
 
-  // Warning if exceeding stock
-  if (newQty > currentStock) {
+  if (currentStock !== null && newQty > currentStock) {
     await Swal.fire({
       icon: 'warning',
       title: 'Low Stock Warning',
-      html: `<b>${med.name}</b><br/>Available: ${currentStock}<br/>Cart Total: ${newQty}<br/><br/>You are exceeding available stock!`,
+      html: `<b>${catalogItem.name}</b><br/>Available: ${currentStock}<br/>Cart Total: ${newQty}<br/><br/>You are exceeding available stock!`,
       confirmButtonText: 'Add Anyway',
       timer: 2000,
       timerProgressBar: true
@@ -455,38 +462,46 @@ const addToCart = async (med) => {
 
   if (existing) existing.qty += 1
   else cart.value.push({
-    id: med.id,
-    name: med.name,
-    generic_name: med.generic_name || '',
+    id: catalogItem.sourceId,
+    sourceId: catalogItem.sourceId,
+    sourceType: 'item',
+    cartKey: catalogItem.cartKey,
+    item_id: catalogItem.sourceId,
+    medicine_id: null,
+    name: catalogItem.name,
+    generic_name: '',
+    description: catalogItem.description || '',
+    item_type: catalogItem.item_type || 'product',
+    track_stock: !!catalogItem.track_stock,
     priceType: selectedPriceType.value,
     price,
     qty: 1
   })
 
   search.value = ''
-  filteredMedicines.value = []
+  filteredCatalog.value = []
 }
 
 
 const setPriceType = (item, type) => {
-  const med = medicinesMap.value[item.id] // <-- always the original med
+  const med = getCatalogEntry(item)
   if (!med) return
   item.priceType = type
-  item.price = type === 'regular' ? med.price1 : med.price2
+  item.price = type === 'regular' ? Number(med.price1 || 0) : Number(med.price2 || med.price1 || 0)
 }
 
 
-const removeItem = (id) => {
-  cart.value = cart.value.filter(i => i.id !== id)
+const removeItem = (cartItem) => {
+  cart.value = cart.value.filter(i => !(i.cartKey === cartItem.cartKey && i.priceType === cartItem.priceType))
 }
 
 
-const getPrice = (medId, type) => {
-  const med = filteredMedicines.value.find(m => m.id === medId) || cart.value.find(m => m.id === medId)
-  if (!med) return '0.00'
+const getPrice = (itemId, type) => {
+  const catalogEntry = filteredCatalog.value.find(item => item.sourceId === itemId) || cart.value.find(item => item.id === itemId)
+  if (!catalogEntry) return '0.00'
   const price = type === 'regular' 
-    ? Number(med.price1 || 0) 
-    : Number(med.price2 || med.price1 || 0)
+    ? Number(catalogEntry.price1 || 0) 
+    : Number(catalogEntry.price2 || catalogEntry.price1 || 0)
   return price.toFixed(2)
 }
 
@@ -559,8 +574,8 @@ const checkout = async () => {
   // Check stock and warn for all items exceeding available quantity
   const stockWarnings = []
   for (const item of cart.value) {
-    const available = medicinesMap.value[item.id]?.quantity || 0
-    if (item.qty > available) {
+    const available = getAvailableStock(item)
+    if (available !== null && item.qty > available) {
       const shortage = item.qty - available
       stockWarnings.push(`<b>${item.name}</b>: Need ${item.qty}, Available ${available} (Short by ${shortage})`)
     }
@@ -585,13 +600,12 @@ const checkout = async () => {
       <table style="width:100%; border-collapse: collapse; text-align: left;">
         <thead style="position: sticky; top: 0; background: #f5f5f5; z-index: 10;">
           <tr style="border-bottom: 2px solid #ddd;">
-            <th style="padding: 8px;">Medicine</th>
+            <th style="padding: 8px;">Item</th>
             <th style="padding: 8px; text-align: center;">Qty</th>
             <th style="padding: 8px; text-align: right;">Price</th>
             <th style="padding: 8px; text-align: right;">Total</th>
           </tr>
         </thead>
-        <tbody>
           ${cart.value.map(item => `
             <tr style="border-bottom: 1px solid #eee;">
               <td style="padding: 8px;">${item.name}</td>
@@ -811,14 +825,112 @@ onBeforeUnmount(() => {
   numpadAudioContext = null
 })
 
-const getStockIndicator = (med) => {
-  if (!med.quantity || med.quantity <= 0) {
-    return { icon: '▲!', color: 'red', text: 'Out of stock', quantity: 0 }
-  } else if (med.quantity < 10) {
-    return { icon: '▲', color: 'orange', text: `Low stock: ${med.quantity}`, quantity: med.quantity }
-  } else {
-    return { icon: '', color: 'green', text: `Stock: ${med.quantity}`, quantity: med.quantity }
+const getStockIndicator = (item) => {
+  if (item.track_stock === false || item.item_type === 'service') {
+    return { icon: '', color: 'blue', text: item.item_type === 'service' ? 'Service' : 'No stock tracking', quantity: null }
   }
+  if (!item.quantity || item.quantity <= 0) {
+    return { icon: '▲!', color: 'red', text: 'Out of stock', quantity: 0 }
+  } else if (item.quantity < 10) {
+    return { icon: '▲', color: 'orange', text: `Low stock: ${item.quantity}`, quantity: item.quantity }
+  } else {
+    return { icon: '', color: 'green', text: `Stock: ${item.quantity}`, quantity: item.quantity }
+  }
+}
+
+const buildCatalogKey = (item) => {
+  const sourceType = 'item'
+  const sourceId = item?.sourceId ?? item?.item_id ?? item?.medicine_id ?? item?.id
+  return sourceId !== undefined && sourceId !== null ? `${sourceType}:${sourceId}` : ''
+}
+
+const getCatalogEntry = (item) => {
+  const key = item?.cartKey || buildCatalogKey(item)
+  return key ? catalogMap.value[key] : null
+}
+
+const getAvailableStock = (item) => {
+  const catalogEntry = getCatalogEntry(item)
+  if (!catalogEntry || catalogEntry.track_stock === false || catalogEntry.item_type === 'service') {
+    return null
+  }
+  return Number(catalogEntry.quantity || 0)
+}
+
+const normalizeDraftCatalogMap = (draft) => {
+  const normalizedMap = {}
+
+  for (const entry of Object.values(draft?.catalogMap || {})) {
+    const sourceId = Number(entry.sourceId ?? entry.item_id ?? entry.medicine_id ?? entry.id)
+    if (!Number.isFinite(sourceId)) continue
+
+    normalizedMap[`item:${sourceId}`] = {
+      ...entry,
+      sourceType: 'item',
+      sourceId,
+      item_id: sourceId,
+      medicine_id: null,
+      cartKey: `item:${sourceId}`,
+      description: entry.description || entry.generic_name || '',
+      generic_name: '',
+      item_type: entry.item_type || 'product',
+      track_stock: entry.track_stock === false ? false : true,
+    }
+  }
+
+  for (const entry of Object.values(draft?.medicinesMap || {})) {
+    const sourceId = Number(entry.sourceId ?? entry.id)
+    if (!Number.isFinite(sourceId)) continue
+
+    normalizedMap[`item:${sourceId}`] = {
+      ...entry,
+      sourceType: 'item',
+      sourceId,
+      item_id: sourceId,
+      medicine_id: null,
+      cartKey: `item:${sourceId}`,
+      description: entry.description || entry.generic_name || '',
+      generic_name: '',
+      item_type: 'product',
+      track_stock: entry.track_stock === false ? false : true,
+    }
+  }
+
+  return normalizedMap
+}
+
+const normalizeDraftCartItem = (item) => {
+  const sourceType = 'item'
+  const sourceId = Number(item.sourceId ?? item.item_id ?? item.medicine_id ?? item.id)
+
+  return {
+    ...item,
+    id: sourceId,
+    sourceId,
+    sourceType,
+    cartKey: item.cartKey || `${sourceType}:${sourceId}`,
+    item_id: sourceId,
+    medicine_id: null,
+    item_type: item.item_type || 'product',
+    description: item.description || item.generic_name || '',
+    generic_name: '',
+    track_stock: !!item.track_stock
+  }
+}
+
+const getRegularPriceLabel = (item) => {
+  const entry = getCatalogEntry(item)
+  return Number(entry?.price1 || 0).toFixed(2)
+}
+
+const hasDiscountPrice = (item) => {
+  const entry = getCatalogEntry(item)
+  return Number(entry?.price2 || 0) > 0
+}
+
+const getDiscountPriceLabel = (item) => {
+  const entry = getCatalogEntry(item)
+  return Number(entry?.price2 || 0).toFixed(2)
 }
 
 
@@ -831,27 +943,28 @@ const getStockIndicator = (med) => {
   <!-- SEARCH BAR + CUSTOMER + REDEEM (ALL INLINE) -->
   <div class="top-controls">
   <div class="search-section">
-    <SearchInput v-model="search" placeholder="Search medicine..." :inputClass="'input pos-medicine-search'" />
+    <SearchInput v-model="search" placeholder="Search catalog item or service..." :inputClass="'input pos-search-input'" />
     
     <!-- Dropdown -->
-    <div v-if="search && filteredMedicines.length" class="dropdown">
-      <div v-for="med in filteredMedicines" :key="med.id" class="dropdown-item" @click="addToCart(med)">
+    <div v-if="search && filteredCatalog.length" class="dropdown">
+      <div v-for="catalogItem in filteredCatalog" :key="catalogItem.cartKey" class="dropdown-item" @click="addToCart(catalogItem)">
         <div class="dropdown-item-content">
           <div>
-            <div class="med-name">{{ med.name }}</div>
-            <div class="med-generic" v-if="med.generic_name">{{ med.generic_name }}</div>
+            <div class="catalog-name">{{ catalogItem.name }}</div>
+            <div class="catalog-meta" v-if="catalogItem.generic_name || catalogItem.description">{{ catalogItem.generic_name || catalogItem.description }}</div>
           </div>
 
           <div 
             class="stock-indicator" 
-            :title="med.stockIndicator.text"
+            :title="catalogItem.stockIndicator.text"
             :class="{
-              'out-of-stock': med.quantity <= 0,
-              'low-stock': med.quantity > 0 && med.quantity < 10,
-              'normal-stock': med.quantity >= 10
+              'out-of-stock': catalogItem.track_stock !== false && catalogItem.quantity <= 0,
+              'low-stock': catalogItem.track_stock !== false && catalogItem.quantity > 0 && catalogItem.quantity < 10,
+              'normal-stock': catalogItem.track_stock === false || catalogItem.quantity >= 10
             }"
           >
-            <span>Remaining QTY: {{ med.quantity }}</span>
+            <span v-if="catalogItem.track_stock !== false">Remaining QTY: {{ catalogItem.quantity }}</span>
+            <span v-else>{{ catalogItem.item_type === 'service' ? 'Service' : 'No stock tracking' }}</span>
           </div>
         </div>
       </div>
@@ -905,7 +1018,7 @@ const getStockIndicator = (med) => {
       <table v-if="cart.length">
         <thead>
           <tr>
-            <th width="25%">Medicine</th>
+            <th width="25%">Item</th>
             <th>Price</th>
             <th>Qty</th>
             <th>Total</th>
@@ -913,10 +1026,10 @@ const getStockIndicator = (med) => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in cart" :key="item.id">
+          <tr v-for="item in cart" :key="`${item.cartKey}:${item.priceType}`">
             <td>
-              <div class="med-name-table">{{ item.name }}</div>
-              <!-- <div class="med-generic" v-if="item.generic_name">{{ item.generic_name }}</div> -->
+              <div class="cart-item-name">{{ item.name }}</div>
+              <div class="catalog-meta" v-if="item.generic_name || item.description">{{ item.generic_name || item.description }}</div>
             </td>
             <td>
 <div class="price-toggle">
@@ -925,23 +1038,23 @@ const getStockIndicator = (med) => {
     :class="{ active: item.priceType === 'regular', inactive: item.priceType !== 'regular' }"
     @click="selectItemPriceType(item, 'regular')"
   >
-    Reg ₱{{ medicinesMap[item.id]?.price1.toFixed(2) || '0.00' }}
+    Reg ₱{{ getRegularPriceLabel(item) }}
   </button>
 
   <button
     class="price-option-btn"
-    v-if="medicinesMap[item.id]?.price2 && medicinesMap[item.id]?.price2 > 0"
+    v-if="hasDiscountPrice(item)"
     :class="{ active: item.priceType === 'discount', inactive: item.priceType !== 'discount' }"
     @click="selectItemPriceType(item, 'discount')"
   >
-    Dis ₱{{ medicinesMap[item.id]?.price2.toFixed(2) || '0.00' }}
+    Dis ₱{{ getDiscountPriceLabel(item) }}
   </button>
 </div>
 
             </td>
             <td>
               <div class="qty-wrapper">
-                <button class="qty-step-btn" @click="decrementQty(item)">-</button>
+              <button class="mini danger remove-cart-item-btn" @click="removeItem(item)">✕</button>
                 <input
                   style="font-weight: bold"
                   type="number"
@@ -956,7 +1069,7 @@ const getStockIndicator = (med) => {
             </td>
             <td>₱{{ (item.price * item.qty).toFixed(2) }}</td>
             <td>
-              <button class="mini danger button-remove-med" @click="removeItem(item.id)">✕</button>
+              <button class="mini danger remove-cart-item-btn" @click="removeItem(item.id)">✕</button>
             </td>
           </tr>
         </tbody>
@@ -1064,7 +1177,7 @@ const getStockIndicator = (med) => {
   <div class="modal app-modal-panel modal-sm modal-customer">
     <h3>Select Customer</h3>
 
-    <SearchInput v-model="customerSearch" placeholder="Search customer..." wrapperClass="full" :inputClass="'input pos-medicine-search'" />
+    <SearchInput v-model="customerSearch" placeholder="Search customer..." wrapperClass="full" :inputClass="'input pos-search-input'" />
 
     <div v-if="customerSearch && filteredCustomers.length" class="customer-list">
       <div
@@ -1290,7 +1403,7 @@ const getStockIndicator = (med) => {
   /* =========================
    SEARCH BAR
 ========================= */
-.input.pos-medicine-search {
+.input.pos-search-input {
   width: 70%;
   display: block;
   min-height: 48px;
@@ -1641,11 +1754,11 @@ tbody tr:last-child td { border-bottom: none; }
 .customer-row:hover { background: #eef8f4; }
 
 /* =========================
-   MED NAMES
+  ITEM LABELS
 ========================= */
-.med-name { font-size: 20px; text-align: left;}
-.med-name-table { font-weight:700; }
-.med-generic { font-size:16px; color:#888; text-align: left; }
+.catalog-name { font-size: 20px; text-align: left;}
+.cart-item-name { font-weight:700; }
+.catalog-meta { font-size:16px; color:#888; text-align: left; }
 
 /* =========================
    CUSTOMER MODAL FIX
@@ -1658,7 +1771,7 @@ tbody tr:last-child td { border-bottom: none; }
 }
 
 /* Customer search field */
-.modal .pos-medicine-search {
+.modal .pos-search-input {
   width: 100%;
   height: 46px;
   font-size: 15px;
@@ -1710,7 +1823,7 @@ tbody tr:last-child td { border-bottom: none; }
 .price-option-btn,
 .qty-step-btn,
 .discount-add-btn,
-.button-remove-med {
+.remove-cart-item-btn {
   box-shadow: 0 8px 16px rgba(15, 23, 42, 0.1);
 }
 
@@ -1866,7 +1979,7 @@ tbody tr:last-child td { border-bottom: none; }
     min-width: 0;
   }
 
-  .input.pos-medicine-search {
+  .input.pos-search-input {
     width: 100%;
     box-sizing: border-box;
   }
@@ -1920,7 +2033,7 @@ tbody tr:last-child td { border-bottom: none; }
 
 @media (max-width: 480px) {
   /* Tighten spacing on small phones */
-  .input.pos-medicine-search { height: 40px; font-size: 14px; }
+  .input.pos-search-input { height: 40px; font-size: 14px; }
   .customer-name { font-size: 16px; }
   .right-panel input { height: 2.2rem; font-size: 1.05rem; }
   .qty-wrapper input { width: 44px; height: 34px; }

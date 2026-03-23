@@ -58,11 +58,10 @@ export default {
         { query: saleId }
       )
 
-      const medsStore = db.transaction('medicines').objectStore('medicines')
+      const itemCatalogStore = db.transaction('items').objectStore('items')
 
       for (const item of items) {
-        const med = await medsStore.get(item.medicine_id)
-        item.medicine_name = med?.name || 'Unknown'
+        await attachCatalogDetails(item, itemCatalogStore)
       }
 
       commit('SET_SALE_DETAILS', { sale, customer, items })
@@ -95,22 +94,22 @@ async saveSale({ commit }, payload) {
 
   const db = await dbPromise
   const tx = db.transaction(
-    ['sales', 'sale_items', 'inventory_batches', 'points_history', 'yearly_points', 'customers', 'medicines'],
+    ['sales', 'sale_items', 'item_batches', 'points_history', 'yearly_points', 'customers', 'items'],
     'readwrite'
   )
 
   const salesStore = tx.objectStore('sales')
-  const itemsStore = tx.objectStore('sale_items')
-  const batchesStore = tx.objectStore('inventory_batches')
+  const saleItemsStore = tx.objectStore('sale_items')
+  const itemBatchesStore = tx.objectStore('item_batches')
   const pointsStore = tx.objectStore('points_history')
   const yearlyStore = tx.objectStore('yearly_points')
-  const medicinesStore = tx.objectStore('medicines')
+  const itemCatalogStore = tx.objectStore('items')
 
   const now = new Date().toISOString()
 
   // Save sale
   const saleId = await salesStore.add({
-    purchased_date: purchased_date ? new Date(purchased_date).toISOString() : now.toISOString(),
+    purchased_date: purchased_date ? new Date(purchased_date).toISOString() : now,
     created_at: now,
     customer_id: customer_id || null,
     total_amount: subTotal,
@@ -126,60 +125,46 @@ async saveSale({ commit }, payload) {
     payment_method
   })
 
-// Deduct inventory (allow negative quantities)
-for (const item of cart) {
-  const allBatches = await collectFromSource(
-    batchesStore.index('medicine_id'),
-    { query: item.id }
-  )
-  
-  let remainingQty = item.qty
-  let primaryBatchId = null
-  
-  // Try to find a batch with sufficient quantity first
-  const sufficientBatch = allBatches.find(b => b.quantity >= remainingQty)
-  
-  if (sufficientBatch) {
-    // Deduct from batch with sufficient quantity
-    sufficientBatch.quantity -= remainingQty
-    await batchesStore.put(sufficientBatch)
-    primaryBatchId = sufficientBatch.id
-  } else if (allBatches.length > 0) {
-    // No sufficient batch, use the first available batch and allow negative
-    const firstBatch = allBatches[0]
-    firstBatch.quantity -= remainingQty  // This can go negative
-    await batchesStore.put(firstBatch)
-    primaryBatchId = firstBatch.id
-  } else {
-    // No batches exist at all, create a negative batch
-    primaryBatchId = await batchesStore.add({
-      medicine_id: item.id,
-      quantity: -remainingQty,  // Create with negative quantity
-      batch_number: 'AUTO-NEG-' + Date.now(),
-      expiry_date: null,
-      cost_price: 0,
-      added_date: now
+  for (const item of cart) {
+    const sourceId = await resolveCatalogItemId(item, itemCatalogStore)
+    if (!sourceId) continue
+
+    const catalogItem = await itemCatalogStore.get(sourceId)
+    const tracksStock = item.track_stock ?? !!catalogItem?.track_stock
+    let primaryBatchId = null
+    let batchStoreName = null
+
+    if (tracksStock) {
+      primaryBatchId = await deductStockWithNegativeFallback({
+        batchStore: itemBatchesStore,
+        indexName: 'item_id',
+        foreignKey: 'item_id',
+        foreignId: sourceId,
+        quantity: Number(item.qty || 0),
+        now,
+        autoBatchPrefix: 'AUTO-NEG-ITEM'
+      })
+      batchStoreName = 'item_batches'
+    }
+
+    await saleItemsStore.add({
+      sale_id: saleId,
+      medicine_id: null,
+      item_id: sourceId,
+      quantity: item.qty,
+      price_at_sale: item.price,
+      price_type: item.priceType,
+      batch_id: primaryBatchId,
+      batch_store: batchStoreName,
+      is_piece_or_box: 'piece'
     })
-  }
 
-  await itemsStore.add({
-    sale_id: saleId,
-    medicine_id: item.id,
-    quantity: item.qty,
-    price_at_sale: item.price,
-    price_type: item.priceType,
-    batch_id: primaryBatchId,
-    is_piece_or_box: 'piece'
-  })
-
-  // Update medicine with last_sold_at timestamp
-  const medicine = await medicinesStore.get(item.id)
-  if (medicine) {
-    medicine.last_sold_at = now
-    medicine.updated_at = now
-    await medicinesStore.put(medicine)
+    if (catalogItem) {
+      catalogItem.last_sold_at = now
+      catalogItem.updated_at = now
+      await itemCatalogStore.put(catalogItem)
+    }
   }
-}
 
 
   // Handle points
@@ -300,16 +285,14 @@ for (const item of cart) {
     // ======================
     async viewSale(_, saleId) {
       const db = await dbPromise
-      const tx = db.transaction(['sale_items', 'medicines'])
+      const tx = db.transaction(['sale_items', 'items'])
       const itemsStore = tx.objectStore('sale_items')
-      const medsStore = tx.objectStore('medicines')
+      const itemCatalogStore = tx.objectStore('items')
 
       const items = await collectFromSource(itemsStore.index('sale_id'), { query: saleId })
 
       for (const item of items) {
-        const med = await medsStore.get(item.medicine_id)
-        item.medicine_name = med?.name || 'Unknown'
-        item.generic_name = med?.generic_name || ''
+        await attachCatalogDetails(item, itemCatalogStore)
       }
 
       return items
@@ -337,15 +320,15 @@ async voidSale(_, sale) {
     { query: sale.id }
   )
 
-  const invTx = db.transaction('inventory_batches', 'readwrite')
-  const batchStore = invTx.objectStore('inventory_batches')
+  const invTx = db.transaction(['item_batches'], 'readwrite')
+  const itemBatchStore = invTx.objectStore('item_batches')
 
   for (const item of items) {
     if (!item.batch_id) continue
-    const batch = await batchStore.get(item.batch_id)
+    const batch = await itemBatchStore.get(item.batch_id)
     if (batch) {
       batch.quantity += Number(item.quantity || 0)
-      await batchStore.put(batch)
+      await itemBatchStore.put(batch)
     }
   }
   await invTx.done
@@ -407,36 +390,17 @@ async voidSale(_, sale) {
   await salesTx.done
 
 },
-
-
-
-    // ======================
-    // GET MEDICINES MAP
-    // ======================
-    async getMedicinesMap() {
-      const db = await dbPromise
-      const medsStore = db.transaction('medicines').objectStore('medicines')
-      return reduceFromSource(
-        medsStore,
-        (map, med) => {
-          map[med.id] = med
-          return map
-        },
-        {}
-      )
-    },
-
     async exportSalesByDateRange(_, { startDate, endDate }) {
       const db = await dbPromise
 
       const tx = db.transaction(
-        ['sales', 'sale_items', 'medicines', 'customers'],
+        ['sales', 'sale_items', 'items', 'customers'],
         'readonly'
       )
 
       const salesStore = tx.objectStore('sales')
       const itemsStore = tx.objectStore('sale_items')
-      const medsStore = tx.objectStore('medicines')
+      const itemCatalogStore = tx.objectStore('items')
       const custStore = tx.objectStore('customers')
 
       const rows = []
@@ -460,13 +424,13 @@ async voidSale(_, sale) {
           const itemsIndex = itemsStore.index('sale_id')
           let itemCursor = await itemsIndex.openCursor(sale.id)
 
-          const medicineNames = []
+          const itemNames = []
 
           while (itemCursor) {
             const item = itemCursor.value
-            const med = await medsStore.get(item.medicine_id)
+            const source = await resolveCatalogItem(item, itemCatalogStore)
 
-            medicineNames.push(med?.name || item.medicine_name || '')
+            itemNames.push(source?.name || item.display_name || item.medicine_name || '')
 
             itemCursor = await itemCursor.continue()
           }
@@ -476,7 +440,7 @@ async voidSale(_, sale) {
             purchased_date: sale.purchased_date,
             status: sale.status,
             customer_name: customer ? customer.name : '',
-            medicines: medicineNames.join(', '),
+            items: itemNames.join(', '),
             subtotal: sale.total_amount,
             professional_fee: sale.professional_fee,
             discount: sale.discount,
@@ -502,4 +466,74 @@ function normalize(list) {
     purchased_date: new Date(s.purchased_date),
     status: s.status || 'completed'
   }))
+}
+
+async function deductStockWithNegativeFallback({ batchStore, indexName, foreignKey, foreignId, quantity, now, autoBatchPrefix }) {
+  const allBatches = await collectFromSource(batchStore.index(indexName), { query: foreignId })
+  const remainingQty = Number(quantity || 0)
+
+  const sufficientBatch = allBatches.find(batch => Number(batch.quantity || 0) >= remainingQty)
+  if (sufficientBatch) {
+    sufficientBatch.quantity = Number(sufficientBatch.quantity || 0) - remainingQty
+    await batchStore.put(sufficientBatch)
+    return sufficientBatch.id
+  }
+
+  if (allBatches.length > 0) {
+    const firstBatch = allBatches[0]
+    firstBatch.quantity = Number(firstBatch.quantity || 0) - remainingQty
+    await batchStore.put(firstBatch)
+    return firstBatch.id
+  }
+
+  return batchStore.add({
+    [foreignKey]: foreignId,
+    quantity: -remainingQty,
+    batch_number: `${autoBatchPrefix}-${Date.now()}`,
+    expiry_date: null,
+    cost_price: 0,
+    added_date: now,
+    created_at: now
+  })
+}
+
+async function attachCatalogDetails(item, itemCatalogStore) {
+  const source = await resolveCatalogItem(item, itemCatalogStore)
+  const sourceType = 'item'
+  const displayName = source?.name || 'Unknown'
+  const secondaryName = source?.description || ''
+
+  item.source_type = sourceType
+  item.display_name = displayName
+  item.secondary_name = secondaryName
+  item.medicine_name = displayName
+  item.generic_name = secondaryName
+}
+
+async function resolveCatalogItemId(item, itemCatalogStore) {
+  const directId = Number(item.sourceId ?? item.item_id ?? item.id)
+  if (Number.isFinite(directId)) {
+    const directItem = await itemCatalogStore.get(directId)
+    if (directItem) {
+      return directId
+    }
+  }
+
+  const legacyMedicineId = Number(item.medicine_id ?? item.sourceId)
+  if (!Number.isFinite(legacyMedicineId)) {
+    return null
+  }
+
+  const legacyIndex = itemCatalogStore.index('legacy_medicine_id')
+  const migratedItem = await legacyIndex.get(legacyMedicineId)
+  return migratedItem?.id || null
+}
+
+async function resolveCatalogItem(item, itemCatalogStore) {
+  const itemId = await resolveCatalogItemId(item, itemCatalogStore)
+  if (!itemId) {
+    return null
+  }
+
+  return itemCatalogStore.get(itemId)
 }

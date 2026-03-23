@@ -4,37 +4,39 @@ async function populateSampleData() {
   const db = await dbPromise;
 
   /* =========================
-     Sample Medicines
+     Sample Items
   ========================== */
-  const medicines = [
-    { name: 'Biogesic 500mg', generic_name: 'Paracetamol', price1: 15, price2: 13 },
-    { name: 'Alaxan 400mg', generic_name: 'Ibuprofen', price1: 20, price2: 18 },
-    { name: 'Decolgen', generic_name: 'Phenylephrine + Chlorpheniramine', price1: 25, price2: 22 }
+  const items = [
+    { name: 'Biogesic 500mg', description: 'Paracetamol', item_type: 'product', track_stock: true, track_batches: true, track_expiry: true, price1: 15, price2: 13 },
+    { name: 'Alaxan 400mg', description: 'Ibuprofen', item_type: 'product', track_stock: true, track_batches: true, track_expiry: true, price1: 20, price2: 18 },
+    { name: 'Decolgen', description: 'Phenylephrine + Chlorpheniramine', item_type: 'product', track_stock: true, track_batches: true, track_expiry: true, price1: 25, price2: 22 }
   ];
 
-  for (let med of medicines) await db.add('medicines', med);
+  const itemIds = []
+  for (let item of items) itemIds.push(await db.add('items', item));
 
   /* =========================
-     Inventory Batches
+     Item Batches
   ========================== */
-  const inventoryBatches = [
-    { medicine_id: 1, quantity: 100, expiry_date: '2026-12-31' },
-    { medicine_id: 1, quantity: 50, expiry_date: null },
-    { medicine_id: 2, quantity: 200, expiry_date: '2025-11-30' },
-    { medicine_id: 3, quantity: 150, expiry_date: '2027-01-15' }
+  const itemBatches = [
+    { item_id: itemIds[0], quantity: 100, expiry_date: '2026-12-31' },
+    { item_id: itemIds[0], quantity: 50, expiry_date: null },
+    { item_id: itemIds[1], quantity: 200, expiry_date: '2025-11-30' },
+    { item_id: itemIds[2], quantity: 150, expiry_date: '2027-01-15' }
   ];
 
-  for (let batch of inventoryBatches) await db.add('inventory_batches', batch);
+  const batchIds = []
+  for (let batch of itemBatches) batchIds.push(await db.add('item_batches', batch));
 
   /* =========================
-     Price History
+     Item Price History
   ========================== */
   const priceHistory = [
-    { medicine_id: 1, old_price1: 14, old_price2: 12, new_price1: 15, new_price2: 13, changed_at: '2025-01-01' },
-    { medicine_id: 2, old_price1: 19, old_price2: 17, new_price1: 20, new_price2: 18, changed_at: '2025-02-01' }
+    { item_id: itemIds[0], price1: 15, price2: 13, changed_at: '2025-01-01' },
+    { item_id: itemIds[1], price1: 20, price2: 18, changed_at: '2025-02-01' }
   ];
 
-  for (let ph of priceHistory) await db.add('price_history', ph);
+  for (let ph of priceHistory) await db.add('item_price_history', ph);
 
   /* =========================
      Customers
@@ -58,12 +60,12 @@ async function populateSampleData() {
   for (let sale of sales) saleIds.push(await db.add('sales', sale));
 
   /* =========================
-     Sale Items (Per Medicine)
+     Sale Items (Per Item)
   ========================== */
   const salesItems = [
-    { sales_id: saleIds[0], medicine_id: 1, quantity: 3, is_piece_or_box: 'piece', price_at_sale: 15, price_type: 'price1', batch_id: 1 },
-    { sales_id: saleIds[0], medicine_id: 2, quantity: 1, is_piece_or_box: 'box', price_at_sale: 20, price_type: 'price1', batch_id: 3 },
-    { sales_id: saleIds[1], medicine_id: 3, quantity: 2, is_piece_or_box: 'piece', price_at_sale: 22, price_type: 'price2', batch_id: 4 }
+    { sale_id: saleIds[0], item_id: itemIds[0], quantity: 3, is_piece_or_box: 'piece', price_at_sale: 15, price_type: 'price1', batch_id: batchIds[0], batch_store: 'item_batches' },
+    { sale_id: saleIds[0], item_id: itemIds[1], quantity: 1, is_piece_or_box: 'box', price_at_sale: 20, price_type: 'price1', batch_id: batchIds[2], batch_store: 'item_batches' },
+    { sale_id: saleIds[1], item_id: itemIds[2], quantity: 2, is_piece_or_box: 'piece', price_at_sale: 22, price_type: 'price2', batch_id: batchIds[3], batch_store: 'item_batches' }
   ];
 
   for (let item of saleItems) await db.add('sales_items', item);
