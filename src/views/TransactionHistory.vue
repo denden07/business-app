@@ -9,6 +9,7 @@ import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 import { format } from 'date-fns'
 import { collectFromSource } from '../db/query'
+import { getLocalDayStart } from '../utils/dateRange'
 
 const route = useRoute()
 const store = useStore()
@@ -71,8 +72,11 @@ const currentCustomer = ref(null)
 ====================== */
 watch(dateRange, (range) => {
   if (range && range[0] && range[1]) {
-    startDate.value = format(range[0], 'yyyy-MM-dd')
-    endDate.value = format(range[1], 'yyyy-MM-dd')
+    const normalizedStart = getLocalDayStart(range[0])
+    const normalizedEnd = getLocalDayStart(range[1])
+
+    startDate.value = normalizedStart ? format(normalizedStart, 'yyyy-MM-dd') : ''
+    endDate.value = normalizedEnd ? format(normalizedEnd, 'yyyy-MM-dd') : ''
   } else {
     startDate.value = ''
     endDate.value = ''
@@ -164,12 +168,14 @@ const activeList = computed(() =>
 const activeTotal = computed(() =>
   activeTab.value === 'points' ? pointsTotal.value : salesTotal.value
 )
+const hasDateRangeFilter = computed(() => Boolean(startDate.value && endDate.value))
 
 const totalPages = computed(() =>
   Math.ceil(activeTotal.value / itemsPerPage.value)
 )
 
 const paginatedData = computed(() => activeList.value)
+const visibleRowCount = computed(() => paginatedData.value.length)
 
 const goPage = (page) => {
   if (page >= 1 && page <= totalPages.value) {
@@ -539,7 +545,7 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
     </div>
 
     <!-- PAGINATION -->
-    <Pagination v-model:page="currentPage" :total-pages="totalPages" :max-pages="5" />
+    <Pagination v-model:page="currentPage" :total-pages="totalPages" :max-pages="5" :item-count="hasDateRangeFilter ? visibleRowCount : null" :total-items="hasDateRangeFilter ? activeTotal : null" />
 
     <!-- SALE MODAL -->
     <div v-if="showSaleModal" class="modal-overlay app-modal-backdrop">

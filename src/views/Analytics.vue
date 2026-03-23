@@ -6,6 +6,7 @@ import VueApexCharts from 'vue3-apexcharts'
 import { format } from 'date-fns'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
+import { getLocalDayEnd, getLocalDayStart } from '../utils/dateRange'
 
 // --------------------
 // Metrics
@@ -88,7 +89,7 @@ const getStartDate = () => {
     case 'week': return startOfWeek(now)
     case 'month': return startOfMonth(now)
     case 'year': return startOfYear(now)
-    case 'custom': return customStart.value ? startOfDay(new Date(customStart.value)) : startOfDay(now)
+    case 'custom': return customStart.value ? getLocalDayStart(customStart.value) : startOfDay(now)
     default: return startOfDay(now)
   }
 }
@@ -100,7 +101,7 @@ const getEndDate = () => {
     case 'week': return endOfDay(new Date(getStartDate().getTime() + 6*24*60*60*1000)) // week
     case 'month': return endOfDay(new Date(getStartDate().getFullYear(), getStartDate().getMonth() + 1, 0)) // end of month
     case 'year': return endOfDay(new Date(getStartDate().getFullYear(), 11, 31)) // end of year
-    case 'custom': return customEnd.value ? endOfDay(new Date(customEnd.value)) : endOfDay(now)
+    case 'custom': return customEnd.value ? getLocalDayEnd(customEnd.value) : endOfDay(now)
     default: return endOfDay(now)
   }
 }
@@ -170,7 +171,10 @@ const updateCharts = async () => {
     trendMap[format(d, 'MM/dd')] = 0
   }
   dailySalesMap.forEach((value, key) => {
-    const label = format(new Date(key), 'MM/dd')
+    const labelDate = getLocalDayStart(key)
+    if (!labelDate) return
+
+    const label = format(labelDate, 'MM/dd')
     if (trendMap[label] !== undefined) {
       trendMap[label] += value
     }

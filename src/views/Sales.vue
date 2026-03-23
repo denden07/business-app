@@ -9,6 +9,7 @@ import Pagination from '../components/Pagination.vue'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 import { format } from 'date-fns'
+import { isWithinLocalDateRange } from '../utils/dateRange'
 
 
 
@@ -140,9 +141,7 @@ const filteredSales = computed(() =>
   sales.value.filter(s => {
     const saleDate = new Date(s.purchased_date) // convert string -> Date
     const matchesKeyword = !searchKeyword.value || String(s.id).includes(searchKeyword.value)
-    const matchesStart = !startDate.value || saleDate >= new Date(startDate.value)
-    const matchesEnd = !endDate.value || saleDate <= new Date(endDate.value + 'T23:59:59')
-    return matchesKeyword && matchesStart && matchesEnd
+    return matchesKeyword && isWithinLocalDateRange(saleDate, startDate.value, endDate.value)
   })
 )
 
@@ -181,8 +180,10 @@ const itemsPerPage = computed({
     store.commit('sales/SET_ITEMS_PER_PAGE', v)
   }
 })
+const hasDateRangeFilter = computed(() => Boolean(startDate.value && endDate.value))
 const totalSalesCount = computed(() => store.state.sales.totalSalesCount)
 const totalPages = computed(() => Math.ceil(totalSalesCount.value / itemsPerPage.value))
+const visibleSalesCount = computed(() => sales.value.length)
 const sales = computed(() => {
   const list = store.state.sales.sales
   
@@ -360,7 +361,7 @@ const exportCSV = async () => {
     </div>
 
     <!-- PAGINATION -->
-    <Pagination v-model:page="currentPage" :total-pages="totalPages" :max-pages="5" />
+    <Pagination v-model:page="currentPage" :total-pages="totalPages" :max-pages="5" :item-count="hasDateRangeFilter ? visibleSalesCount : null" :total-items="hasDateRangeFilter ? totalSalesCount : null" />
 
     <!-- VIEW SALE MODAL -->
     <div v-if="showView" class="modal-backdrop app-modal-backdrop">

@@ -1,5 +1,6 @@
 import { dbPromise } from '../db'
 import { collectFromSource, reduceFromSource } from '../db/query'
+import { buildDateKeyRange, isWithinLocalDateRange } from '../utils/dateRange'
 import Swal from 'sweetalert2'
 
 export default {
@@ -262,15 +263,7 @@ for (const item of cart) {
       const index = store.index('purchased_date')
 
       // 1️⃣ Count total sales with filters
-      let range = null
-      if (startDate && endDate) {
-        // Use ISO strings for comparison since purchased_date is stored as ISO string
-        range = IDBKeyRange.bound(startDate + 'T00:00:00', endDate + 'T23:59:59')
-      } else if (startDate) {
-        range = IDBKeyRange.lowerBound(startDate + 'T00:00:00')
-      } else if (endDate) {
-        range = IDBKeyRange.upperBound(endDate + 'T23:59:59')
-      }
+      const range = buildDateKeyRange(startDate, endDate)
 
       // For total count with filters, we need to iterate through cursor
       let totalCount = 0
@@ -446,9 +439,6 @@ async voidSale(_, sale) {
       const medsStore = tx.objectStore('medicines')
       const custStore = tx.objectStore('customers')
 
-      const start = new Date(startDate)
-      const end = new Date(endDate + 'T23:59:59')
-
       const rows = []
       let totalSales = 0
       let transactionCount = 0
@@ -458,7 +448,7 @@ async voidSale(_, sale) {
         const sale = cursor.value
         const saleDate = new Date(sale.purchased_date)
 
-        if (saleDate >= start && saleDate <= end) {
+        if (isWithinLocalDateRange(saleDate, startDate, endDate)) {
           transactionCount++
           totalSales += Number(sale.final_total || 0)
 

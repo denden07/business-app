@@ -8,6 +8,7 @@ import { dbPromise } from '../db'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 import { format } from 'date-fns'
+import { isWithinLocalDateRange } from '../utils/dateRange'
 import { collectFromSource } from '../db/query'
 
 const route = useRoute()
@@ -164,18 +165,7 @@ const filteredStockEntries = computed(() => {
 
   const filteredByDate = entries.filter(entry => {
     const entryDate = new Date(entry.created_at)
-
-    if (startDate.value) {
-      const from = new Date(startDate.value)
-      if (entryDate < from) return false
-    }
-
-    if (endDate.value) {
-      const to = new Date(`${endDate.value}T23:59:59`)
-      if (entryDate > to) return false
-    }
-
-    return true
+    return isWithinLocalDateRange(entryDate, startDate.value, endDate.value)
   })
 
   const filtered = keyword
@@ -203,18 +193,7 @@ const filteredPriceEntries = computed(() => {
 
   const filteredByDate = entries.filter(entry => {
     const entryDate = new Date(entry.changed_at)
-
-    if (startDate.value) {
-      const from = new Date(startDate.value)
-      if (entryDate < from) return false
-    }
-
-    if (endDate.value) {
-      const to = new Date(`${endDate.value}T23:59:59`)
-      if (entryDate > to) return false
-    }
-
-    return true
+    return isWithinLocalDateRange(entryDate, startDate.value, endDate.value)
   })
 
   const filtered = keyword
@@ -237,6 +216,8 @@ const filteredPriceEntries = computed(() => {
 })
 
 const activeList = computed(() => activeTab.value === 'stock' ? filteredStockEntries.value : filteredPriceEntries.value)
+const hasDateRangeFilter = computed(() => Boolean(startDate.value && endDate.value))
+const visibleEntryCount = computed(() => paginatedData.value.length)
 
 const totalPages = computed(() => Math.max(1, Math.ceil(activeList.value.length / itemsPerPage.value)))
 
@@ -479,7 +460,7 @@ const goBack = () => {
         </table>
       </div>
 
-      <Pagination v-model:page="currentPage" :total-pages="totalPages" :max-pages="5" />
+      <Pagination v-model:page="currentPage" :total-pages="totalPages" :max-pages="5" :item-count="hasDateRangeFilter ? visibleEntryCount : null" :total-items="hasDateRangeFilter ? activeList.length : null" />
 
       <div class="detail-footnote" v-if="latestPriceEntry && activeTab === 'prices'">
         Latest recorded price change: {{ formatDateTime(latestPriceEntry.changed_at) }}

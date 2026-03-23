@@ -1,4 +1,5 @@
 import { dbPromise } from '../db'
+import { buildCustomerDateKeyRange, buildDateKeyRange } from '../utils/dateRange'
 
 export default {
   namespaced: true,
@@ -39,8 +40,8 @@ export default {
         : db.transaction('points_history').store.index('date')
       const direction = sortOrder === 'asc' ? 'next' : 'prev'
       const range = customerId
-        ? buildCustomerDateRange(customerId, startDate, endDate)
-        : buildDateRange(startDate, endDate)
+        ? buildCustomerDateKeyRange(customerId, startDate, endDate)
+        : buildDateKeyRange(startDate, endDate)
 
       let total = 0
       if (filterType === 'all') {
@@ -93,8 +94,8 @@ export default {
         : db.transaction('sales').store.index('purchased_date')
       const direction = sortOrder === 'asc' ? 'next' : 'prev'
       const range = customerId
-        ? buildCustomerDateRange(customerId, startDate, endDate)
-        : buildDateRange(startDate, endDate)
+        ? buildCustomerDateKeyRange(customerId, startDate, endDate)
+        : buildDateKeyRange(startDate, endDate)
 
       const total = await source.count(range)
       const offset = (page - 1) * perPage
@@ -146,31 +147,3 @@ export default {
   }
 }
 
-function buildDateRange(startDate, endDate) {
-  if (startDate && endDate) {
-    return IDBKeyRange.bound(`${startDate}T00:00:00`, `${endDate}T23:59:59`)
-  }
-  if (startDate) {
-    return IDBKeyRange.lowerBound(`${startDate}T00:00:00`)
-  }
-  if (endDate) {
-    return IDBKeyRange.upperBound(`${endDate}T23:59:59`)
-  }
-  return null
-}
-
-function buildCustomerDateRange(customerId, startDate, endDate) {
-  if (startDate && endDate) {
-    return IDBKeyRange.bound(
-      [customerId, `${startDate}T00:00:00`],
-      [customerId, `${endDate}T23:59:59`]
-    )
-  }
-  if (startDate) {
-    return IDBKeyRange.lowerBound([customerId, `${startDate}T00:00:00`])
-  }
-  if (endDate) {
-    return IDBKeyRange.upperBound([customerId, `${endDate}T23:59:59`])
-  }
-  return IDBKeyRange.bound([customerId, ''], [customerId, '\uffff'])
-}
