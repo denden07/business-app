@@ -605,6 +605,19 @@ const checkout = async () => {
     </div>
     
     <div style="margin-top: 16px; padding: 12px; background: #f9f9f9; border-radius: 4px;">
+      <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #ddd;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-weight: bold; color: #2c5aa0;">
+          <span>Sold to:</span>
+          <span>${selectedCustomer.value ? selectedCustomer.value.name : 'Walk-in Customer'}</span>
+        </div>
+        ${selectedCustomer.value?.phone ? `
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-size: 13px; color: #4a6fa5;">
+            <span>Phone:</span>
+            <span>${selectedCustomer.value.phone}</span>
+          </div>
+        ` : ''}
+      </div>
+
       <div style="display: flex; justify-content: space-between; padding: 4px 0;">
         <span>Subtotal:</span>
         <span>₱${subTotal.value.toFixed(2)}</span>
