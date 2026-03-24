@@ -2,6 +2,12 @@ import { dbPromise } from '../db'
 import { collectFromSource, reduceFromSource } from '../db/query'
 import { buildDateKeyRange, isWithinLocalDateRange } from '../utils/dateRange'
 import Swal from 'sweetalert2'
+import {
+  getTemplatePaymentLabel,
+  getTemplateProfessionalFeeLabel,
+  normalizePaymentMethod,
+} from '../utils/templatePresentation'
+import { loadResolvedActiveTemplate } from '../utils/templatePreferences'
 
 export default {
   namespaced: true,
@@ -391,6 +397,9 @@ async voidSale(_, sale) {
 
 },
     async exportSalesByDateRange(_, { startDate, endDate }) {
+  const activeTemplate = await loadResolvedActiveTemplate()
+  const templateLabels = activeTemplate.labels || {}
+  const professionalFeeLabel = getTemplateProfessionalFeeLabel(templateLabels)
       const db = await dbPromise
 
       const tx = db.transaction(
@@ -442,12 +451,12 @@ async voidSale(_, sale) {
             customer_name: customer ? customer.name : '',
             items: itemNames.join(', '),
             subtotal: sale.total_amount,
-            professional_fee: sale.professional_fee,
+            [professionalFeeLabel]: sale.professional_fee,
             discount: sale.discount,
             final_total: sale.final_total,
             money_given: sale.money_given,
             change: sale.change,
-            payment_method: sale.payment_method || 'Cash'
+            payment_method: getTemplatePaymentLabel(normalizePaymentMethod(sale.payment_method), templateLabels)
           })
         }
 

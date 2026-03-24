@@ -36,6 +36,9 @@ const baseTemplate = {
     enableLoyalty: true,
     requireCustomerDetails: false,
   },
+  payments: {
+    methods: ['cash', 'gcash'],
+  },
   pages: {
     showHome: true,
     showItems: true,
@@ -43,7 +46,6 @@ const baseTemplate = {
     showDrafts: true,
     showCustomers: true,
     showAnalytics: true,
-    showAbout: true,
     showSettings: true,
   },
   reporting: {
@@ -52,6 +54,11 @@ const baseTemplate = {
   labels: {
     catalog: 'Items',
     catalogEntry: 'Item',
+    professionalFee: 'Additional Fee',
+    customerSection: 'Sold to',
+    customerAction: 'Select Customer',
+    paymentCash: 'Cash',
+    paymentGcash: 'Online Bank',
   },
 }
 
@@ -105,6 +112,9 @@ const templates = [
       trackBatches: false,
       trackExpiry: false,
     },
+    payments: {
+      methods: ['cash'],
+    },
     reporting: {
       focus: 'sales',
     },
@@ -131,6 +141,10 @@ const templates = [
       trackStock: true,
       trackBatches: true,
       trackExpiry: true,
+    },
+    labels: {
+      professionalFee: 'Professional Fee',
+      paymentGcash: 'Online Bank',
     },
     reporting: {
       focus: 'inventory',
@@ -174,6 +188,14 @@ const templates = [
       trackBatches: false,
       trackExpiry: false,
     },
+    customer: {
+      enableLoyalty: false,
+      requireCustomerDetails: false,
+    },
+    labels: {
+      professionalFee: 'Service Fee',
+      paymentGcash: 'Online Bank',
+    },
     reporting: {
       focus: 'services',
     },
@@ -198,6 +220,14 @@ const templates = [
       trackStock: false,
       trackBatches: false,
       trackExpiry: false,
+    },
+    customer: {
+      enableLoyalty: false,
+      requireCustomerDetails: false,
+    },
+    labels: {
+      professionalFee: 'Labor Fee',
+      paymentGcash: 'Online Bank',
     },
     reporting: {
       focus: 'mixed',

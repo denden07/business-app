@@ -6,6 +6,10 @@ import { useStore } from 'vuex'
 import Swal from 'sweetalert2'
 import { useRouter } from 'vue-router'
 import Pagination from '../components/Pagination.vue'
+import {
+  isCustomerSelectionRequired,
+  isLoyaltyEnabled,
+} from '../utils/templatePresentation'
 
 const store = useStore()
 
@@ -19,6 +23,10 @@ const perPage = ref(10)
 const search = ref('')
 const sortBy = ref('id')    // created_at | name
 const sortOrder = ref('desc')        // asc | desc
+const activeTemplate = computed(() => store.getters['template/activeTemplate'] || {})
+const loyaltyEnabled = computed(() => isLoyaltyEnabled(activeTemplate.value))
+const customerSelectionRequired = computed(() => isCustomerSelectionRequired(activeTemplate.value))
+const showPointsFeatures = computed(() => loyaltyEnabled.value)
 
 /* ======================
    COLUMN VISIBILITY
@@ -27,12 +35,19 @@ const _custDefaultCols = { name: true, address: true, points: true }
 const colMenuOpen = ref(false)
 const visibleCols = ref({ ..._custDefaultCols, ...JSON.parse(localStorage.getItem('col-vis-customers') || '{}') })
 watch(visibleCols, v => localStorage.setItem('col-vis-customers', JSON.stringify(v)), { deep: true })
-const allCols = [
-  { key: 'name', label: 'Name' },
-  { key: 'address', label: 'Address' },
-  { key: 'points', label: 'Points' },
-]
-const visibleColumnCount = computed(() => allCols.filter(col => visibleCols.value[col.key]).length + 1)
+const allCols = computed(() => {
+  const columns = [
+    { key: 'name', label: 'Name' },
+    { key: 'address', label: 'Address' },
+  ]
+
+  if (showPointsFeatures.value) {
+    columns.push({ key: 'points', label: 'Points' })
+  }
+
+  return columns
+})
+const visibleColumnCount = computed(() => allCols.value.filter(col => visibleCols.value[col.key]).length + 1)
 const toggleCol = (key) => { visibleCols.value[key] = !visibleCols.value[key] }
 
 const modal = ref(null)
@@ -81,7 +96,7 @@ const load = async () => {
     page: page.value,
     perPage: perPage.value,
     search: search.value,
-    sortBy: sortBy.value,
+    sortBy: !showPointsFeatures.value && sortBy.value === 'points' ? 'id' : sortBy.value,
     sortOrder: sortOrder.value
   })
 }
@@ -95,6 +110,15 @@ watch([search, sortBy, sortOrder, perPage], () => {
 })
 
 watch(page, () => load())
+
+watch(showPointsFeatures, enabled => {
+  if (!enabled) {
+    visibleCols.value.points = false
+    if (sortBy.value === 'points') {
+      sortBy.value = 'id'
+    }
+  }
+}, { immediate: true })
 
 /* ======================
    PAGINATION
@@ -201,6 +225,8 @@ async function remove(c) {
    POINTS MODAL
 ====================== */
 function openPointsModal(c) {
+  if (!showPointsFeatures.value) return
+
   pointsForm.customer_id = c.id
   pointsForm.points = 0
   pointsForm.note = ''
@@ -270,7 +296,7 @@ onMounted(() => {
   if (q.search !== undefined) search.value = q.search
   const qPer = Number(q.perPage || 0)
   if (qPer && qPer > 0) perPage.value = qPer
-  if (q.sortBy) sortBy.value = q.sortBy
+  if (q.sortBy) sortBy.value = !showPointsFeatures.value && q.sortBy === 'points' ? 'id' : q.sortBy
   if (q.sortOrder) sortOrder.value = q.sortOrder
   load()
   // ensure native dialog close resets forms if user dismisses via ESC/outside click
@@ -295,10 +321,11 @@ function goToTransactionHistory(customerId) {
     name: 'TransactionHistory',
     params: { id: customerId },
     query: {
+      tab: showPointsFeatures.value ? 'points' : 'purchases',
       page: page.value,
       search: search.value || undefined,
       perPage: perPage.value,
-      sortBy: sortBy.value,
+      sortBy: !showPointsFeatures.value && sortBy.value === 'points' ? 'id' : sortBy.value,
       sortOrder: sortOrder.value
     }
   })
@@ -308,6 +335,9 @@ function goToTransactionHistory(customerId) {
 <template>
   <div class="page-shell">
     <h1>Customers</h1>
+    <p v-if="!showPointsFeatures && customerSelectionRequired" class="page-subtitle">
+      Customer records stay available for required checkout selection, but loyalty and points tools are hidden for this template.
+    </p>
 
     <!-- Top bar -->
       <div class="top-bar">
@@ -322,7 +352,7 @@ function goToTransactionHistory(customerId) {
         <select v-model="sortBy" class="select-field">
         <option value="id">Newest</option>
         <option value="name">Name</option>
-        <option value="points">Points</option>
+        <option v-if="showPointsFeatures" value="points">Points</option>
         </select>
 
         <select v-model="sortOrder" class="select-field">
@@ -340,7 +370,7 @@ function goToTransactionHistory(customerId) {
           <tr>
             <th v-if="visibleCols.name">Name</th>
             <th v-if="visibleCols.address">Address</th>
-            <th v-if="visibleCols.points">Points</th>
+            <th v-if="showPointsFeatures && visibleCols.points">Points</th>
             <th class="col-actions">
               <div class="th-actions-head">
                 Actions
@@ -360,11 +390,11 @@ function goToTransactionHistory(customerId) {
           <tr v-for="c in paginated" :key="c.id" @click="goToTransactionHistory(c.id)" style="cursor: pointer;">
             <td v-if="visibleCols.name">{{ c.name }}</td>
             <td v-if="visibleCols.address">{{ c.address || '-' }}</td>
-            <td v-if="visibleCols.points">{{ c.points }}</td>
+            <td v-if="showPointsFeatures && visibleCols.points">{{ c.points }}</td>
             <td class="col-actions actions-td">
               <button class="warning btn" @click.stop="openEdit(c)">Edit</button>
               <button class="danger btn" @click.stop="remove(c)">Delete</button>
-              <button class="secondary btn" @click.stop="openPointsModal(c)">Adjust Points</button>
+              <button v-if="showPointsFeatures" class="secondary btn" @click.stop="openPointsModal(c)">Adjust Points</button>
             </td>
           </tr>
           <tr v-if="!paginated.length">
@@ -395,7 +425,7 @@ function goToTransactionHistory(customerId) {
     </dialog>
 
     <!-- POINTS MODAL -->
-    <dialog ref="pointsModal" class="modal app-modal-dialog modal-sm">
+    <dialog v-if="showPointsFeatures" ref="pointsModal" class="modal app-modal-dialog modal-sm">
       <h3>Adjust Customer Points</h3>
 
       <div class="modal-form">

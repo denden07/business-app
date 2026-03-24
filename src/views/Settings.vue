@@ -272,6 +272,10 @@ async function openTemplateSetup({ reset = false } = {}) {
   await router.push({ name: 'Setup' })
 }
 
+function openAboutPage() {
+  router.push({ name: 'About' })
+}
+
 async function backupDB() {
   status.value = 'Preparing backup...'
   progress.value = 0
@@ -567,6 +571,25 @@ onMounted(async () => {
             <button class="primary" @click="setOrChangePin">{{ pinIsSet ? 'Change PIN' : 'Set PIN' }}</button>
             <button v-if="pinIsSet" class="danger" @click="removePin">Remove PIN</button>
           </div>
+        </div>
+      </div>
+
+      <div class="card card-section">
+        <div class="section-heading">
+          <span class="section-icon">ℹ️</span>
+          <div>
+            <h2>About</h2>
+            <p class="muted">Read the app overview, disclaimer, and contact details.</p>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-copy">
+            <strong>Open About Page</strong>
+            <span>View application background, usage notes, and support contact information.</span>
+          </div>
+
+          <button class="secondary" @click="openAboutPage">Go To About</button>
         </div>
       </div>
     </div>

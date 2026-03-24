@@ -7,6 +7,7 @@ import { configurablePageDefinitions, templatePageSettingByRouteName } from '../
 import { loadResolvedActiveTemplate } from '../utils/templatePreferences'
 import { setOnboardingComplete } from '../utils/onboardingPreferences'
 import { dbPromise } from '../db'
+import { getTemplatePaymentLabel } from '../utils/templatePresentation'
 
 const router = useRouter()
 const route = useRoute()
@@ -21,12 +22,16 @@ const catalogMode = ref('mixed')
 const trackStock = ref(false)
 const trackBatches = ref(false)
 const trackExpiry = ref(false)
+const loyaltyEnabled = ref(true)
+const requireCustomer = ref(false)
+const paymentMethods = ref({ cash: true, gcash: true })
 const pageVisibility = ref({})
 
 const availableTemplates = computed(() => store.getters['template/availableTemplates'])
 const selectedTemplate = computed(() => {
   return availableTemplates.value.find(template => template.id === selectedTemplateId.value) || availableTemplates.value[0]
 })
+const selectedTemplateLabels = computed(() => selectedTemplate.value?.labels || {})
 const isServiceOnlyMode = computed(() => catalogMode.value === 'services')
 const progressPercent = computed(() => {
   if (steps.length <= 1) {
@@ -41,6 +46,11 @@ const customizationSummary = computed(() => ({
   trackStock: trackStock.value,
   trackBatches: trackBatches.value,
   trackExpiry: trackExpiry.value,
+  loyaltyEnabled: loyaltyEnabled.value,
+  requireCustomer: requireCustomer.value,
+  paymentMethods: Object.entries(paymentMethods.value)
+    .filter(([, enabled]) => enabled)
+    .map(([method]) => getTemplatePaymentLabel(method, selectedTemplateLabels.value)),
   visiblePages: configurablePageDefinitions.filter(page => pageVisibility.value[page.name] !== false),
 }))
 
@@ -48,6 +58,10 @@ const canProceed = computed(() => {
   if (currentStep.value === 0) {
     return appName.value.trim().length > 1
   }
+
+   if (currentStep.value === 2) {
+    return Object.values(paymentMethods.value).some(Boolean)
+   }
 
   return true
 })
@@ -67,6 +81,12 @@ function applyTemplatePreset(template) {
   trackStock.value = !!template.itemDefaults?.trackStock
   trackBatches.value = !!template.itemDefaults?.trackBatches
   trackExpiry.value = !!template.itemDefaults?.trackExpiry
+  loyaltyEnabled.value = template.customer?.enableLoyalty !== false
+  requireCustomer.value = template.workflow?.requireCustomer === true || template.customer?.requireCustomerDetails === true
+  paymentMethods.value = {
+    cash: (template.payments?.methods || ['cash', 'gcash']).includes('cash'),
+    gcash: (template.payments?.methods || ['cash', 'gcash']).includes('gcash'),
+  }
   pageVisibility.value = { ...template.defaultPageVisibility }
 }
 
@@ -90,6 +110,20 @@ function togglePageVisibility(pageName) {
   pageVisibility.value[pageName] = pageVisibility.value[pageName] === false
 }
 
+function togglePaymentMethod(method) {
+  const nextValue = !paymentMethods.value[method]
+  const enabledCount = Object.values(paymentMethods.value).filter(Boolean).length
+
+  if (!nextValue && enabledCount <= 1) {
+    return
+  }
+
+  paymentMethods.value = {
+    ...paymentMethods.value,
+    [method]: nextValue,
+  }
+}
+
 function buildTemplateOverrides() {
   const productsEnabled = catalogMode.value !== 'services'
   const servicesEnabled = catalogMode.value !== 'products'
@@ -97,6 +131,9 @@ function buildTemplateOverrides() {
   const canTrackStock = productsEnabled && trackStock.value
   const canTrackBatches = canTrackStock && trackBatches.value
   const canTrackExpiry = canTrackBatches && trackExpiry.value
+  const methods = Object.entries(paymentMethods.value)
+    .filter(([, enabled]) => enabled)
+    .map(([method]) => method)
   const pages = {}
 
   for (const page of configurablePageDefinitions) {
@@ -117,12 +154,20 @@ function buildTemplateOverrides() {
       allowServiceSales: servicesEnabled,
       allowMixedItems,
       requireBatchSelection: canTrackBatches,
+      requireCustomer: requireCustomer.value,
     },
     itemDefaults: {
       itemType: catalogMode.value === 'services' ? 'service' : 'product',
       trackStock: canTrackStock,
       trackBatches: canTrackBatches,
       trackExpiry: canTrackExpiry,
+    },
+    customer: {
+      enableLoyalty: loyaltyEnabled.value,
+      requireCustomerDetails: requireCustomer.value,
+    },
+    payments: {
+      methods: methods.length ? methods : ['cash'],
     },
     pages,
   }
@@ -330,6 +375,51 @@ onMounted(async () => {
             </button>
           </div>
         </div>
+
+        <div class="option-group">
+          <span class="group-label">Customer and loyalty</span>
+          <div class="toggle-stack compact-stack">
+            <label class="toggle-row">
+              <input v-model="loyaltyEnabled" type="checkbox" />
+              <div>
+                <strong>Enable loyalty</strong>
+                <span>Show customer points and redeem controls during checkout.</span>
+              </div>
+            </label>
+
+            <label class="toggle-row">
+              <input v-model="requireCustomer" type="checkbox" />
+              <div>
+                <strong>Require customer selection</strong>
+                <span>Keep the customer section visible and require a customer before checkout.</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div class="option-group">
+          <span class="group-label">Payment methods</span>
+          <div class="page-chip-grid">
+            <button
+              type="button"
+              :class="['page-chip', { active: paymentMethods.cash }]"
+              @click="togglePaymentMethod('cash')"
+            >
+              <span class="page-chip-icon" aria-hidden="true">{{ paymentMethods.cash ? '✓' : '✕' }}</span>
+              <span>{{ getTemplatePaymentLabel('cash', selectedTemplateLabels) }}</span>
+            </button>
+
+            <button
+              type="button"
+              :class="['page-chip', { active: paymentMethods.gcash }]"
+              @click="togglePaymentMethod('gcash')"
+            >
+              <span class="page-chip-icon" aria-hidden="true">{{ paymentMethods.gcash ? '✓' : '✕' }}</span>
+              <span>{{ getTemplatePaymentLabel('gcash', selectedTemplateLabels) }}</span>
+            </button>
+          </div>
+          <p class="muted helper-copy">At least one payment method must stay enabled.</p>
+        </div>
       </div>
 
       <div v-else class="step-panel review-panel">
@@ -359,6 +449,19 @@ onMounted(async () => {
               {{ customizationSummary.trackBatches ? 'batches on' : 'batches off' }},
               {{ customizationSummary.trackExpiry ? 'expiry on' : 'expiry off' }}
             </strong>
+          </article>
+
+          <article>
+            <span>Customer and loyalty</span>
+            <strong class="review-value review-value-break">
+              {{ customizationSummary.loyaltyEnabled ? 'Loyalty on' : 'Loyalty off' }},
+              {{ customizationSummary.requireCustomer ? 'customer required' : 'customer optional' }}
+            </strong>
+          </article>
+
+          <article>
+            <span>Payment methods</span>
+            <strong class="review-value review-value-break">{{ customizationSummary.paymentMethods.join(', ') }}</strong>
           </article>
         </div>
 
@@ -597,6 +700,14 @@ onMounted(async () => {
 .review-pages {
   display: grid;
   gap: 12px;
+}
+
+.compact-stack {
+  gap: 10px;
+}
+
+.helper-copy {
+  font-size: 13px;
 }
 
 .segmented {

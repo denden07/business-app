@@ -10,11 +10,22 @@ import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 import { format } from 'date-fns'
 import { isWithinLocalDateRange } from '../utils/dateRange'
+import {
+  getTemplateCustomerSectionLabel,
+  getTemplatePaymentLabel,
+  getTemplateProfessionalFeeLabel,
+  normalizePaymentMethod,
+} from '../utils/templatePresentation'
 
 
 
 const store = useStore()
 const router = useRouter()
+const activeTemplate = computed(() => store.getters['template/activeTemplate'] || {})
+const templateLabels = computed(() => activeTemplate.value.labels || {})
+const professionalFeeLabel = computed(() => getTemplateProfessionalFeeLabel(templateLabels.value))
+const customerSectionLabel = computed(() => getTemplateCustomerSectionLabel(templateLabels.value))
+const formatPaymentMethod = (value) => getTemplatePaymentLabel(value, templateLabels.value)
 
 /* ======================
    SORTING
@@ -38,17 +49,17 @@ const _salesDefaultCols = { id: true, purchased_date: true, total_amount: true, 
 const colMenuOpen = ref(false)
 const visibleCols = ref({ ..._salesDefaultCols, ...JSON.parse(localStorage.getItem('col-vis-sales') || '{}') })
 watch(visibleCols, v => localStorage.setItem('col-vis-sales', JSON.stringify(v)), { deep: true })
-const allCols = [
+const allCols = computed(() => [
   { key: 'id', label: 'Sale #' },
   { key: 'purchased_date', label: 'Purchased Date' },
   { key: 'total_amount', label: 'Subtotal' },
   { key: 'discount', label: 'Discount' },
-  { key: 'professional_fee', label: 'Prof Fee' },
+  { key: 'professional_fee', label: professionalFeeLabel.value },
   { key: 'final_total', label: 'Total' },
   { key: 'payment_method', label: 'Payment' },
   { key: 'status', label: 'Status' },
-]
-const visibleColumnCount = computed(() => allCols.filter(col => visibleCols.value[col.key]).length + 1)
+])
+const visibleColumnCount = computed(() => allCols.value.filter(col => visibleCols.value[col.key]).length + 1)
 const toggleCol = (key) => { visibleCols.value[key] = !visibleCols.value[key] }
 
 /* ======================
@@ -195,8 +206,8 @@ const sales = computed(() => {
     
     // For payment_method, default to 'Cash' if not set
     if (sortBy.value === 'payment_method') {
-      aVal = aVal || 'Cash'
-      bVal = bVal || 'Cash'
+      aVal = normalizePaymentMethod(aVal)
+      bVal = normalizePaymentMethod(bVal)
     }
     
     const comparison = aVal < bVal ? -1 : aVal > bVal ? 1 : 0
@@ -315,7 +326,7 @@ const exportCSV = async () => {
           <th v-if="visibleCols.purchased_date">Purchased Date</th>
           <th v-if="visibleCols.total_amount">Subtotal</th>
           <th v-if="visibleCols.discount">Discount</th>
-          <th v-if="visibleCols.professional_fee">Prof Fee</th>
+          <th v-if="visibleCols.professional_fee">{{ professionalFeeLabel }}</th>
           <th v-if="visibleCols.final_total">Total</th>
           <th v-if="visibleCols.payment_method" @click="toggleSort('payment_method')" style="cursor: pointer; user-select: none;">
             Payment {{ sortBy === 'payment_method' ? (sortOrder === 'asc' ? '↑' : '↓') : '' }}
@@ -346,7 +357,7 @@ const exportCSV = async () => {
           <td v-if="visibleCols.discount">₱{{ fmt(sale.discount) }}</td>
           <td v-if="visibleCols.professional_fee">₱{{ fmt(sale.professional_fee) }}</td>
           <td v-if="visibleCols.final_total"><strong>₱{{ fmt(sale.final_total) }}</strong></td>
-          <td v-if="visibleCols.payment_method">{{ sale.payment_method || 'Cash' }}</td>
+          <td v-if="visibleCols.payment_method">{{ formatPaymentMethod(sale.payment_method) }}</td>
           <td v-if="visibleCols.status" :class="sale.status === 'voided' ? 'status-voided' : 'status-ok'">{{ sale.status }}</td>
           <td class="col-actions actions-td">
             <button class="info btn" @click="openSaleModal(sale)">View</button>
@@ -373,10 +384,10 @@ const exportCSV = async () => {
               {{ new Date(selectedSale.purchased_date).toLocaleString() }}
             </div>
             <div class="sale-meta">
-              Customer: {{ saleCustomer ? saleCustomer.name : 'Walk-in' }}
+              {{ customerSectionLabel }}: {{ saleCustomer ? saleCustomer.name : 'Walk-in' }}
             </div>
             <div class="sale-meta">
-              Payment: {{ selectedSale.payment_method || 'Cash' }}
+              Payment: {{ formatPaymentMethod(selectedSale.payment_method) }}
             </div>
           </div>
 
@@ -413,7 +424,7 @@ const exportCSV = async () => {
         </div>
         <div class="sale-summary">
           <div>Subtotal: ₱{{ selectedSale.total_amount.toFixed(2) }}</div>
-          <div>Professional Fee: ₱{{ selectedSale.professional_fee.toFixed(2) }}</div>
+          <div v-if="Number(selectedSale.professional_fee || 0) > 0">{{ professionalFeeLabel }}: ₱{{ Number(selectedSale.professional_fee || 0).toFixed(2) }}</div>
           <div>Discount: ₱{{ selectedSale.discount.toFixed(2) }}</div>
           <div><strong>Total: ₱{{ selectedSale.final_total.toFixed(2) }}</strong></div>
 

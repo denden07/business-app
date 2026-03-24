@@ -10,6 +10,12 @@ import '@vuepic/vue-datepicker/dist/main.css'
 import { format } from 'date-fns'
 import { collectFromSource } from '../db/query'
 import { getLocalDayStart } from '../utils/dateRange'
+import {
+  getTemplateCustomerSectionLabel,
+  getTemplatePaymentLabel,
+  getTemplateProfessionalFeeLabel,
+  isLoyaltyEnabled,
+} from '../utils/templatePresentation'
 
 const route = useRoute()
 const store = useStore()
@@ -18,11 +24,25 @@ const router = useRouter()
 
 const customerId = Number(route.params.id)
 const customerPoints = ref(0)
+const activeTemplate = computed(() => store.getters['template/activeTemplate'] || {})
+const templateLabels = computed(() => activeTemplate.value.labels || {})
+const loyaltyEnabled = computed(() => isLoyaltyEnabled(activeTemplate.value))
+const customerSectionLabel = computed(() => getTemplateCustomerSectionLabel(templateLabels.value))
+const professionalFeeLabel = computed(() => getTemplateProfessionalFeeLabel(templateLabels.value))
+const formatPaymentMethod = (value) => getTemplatePaymentLabel(value, templateLabels.value)
+
+function normalizeTab(value) {
+  if (!loyaltyEnabled.value) {
+    return 'purchases'
+  }
+
+  return value === 'purchases' ? 'purchases' : 'points'
+}
 
 /* ======================
    STATE
 ====================== */
-const activeTab = ref('points')
+const activeTab = ref('purchases')
 const startDate = ref('')
 const endDate = ref('')
 const dateRange = ref(null)
@@ -89,6 +109,12 @@ watch(activeTab, () => {
   loadActiveTab()
 })
 
+watch(loyaltyEnabled, enabled => {
+  if (!enabled && activeTab.value !== 'purchases') {
+    activeTab.value = 'purchases'
+  }
+}, { immediate: true })
+
 watch([startDate, endDate, sortOrder, itemsPerPage], () => {
   currentPage.value = 1
   loadActiveTab()
@@ -108,6 +134,7 @@ watch(currentPage, () => {
    LOAD DATA
 ====================== */
 onMounted(async () => {
+  activeTab.value = normalizeTab(typeof route.query.tab === 'string' ? route.query.tab : 'points')
   const db = await dbPromise
   currentCustomer.value = await db.get('customers', customerId)
   const year = new Date().getFullYear()
@@ -279,7 +306,7 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
     <div class="page-header">
       <div>
         <h1>Customer Transactions</h1>
-        <p class="page-subtitle">Transaction activity and points history for the selected customer.</p>
+        <p class="page-subtitle">{{ loyaltyEnabled ? 'Transaction activity and points history for the selected customer.' : 'Transaction activity for the selected customer.' }}</p>
       </div>
 
       <button class="info back-btn" @click="goBack">← Back to Customers</button>
@@ -290,7 +317,7 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
         <span class="summary-label">Current Customer</span>
         <strong class="summary-value">{{ currentCustomerName }}</strong>
       </div>
-      <div class="customer-summary-card points-card">
+      <div v-if="loyaltyEnabled" class="customer-summary-card points-card">
         <span class="summary-label">Available Points</span>
         <strong class="summary-value">{{ currentCustomerPoints }}</strong>
       </div>
@@ -299,6 +326,7 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
     <!-- TABS -->
     <div class="tabs">
       <button
+        v-if="loyaltyEnabled"
         class="tab-button"
         :class="{ active: activeTab === 'points' }"
         @click="activeTab = 'points'"
@@ -337,7 +365,7 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
         </template>
       </VueDatePicker>
 
-      <select v-if="activeTab === 'points'" v-model="filterType" class="select-field">
+      <select v-if="loyaltyEnabled && activeTab === 'points'" v-model="filterType" class="select-field">
         <option value="all">All Types</option>
         <option value="sale">Sale</option>
         <option value="manual">Manual</option>
@@ -356,7 +384,7 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
     </div>
 
     <!-- POINTS HISTORY -->
-    <div v-if="activeTab === 'points'" class="table-wrap" :class="{ 'table-wrap-menu-open': colMenuOpen }">
+    <div v-if="loyaltyEnabled && activeTab === 'points'" class="table-wrap" :class="{ 'table-wrap-menu-open': colMenuOpen }">
     <table>
       <thead>
         <tr>
@@ -562,10 +590,10 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
               {{ salePurchasedAt ? new Date(salePurchasedAt).toLocaleString() : '' }}
             </div>
             <div class="sale-meta">
-              Customer: {{ saleCustomer ? saleCustomer.name : 'Walk-in' }}
+              {{ customerSectionLabel }}: {{ saleCustomer ? saleCustomer.name : 'Walk-in' }}
             </div>
             <div class="sale-meta">
-              Payment: {{ selectedSale.payment_method || 'Cash' }}
+              Payment: {{ formatPaymentMethod(selectedSale.payment_method) }}
             </div>
           </div>
 
@@ -603,7 +631,7 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
 
         <div class="sale-summary">
           <div>Subtotal: ₱{{ Number(selectedSale.total_amount || 0).toFixed(2) }}</div>
-          <div>Professional Fee: ₱{{ Number(selectedSale.professional_fee || 0).toFixed(2) }}</div>
+          <div v-if="Number(selectedSale.professional_fee || 0) > 0">{{ professionalFeeLabel }}: ₱{{ Number(selectedSale.professional_fee || 0).toFixed(2) }}</div>
           <div>Discount: ₱{{ saleDiscountAmount.toFixed(2) }}</div>
           <div><strong>Total: ₱{{ Number(selectedSale.final_total || 0).toFixed(2) }}</strong></div>
 

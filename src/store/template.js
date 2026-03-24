@@ -47,6 +47,7 @@ export default {
         workflow: template.workflow,
         itemDefaults: template.itemDefaults,
         customer: template.customer,
+        payments: template.payments,
         pages: template.pages,
         reporting: template.reporting,
         labels: template.labels,

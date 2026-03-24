@@ -25,13 +25,6 @@ Phase 1 behavior
 - Does not change current medicines-based checkout yet
 - Does not migrate old medicines data yet
 
-Pending next phases
-
-- Phase 2: allow POS and drafts to accept both medicines and items
-- Phase 3: add item-based sales persistence and mixed reporting support
-- Phase 4: migrate shared UI from medicine-specific wording to business-neutral wording where safe
-- Phase 5: template-specific behavior deferred for now
-
 Notes
 
 - This phase is intentionally parallel-first to avoid breaking live sales behavior.
@@ -59,12 +52,6 @@ Phase 2 behavior
 - Medicines continue using the existing inventory flow
 - Older drafts remain resumable through legacy medicine-map fallback
 
-Pending next phases
-
-- Phase 3: update analytics and reporting queries to aggregate medicines and items together
-- Phase 4: migrate more medicine-specific UI wording and detail screens to shared item-based components
-- Phase 5: template-specific behavior deferred for now
-
 ## Phase 3: Mixed Analytics and Reporting
 
 Status: completed on 2026-03-23
@@ -81,11 +68,6 @@ Phase 3 behavior
 - Analytics totals include mixed medicine and item sales
 - Top-selling chart now ranks medicines and items together
 - Sales CSV exports use neutral item wording and include mixed sale-line names
-
-Pending next phases
-
-- Phase 4: migrate more medicine-specific UI wording and detail screens to shared item-based components
-- Phase 5: template-specific behavior deferred for now
 
 ## Phase 4: Item Detail Flow and UI Generalization
 
@@ -112,35 +94,87 @@ Phase 4 behavior
 - Mixed sale modals now label sale lines as items instead of medicines when showing combined catalog data
 - Navigation and page titles now use more transitional catalog wording while the legacy medicines module remains available
 
-Pending next phases
+## Phase 5: Template Foundation and Initial Runtime Wiring
 
-- Phase 5: template foundation planning is now defined in [docs/template.md](docs/template.md)
+Status: completed on 2026-03-24 to 2026-03-25
 
-## Phase 5: Template Foundation
+Completed
 
-Status: planned
+- Added a shared template registry in [src/templates/registry.js](src/templates/registry.js) covering Generic, Sari-sari Store, Pharmacy, Food Cart, Car Wash, and Repair Shop
+- Added shared page definitions and template page visibility mapping in [src/templates/pages.js](src/templates/pages.js)
+- Added template preference persistence in [src/utils/templatePreferences.js](src/utils/templatePreferences.js) for active template selection and resolved template overrides
+- Added onboarding completion persistence in [src/utils/onboardingPreferences.js](src/utils/onboardingPreferences.js)
+- Added a Vuex template module in [src/store/template.js](src/store/template.js) and registered it in [src/store/index.js](src/store/index.js)
+- Initialized the active template during startup in [src/main.js](src/main.js)
+- Updated route visibility fallback in [src/router/index.js](src/router/index.js) to use effective template page defaults
+- Updated navigation and page visibility controls in [src/components/Sidebar.vue](src/components/Sidebar.vue) and [src/components/PageVisibilitySettings.vue](src/components/PageVisibilitySettings.vue) to respect template-driven defaults
+- Updated [src/components/ItemForm.vue](src/components/ItemForm.vue) so new items inherit active template defaults and enforce template-driven product/service and stock-tracking rules
+- Updated [src/views/Home.vue](src/views/Home.vue) so POS catalog search and add-to-cart behavior respect template-driven product/service availability
+- Added template-aware POS search wording in [src/views/Home.vue](src/views/Home.vue) for placeholder and no-results states
+- Removed the unused Inventory page from [src/router/index.js](src/router/index.js), [src/templates/pages.js](src/templates/pages.js), and [src/views/Inventory.vue](src/views/Inventory.vue)
 
-Planned rollout
+Phase 5 behavior
 
-- Phase 5A: template registry and active template setting
-- Phase 5B: sari-sari store baseline template
-- Phase 5C: pharmacy template rules through config
-- Phase 5D: food cart and car wash template rollout
-- Phase 5E: repair template extension after shared flows are stable
-
-Phase 5 goals
-
-- Templates remain configurations layered on top of the shared item, POS, customer, and analytics engine
-- No separate app forks, databases, or duplicated route trees
-- Template behavior is driven by a normalized config contract covering capabilities, workflow rules, defaults, UI visibility, and reporting focus
+- Templates now exist as runtime configuration objects instead of planning-only documentation
+- The app now persists an active template and resolved overrides in app settings
+- New items inherit template defaults for item type and stock behavior
+- Product and service availability can now be constrained by the active template in item creation and POS search
+- Page visibility defaults now come from the active template before user overrides are applied
 
 Reference
 
 - See [docs/template.md](docs/template.md) for the template capability model, schema, and rollout plan
 
-Notes
+## Phase 6: First-Run Setup and Template Profile Editing
 
-- Template-specific behavior is intentionally postponed until the shared items foundation has settled further.
+Status: completed on 2026-03-24 to 2026-03-25
+
+Completed
+
+- Added a first-run setup route and onboarding redirect in [src/router/index.js](src/router/index.js)
+- Added the onboarding UI in [src/views/Setup.vue](src/views/Setup.vue)
+- Implemented setup steps for business name, template selection, quick customization, and review in [src/views/Setup.vue](src/views/Setup.vue)
+- Persisted onboarding completion state in [src/utils/onboardingPreferences.js](src/utils/onboardingPreferences.js)
+- Persisted active template overrides from setup in [src/utils/templatePreferences.js](src/utils/templatePreferences.js) and [src/store/template.js](src/store/template.js)
+- Hid the sidebar during setup in [src/App.vue](src/App.vue)
+- Added a Template Profile section to [src/views/Settings.vue](src/views/Settings.vue) with `Edit Template Profile` and `Rerun Setup` actions
+- Added a safe rerun-setup flow in [src/views/Settings.vue](src/views/Settings.vue) so onboarding can be reopened for retesting or profile edits
+- Improved setup UX in [src/views/Setup.vue](src/views/Setup.vue) with a multi-step progress bar, service-only customization behavior, page visibility state indicators, and overflow-safe review cards
+
+Phase 6 behavior
+
+- First launch now routes through setup until onboarding is completed
+- Users can choose a premade template or Generic during onboarding
+- Users can apply lightweight template customizations before entering the app
+- Users can reopen setup later from Settings to retest or revise the template profile
+
+## Phase 7: Template-Driven Checkout, Customer Rules, and Sales Presentation
+
+Status: completed on 2026-03-25
+
+Completed
+
+- Extended [src/views/Setup.vue](src/views/Setup.vue) so setup now captures payment-method availability and customer-selection requirements alongside loyalty toggles
+- Updated [src/views/Home.vue](src/views/Home.vue) so checkout summary copy, customer visibility, professional fee visibility, and payment labels follow the active template
+- Added shared template presentation helpers in [src/utils/templatePresentation.js](src/utils/templatePresentation.js) for loyalty gating, customer requirements, payment labels, and professional fee labels
+- Updated [src/templates/pages.js](src/templates/pages.js) so Customers is hidden by default when the active template does not need loyalty and does not require customer selection
+- Updated [src/views/Customers.vue](src/views/Customers.vue) so points sorting, columns, and manual point adjustments are hidden when loyalty is off while keeping customer records usable when customer selection is still required
+- Updated [src/views/TransactionHistory.vue](src/views/TransactionHistory.vue) so loyalty-off templates default to purchase history, hide points-only tabs and summaries, and use template-aware sale labels in the detail modal
+- Updated [src/views/Sales.vue](src/views/Sales.vue) and [src/store/sales.js](src/store/sales.js) so sales history and CSV export use template-aware payment and professional fee labels
+
+Phase 7 behavior
+
+- Setup now controls whether customers are optional or required and which payment methods appear in POS
+- Customers is no longer shown by default for templates that do not use loyalty and do not require customer tracking
+- Customer records can still be exposed manually from page visibility settings without re-enabling loyalty features
+- Loyalty-off templates now show customer history as purchase-first instead of points-first
+- Sales detail surfaces and exports now use the same payment and fee terminology as the active template
+
+Pending next phases
+
+- Deeper template-specific labeling in more historical and draft surfaces where legacy neutral copy still remains
+- Multi-business support remains deferred
+- Combined analytics remains deferred
 
 ## Phase 4.5: Legacy Medicines Removal
 
@@ -162,6 +196,27 @@ Phase 4.5 behavior
 - Older medicine records are migrated into items automatically before the app starts using the database
 - Older `/medicines` links continue to land on the matching item routes through redirects
 
-Pending next phases
+## Phase 8: Settings-Only About Access
 
-- Phase 5: template-specific behavior deferred for now
+Status: completed on 2026-03-25
+
+Completed
+
+- Added an About link in the lowest section of [src/views/Settings.vue](src/views/Settings.vue)
+- Removed About from template-managed navigation in [src/templates/pages.js](src/templates/pages.js)
+- Removed About from template page defaults in [src/templates/registry.js](src/templates/registry.js)
+
+Phase 8 behavior
+
+- About is still available through its route
+- About no longer appears in the sidebar
+- About no longer appears in page visibility or template-managed navigation
+- Settings is now the intended entry point for About
+
+## Remaining Backlog
+
+- Deeper template-specific labeling in more historical and draft surfaces where legacy neutral copy still remains
+- More template-driven analytics emphasis and reporting-focus behavior beyond the current foundation
+- Multi-business support
+- Separate operational database per business
+- Cross-business combined analytics

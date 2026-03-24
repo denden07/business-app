@@ -1,243 +1,150 @@
 # Backlogs
 
-## Current Execution Scope
+This file only keeps work that is still pending.
 
-The current implementation focus is limited to:
+Completed work such as template foundation, first-run setup, initial template customization, customer-rule wiring, and settings entry points should stay in [docs/checklist.md](docs/checklist.md), not here.
 
-1. Template foundation
-2. First-run setup page
+## Priority Order
 
-The following areas are intentionally deferred until later instruction:
+1. Remaining template work
+	- quickest wins because the template engine and related screens already exist
+2. Item expiration notifications
+	- moderate effort because expiry data and inventory flows already exist
+3. Debt sale tracking
+	- moderate effort because it affects checkout, customers, sales history, and reporting
+4. Budgeting feature
+	- moderate effort because expenses and profit reporting need new storage, UI, and analytics integration
+5. Multi-business support
+	- large change because it introduces business registry and switching
+6. Separate database per business
+	- large change because it requires migration and business-scoped data isolation
+7. Cross-business analytics
+	- heaviest change because it depends on multi-business isolation and cross-database aggregation
 
-- multi-business support
-- separate database per business
-- combined analytics across businesses
+## 1. Remaining Template Work
 
-This means current work should establish the shared template system first, then the onboarding/setup flow that selects and customizes a template.
+### Post-Setup Template Editing
 
-## Multi-Business With Separate Databases
+The app can already rerun setup and edit the active template profile, but deeper post-setup editing is still pending.
 
-### Summary
+Remaining scope:
 
-Support multiple businesses owned by the same user, where each business has its own local database while analytics can still show combined revenue across all businesses.
+- richer label customization beyond the current payment, customer, and professional-fee labels
+- more direct Settings-based template editing without requiring a full setup rerun
+- additional template-managed page and terminology controls where useful
 
-Example:
-- Business A: Pharmacy
-- Business B: Sari-sari store
+### More Template-Driven Runtime Coverage
 
-Each business should operate independently for day-to-day records, but the owner should be able to view consolidated analytics such as total revenue across all businesses.
+Several core template behaviors are already wired into setup, POS, customers, history, and sales presentation.
 
-### Why Consider This
+Still pending:
 
-- Strong separation of operational data per business
-- Lower risk of mixing inventory, sales, customers, and settings
-- Better fit for different business templates in the future
-- Easier per-business backup and restore
+- template-specific wording in remaining draft and historical surfaces
+- any additional validation rules not yet covered by the current shared template engine
+- further analytics emphasis and dashboard/report tailoring by reporting focus
 
-### Proposed Direction
+## 2. Item Expiration Notifications
 
-Use a multi-layer setup:
+Add notification and visibility support for items that are near expiry or already expired.
 
-1. Central meta database
-   - Stores business registry
-   - Stores active business selection
-   - Stores app-level preferences
+Remaining goals:
 
-2. One operational database per business
-   - Items
-   - Inventory and batches
-   - Sales and sale items
-   - Customers
-   - Drafts
-   - Business-specific settings
+- detect items nearing expiration based on tracked expiry dates
+- surface expired and near-expiry items in inventory and relevant dashboards
+- define notification thresholds such as 7 days, 30 days, or template-driven windows
+- support operational alerts before inventory becomes unusable
 
-3. Shared analytics aggregation layer
-   - Reads totals across business databases
-   - Can be computed live or stored in a summary database
+## 3. Debt Sale Tracking
 
-### Analytics Requirement
+Add a way to mark and manage sales that are not fully paid at the time of checkout.
 
-The owner should be able to switch analytics scope between:
+Remaining goals:
 
-- Current business only
-- All businesses combined
-- Selected businesses combined
+- mark a sale as debt or unpaid balance during checkout
+- connect debt records to a customer when customer tracking is enabled
+- store outstanding balance and payment status in sale records
+- distinguish fully paid, partially paid, and unpaid sales in history and reporting
+- allow later settlement or follow-up payment recording
+- define how debt sales affect total sales, collected revenue, and outstanding receivables in reporting
 
-Possible combined metrics:
-- Total revenue
-- Total items sold
-- Transaction count
-- Revenue trend over time
-- Revenue contribution by business
+Notes:
 
-### Tradeoffs
+- if customer tracking is enabled, debt should be attached to the selected customer record for follow-up and settlement history
+- reporting should not treat debt the same as fully collected cash; totals should clearly separate gross sale value, collected amount, and remaining receivables where needed
 
-Benefits:
-- Cleaner isolation between businesses
-- More future-proof for business templates
-- Easier to reason about backups and restores
+## 4. Budgeting Feature
 
-Costs:
-- Combined analytics becomes a cross-database aggregation problem
-- More architecture work than a single database with business_id
-- Requires careful handling of business switching and migrations
+Add an expense and budgeting layer so the app can track money going out, not only sales coming in.
 
-### Open Questions
+Remaining goals:
 
-- Should customers be isolated per business or optionally shared?
-- Should combined analytics read all business databases live or use a summary database?
-- Should business settings and page visibility be global or per business?
-- How should backup and restore work for one business versus the full owner profile?
+- track expenses by date, category, and amount
+- define budget entries or spending buckets where useful
+- integrate expenses into analytics views and summaries
+- compute profit using sales minus expenses
+- distinguish revenue, expenses, and profit clearly in reports and dashboards
 
-### Suggested Rollout
-
-1. Add business registry and active business selection
-2. Move operational data to one database per business
-3. Add analytics scope filters
-4. Add combined analytics aggregation
-5. Consider cloud sync later if separate devices must contribute to the same owner dashboard
-
-## First-Run Setup And Template Selection
+## 5. Multi-Business Support
 
 ### Summary
 
-Add a first-run setup page that helps the user choose a business template before entering the app.
+Support multiple businesses owned by the same user, where each business has its own operational data boundary while the owner can still manage them from one app.
 
-The setup flow should support:
+### Remaining goals
 
-- premade templates
-- a generic template fallback
-- quick customization before finishing setup
-- continued customization after setup
-
-### Why This Matters
-
-- reduces first-use friction
-- gives users a clearer starting point
-- supports businesses that do not match a premade template
-- keeps templates flexible instead of locked presets
-
-### Backlog Scope
-
-1. Show setup flow on first app open when no business profile is configured
-2. Let the user enter a business name
-3. Let the user choose a premade template or Generic
-4. Let the user adjust core capabilities before finishing setup
-5. Persist the active template config in app settings
-6. Allow the user to edit the template later in Settings
-
-### Key Rule
-
-Premade templates are starting points, not fixed restrictions.
-
-The Generic template should be a neutral baseline for businesses that need a custom setup from the start.
-
-## Phased Rollout Plan
-
-### Phase 1: Template Foundation
-
-Goal:
-- define the shared template contract before changing screens or flows
-
-Scope:
-- finalize template schema
-- finalize Generic template behavior
-- finalize premade template capability defaults
-- keep one active template model in app settings
-
-Expected outcome:
-- templates become configuration objects, not hardcoded branches
-
-### Phase 2: First-Run Setup Page
-
-Goal:
-- guide first-time users into a valid starting configuration
-
-Scope:
-- first-run setup entry condition
-- business name step
-- template selection step
-- Generic template fallback
-- lightweight review and finish step
-
-Expected outcome:
-- new users can enter the app with a valid business profile and active template
-
-### Phase 3: Template Customization
-
-Goal:
-- let users adjust the selected template without breaking the shared engine
-
-Scope:
-- quick capability toggles
-- page visibility defaults
-- label customization
-- post-setup editing in Settings
-
-Expected outcome:
-- premade templates remain editable starting points
-
-### Phase 4: Shared-Core Behavior Wiring
-
-Goal:
-- connect template config into existing app behavior
-
-Scope:
-- item defaults
-- page visibility
-- POS validation rules
-- inventory behavior flags
-- customer and loyalty toggles
-- analytics emphasis by reporting focus
-
-Expected outcome:
-- the existing app responds to template configuration without duplicating flows
-
-### Phase 5: Business Registry
-
-Goal:
-- support more than one business owned by the same user
-
-Scope:
 - central business registry
-- active business selection
+- active business selection and switching
 - business creation flow
-- business-level settings container
+- business-scoped settings container
 
-Expected outcome:
-- the app can manage multiple business profiles cleanly
+### Open questions
 
-### Phase 6: Separate Operational Database Per Business
+- should customers be isolated per business or optionally shared?
+- which settings stay global versus business-specific?
+- how should backup and restore work for one business versus the full owner profile?
 
-Goal:
-- isolate day-to-day records for each business
+## 6. Separate Database Per Business
 
-Scope:
+### Summary
+
+Move from the current single-business runtime model to one operational database per business once the business registry exists.
+
+### Remaining goals
+
 - one database per business
-- migration strategy for existing single-business installs
-- business-scoped operational stores
+- migration strategy for current installs
+- business-scoped operational stores for items, sales, customers, drafts, and settings
 - per-business backup and restore behavior
 
-Expected outcome:
-- inventory, sales, customers, and drafts stay isolated per business
+### Tradeoffs to keep in mind
 
-### Phase 7: Cross-Business Analytics
+- cleaner data isolation between businesses
+- more migration and switching complexity
+- combined analytics becomes a cross-database aggregation problem
 
-Goal:
-- allow the owner to view consolidated performance across businesses
+## 7. Cross-Business Analytics
 
-Scope:
+### Summary
+
+Allow the owner to switch between analytics for the current business and combined analytics across multiple businesses.
+
+### Remaining goals
+
 - analytics scope selector
 - combined revenue totals
 - per-business contribution breakdown
 - multi-database aggregation or summary-store strategy
 
-Expected outcome:
-- users can view current business analytics or combined analytics across selected businesses
+### Expected metrics
 
-### Delivery Order Notes
+- total revenue
+- total items sold
+- transaction count
+- revenue trend over time
+- revenue contribution by business
 
-- Do not start separate per-business databases before template and setup foundations are stable.
-- Do not build combined analytics before business registry and business isolation exist.
-- Keep the current POS flow working throughout all phases.
-- For the current implementation window, stop after Phase 2 unless explicitly instructed to continue.
+## Delivery Order Notes
+
+- do not start separate per-business databases before business registry is stable
+- do not build combined analytics before business isolation exists
+- keep the current single-business POS flow working while multi-business is being introduced

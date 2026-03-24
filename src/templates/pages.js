@@ -1,3 +1,5 @@
+import { shouldShowCustomerDirectoryByDefault } from '../utils/templatePresentation'
+
 export const pageDefinitions = [
   { name: 'Home', label: 'Home', path: '/', icon: '🏠', configurable: true },
   { name: 'Items', label: 'Items', path: '/items', icon: '📦', configurable: true },
@@ -5,7 +7,6 @@ export const pageDefinitions = [
   { name: 'Drafts', label: 'Drafts', path: '/drafts', icon: '📝', configurable: true },
   { name: 'Customers', label: 'Customers', path: '/customers', icon: '🧑‍🤝‍🧑', configurable: true },
   { name: 'Analytics', label: 'Analytics', path: '/analytics', icon: '📊', configurable: true },
-  { name: 'About', label: 'About', path: '/about', icon: 'ℹ️', configurable: true },
   { name: 'Settings', label: 'Settings', path: '/settings', icon: '⚙️', configurable: false },
 ]
 
@@ -24,7 +25,6 @@ export const templatePageSettingByRouteName = {
   Drafts: 'showDrafts',
   Customers: 'showCustomers',
   Analytics: 'showAnalytics',
-  About: 'showAbout',
   Settings: 'showSettings',
 }
 
@@ -33,7 +33,14 @@ export function createPageVisibilityMapFromTemplate(template) {
 
   for (const page of configurablePageDefinitions) {
     const configKey = templatePageSettingByRouteName[page.name]
-    map[page.name] = template?.pages?.[configKey] !== false
+    const isEnabled = template?.pages?.[configKey] !== false
+
+    if (page.name === 'Customers') {
+      map[page.name] = isEnabled && shouldShowCustomerDirectoryByDefault(template)
+      continue
+    }
+
+    map[page.name] = isEnabled
   }
 
   return map

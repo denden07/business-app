@@ -17,8 +17,34 @@ const router = useRouter()
 const route = useRoute()
 const activeTemplate = computed(() => store.getters['template/activeTemplate'] || {})
 const templateWorkflow = computed(() => activeTemplate.value.workflow || {})
+const templateCustomer = computed(() => activeTemplate.value.customer || {})
+const templatePayments = computed(() => activeTemplate.value.payments || {})
+const templateLabels = computed(() => activeTemplate.value.labels || {})
 const allowProductSales = computed(() => templateWorkflow.value.allowProductSales !== false)
 const allowServiceSales = computed(() => templateWorkflow.value.allowServiceSales !== false)
+const requireCustomerSelection = computed(() => templateWorkflow.value.requireCustomer === true || templateCustomer.value.requireCustomerDetails === true)
+const loyaltyEnabled = computed(() => templateCustomer.value.enableLoyalty !== false)
+const showProfessionalFee = computed(() => allowServiceSales.value)
+const professionalFeeLabel = computed(() => templateLabels.value.professionalFee || 'Additional Fee')
+const showCustomerSection = computed(() => {
+  return loyaltyEnabled.value || requireCustomerSelection.value
+})
+const customerSectionLabel = computed(() => templateLabels.value.customerSection || 'Sold to')
+const customerActionLabel = computed(() => templateLabels.value.customerAction || 'Select Customer')
+const paymentOptions = computed(() => {
+  const configuredMethods = Array.isArray(templatePayments.value.methods) && templatePayments.value.methods.length
+    ? templatePayments.value.methods
+    : ['cash', 'gcash']
+
+  return configuredMethods.map(method => ({
+    value: method,
+    label: method === 'gcash'
+      ? (templateLabels.value.paymentGcash || 'Online Bank')
+      : (templateLabels.value.paymentCash || 'Cash'),
+  }))
+})
+const showPaymentMethodSelector = computed(() => paymentOptions.value.length > 1)
+const paymentMethodLabel = computed(() => paymentOptions.value.find(option => option.value === paymentMethod.value)?.label || paymentOptions.value[0]?.label || 'Cash')
 const catalogSearchLabel = computed(() => {
   if (allowProductSales.value && allowServiceSales.value) {
     return 'catalog items or services'
@@ -189,6 +215,137 @@ const getQtyInputStyle = (value) => {
 const paymentMethod = ref('cash') // default
 const interactionSettings = ref({ ...defaultInteractionSettings })
 let numpadAudioContext = null
+
+watch(paymentOptions, options => {
+  const firstOption = options[0]?.value || 'cash'
+  if (!options.some(option => option.value === paymentMethod.value)) {
+    paymentMethod.value = firstOption
+  }
+}, { immediate: true })
+
+watch(showProfessionalFee, visible => {
+  if (!visible) {
+    professionalFee.value = 0
+    if (focusedField.value === 'professionalFee') {
+      focusedField.value = ''
+    }
+  }
+}, { immediate: true })
+
+watch(showCustomerSection, visible => {
+  if (!visible) {
+    selectedCustomer.value = null
+    showCustomerModal.value = false
+    showRedeemModal.value = false
+    customerPoints.value = 0
+    redeemMultiplier.value = 1
+    pointsConfirmed.value = false
+  }
+}, { immediate: true })
+
+const buildCheckoutSummaryHtml = () => {
+  const customerBlock = showCustomerSection.value
+    ? `
+      <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #ddd;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-weight: bold; color: #2c5aa0;">
+          <span>${customerSectionLabel.value}:</span>
+          <span>${selectedCustomer.value ? selectedCustomer.value.name : 'Walk-in Customer'}</span>
+        </div>
+        ${selectedCustomer.value?.phone ? `
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-size: 13px; color: #4a6fa5;">
+            <span>Phone:</span>
+            <span>${selectedCustomer.value.phone}</span>
+          </div>
+        ` : ''}
+      </div>
+    `
+    : ''
+
+  const professionalFeeBlock = showProfessionalFee.value && professionalFee.value > 0
+    ? `
+      <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+        <span>${professionalFeeLabel.value}:</span>
+        <span>₱${professionalFee.value.toFixed(2)}</span>
+      </div>
+    `
+    : ''
+
+  const pointsBreakdown = loyaltyEnabled.value && pointsUsed.value > 0
+    ? `
+      <div style="display: flex; justify-content: space-between; padding: 2px 0 2px 16px; font-size: 13px; color: #718096;">
+        <span>• Points:</span>
+        <span>-₱${pointsUsed.value.toFixed(2)}</span>
+      </div>
+    `
+    : ''
+
+  const specialDiscountBreakdown = specialDiscount.value > 0
+    ? `
+      <div style="display: flex; justify-content: space-between; padding: 2px 0 2px 16px; font-size: 13px; color: #718096;">
+        <span>• Special:</span>
+        <span>-₱${specialDiscount.value.toFixed(2)}</span>
+      </div>
+    `
+    : ''
+
+  return `
+    <div style="max-height: 40vh; overflow-y: auto; margin: 16px 0; border: 1px solid #ddd; border-radius: 4px;">
+      <table style="width:100%; border-collapse: collapse; text-align: left;">
+        <thead style="position: sticky; top: 0; background: #f5f5f5; z-index: 10;">
+          <tr style="border-bottom: 2px solid #ddd;">
+            <th style="padding: 8px;">Item</th>
+            <th style="padding: 8px; text-align: center;">Qty</th>
+            <th style="padding: 8px; text-align: right;">Price</th>
+            <th style="padding: 8px; text-align: right;">Total</th>
+          </tr>
+        </thead>
+          ${cart.value.map(item => `
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 8px;">${item.name}</td>
+              <td style="padding: 8px; text-align: center;">${item.qty}</td>
+              <td style="padding: 8px; text-align: right;">₱${item.price.toFixed(2)}</td>
+              <td style="padding: 8px; text-align: right;">₱${(item.price * item.qty).toFixed(2)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top: 16px; padding: 12px; background: #f9f9f9; border-radius: 4px;">
+      ${customerBlock}
+      <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+        <span>Subtotal:</span>
+        <span>₱${subTotal.value.toFixed(2)}</span>
+      </div>
+      ${professionalFeeBlock}
+      ${pointsDiscount.value > 0 ? `
+        <div style="display: flex; justify-content: space-between; padding: 4px 0; color: #e53e3e;">
+          <span>Discount:</span>
+          <span>-₱${pointsDiscount.value.toFixed(2)}</span>
+        </div>
+        ${pointsBreakdown}
+        ${specialDiscountBreakdown}
+      ` : ''}
+      <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+        <span>Payment Method:</span>
+        <span>${paymentMethodLabel.value}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+        <span>Money Given:</span>
+        <span>₱${moneyGiven.value.toFixed(2)}</span>
+      </div>
+      <hr style="margin: 8px 0; border: none; border-top: 1px solid #ddd;" />
+      <div style="display: flex; justify-content: space-between; padding: 8px 0; font-size: 18px; font-weight: bold; color: #2d3748;">
+        <span>Grand Total:</span>
+        <span style="color: green;">₱${grandTotal.value.toFixed(2)}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 8px 0; font-size: 18px; font-weight: bold; color: #2d3748;">
+        <span>Change:</span>
+        <span style="color: red;">₱${change.value.toFixed(2)}</span>
+      </div>
+    </div>
+  `
+}
 
 const handleInteractionSettingsChanged = (event) => {
   interactionSettings.value = {
@@ -609,6 +766,14 @@ const checkout = async () => {
       text: 'Please add items before saving the sale.'
     })
 
+  if (requireCustomerSelection.value && !selectedCustomer.value) {
+    return Swal.fire({
+      icon: 'warning',
+      title: 'Customer required',
+      text: 'Select a customer before saving the sale.',
+    })
+  }
+
   if ((moneyGiven.value || 0) < grandTotal.value) {
     const { isConfirmed } = await Swal.fire({
       icon: 'warning',
@@ -646,86 +811,7 @@ const checkout = async () => {
   }
 
   // Confirmation with detailed breakdown
-  const itemsTable = `
-    <div style="max-height: 40vh; overflow-y: auto; margin: 16px 0; border: 1px solid #ddd; border-radius: 4px;">
-      <table style="width:100%; border-collapse: collapse; text-align: left;">
-        <thead style="position: sticky; top: 0; background: #f5f5f5; z-index: 10;">
-          <tr style="border-bottom: 2px solid #ddd;">
-            <th style="padding: 8px;">Item</th>
-            <th style="padding: 8px; text-align: center;">Qty</th>
-            <th style="padding: 8px; text-align: right;">Price</th>
-            <th style="padding: 8px; text-align: right;">Total</th>
-          </tr>
-        </thead>
-          ${cart.value.map(item => `
-            <tr style="border-bottom: 1px solid #eee;">
-              <td style="padding: 8px;">${item.name}</td>
-              <td style="padding: 8px; text-align: center;">${item.qty}</td>
-              <td style="padding: 8px; text-align: right;">₱${item.price.toFixed(2)}</td>
-              <td style="padding: 8px; text-align: right;">₱${(item.price * item.qty).toFixed(2)}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-    
-    <div style="margin-top: 16px; padding: 12px; background: #f9f9f9; border-radius: 4px;">
-      <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #ddd;">
-        <div style="display: flex; justify-content: space-between; align-items: center; font-weight: bold; color: #2c5aa0;">
-          <span>Sold to:</span>
-          <span>${selectedCustomer.value ? selectedCustomer.value.name : 'Walk-in Customer'}</span>
-        </div>
-        ${selectedCustomer.value?.phone ? `
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-size: 13px; color: #4a6fa5;">
-            <span>Phone:</span>
-            <span>${selectedCustomer.value.phone}</span>
-          </div>
-        ` : ''}
-      </div>
-
-      <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-        <span>Subtotal:</span>
-        <span>₱${subTotal.value.toFixed(2)}</span>
-      </div>
-      ${professionalFee.value > 0 ? `
-        <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-          <span>Professional Fee:</span>
-          <span>₱${professionalFee.value.toFixed(2)}</span>
-        </div>
-      ` : ''}
-      ${pointsDiscount.value > 0 ? `
-        <div style="display: flex; justify-content: space-between; padding: 4px 0; color: #e53e3e;">
-          <span>Discount:</span>
-          <span>-₱${pointsDiscount.value.toFixed(2)}</span>
-        </div>
-        ${pointsUsed.value > 0 ? `
-          <div style="display: flex; justify-content: space-between; padding: 2px 0 2px 16px; font-size: 13px; color: #718096;">
-            <span>• Points:</span>
-            <span>-₱${pointsUsed.value.toFixed(2)}</span>
-          </div>
-        ` : ''}
-        ${specialDiscount.value > 0 ? `
-          <div style="display: flex; justify-content: space-between; padding: 2px 0 2px 16px; font-size: 13px; color: #718096;">
-            <span>• Special:</span>
-            <span>-₱${specialDiscount.value.toFixed(2)}</span>
-          </div>
-        ` : ''}
-      ` : ''}
-      <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-        <span>Money Given:</span>
-        <span>₱${moneyGiven.value.toFixed(2)}</span>
-      </div>
-      <hr style="margin: 8px 0; border: none; border-top: 1px solid #ddd;" />
-      <div style="display: flex; justify-content: space-between; padding: 8px 0; font-size: 18px; font-weight: bold; color: #2d3748;">
-        <span>Grand Total:</span>
-        <span style="color: green;">₱${grandTotal.value.toFixed(2)}</span>
-      </div>
-      <div style="display: flex; justify-content: space-between; padding: 8px 0; font-size: 18px; font-weight: bold; color: #2d3748;">
-        <span>Change:</span>
-        <span style="color: red;">₱${change.value.toFixed(2)}</span>
-      </div>
-    </div>
-  `
+  const itemsTable = buildCheckoutSummaryHtml()
   
   const confirmResult = await Swal.fire({
     title: 'Confirm Checkout',
@@ -1026,22 +1112,22 @@ const getDiscountPriceLabel = (item) => {
     </div>
   </div>
 
-      <div class="sold-to">
+      <div v-if="showCustomerSection" class="sold-to">
         <!-- CUSTOMER SECTION + REDEEM (inline together) -->
         <div class="customer-section">
-          <label><strong>Sold to:</strong></label>
+          <label><strong>{{ customerSectionLabel }}:</strong></label>
           <div class="customer-display">
             <span v-if="selectedCustomer" class="customer-name">
               👤 {{ selectedCustomer.name }} 
             </span>
             <button v-if="!selectedCustomer" class="btn select-customer" @click="showCustomerModal=true">
-              Select Customer
+              {{ customerActionLabel }}
             </button>
             <button style="margin-left: 8px" v-if="selectedCustomer" class="mini danger" @click="selectedCustomer=null">✕</button>
           </div>
 
           <!-- REDEEM BUTTONS (inline in same section) -->
-          <div v-if="selectedCustomer" class="redeem-section">
+          <div v-if="loyaltyEnabled && selectedCustomer" class="redeem-section">
             <button 
               v-if="!pointsConfirmed" 
               class="mini regular" 
@@ -1166,8 +1252,8 @@ const getDiscountPriceLabel = (item) => {
 
   <!-- RIGHT PANEL -->
   <div class="right-panel">
-    <label>
-      Professional Fee
+    <label v-if="showProfessionalFee">
+      {{ professionalFeeLabel }}
       <input
         type="number"
         :value="professionalFee"
@@ -1204,21 +1290,15 @@ const getDiscountPriceLabel = (item) => {
       <button class="num-btn" @click="backspace">←</button>
     </div>
 
-    <div class="payment-toggle">
+    <div v-if="showPaymentMethodSelector" class="payment-toggle">
       <button
+        v-for="option in paymentOptions"
+        :key="option.value"
         class="payment-option-btn"
-        :class="{ active: paymentMethod === 'cash' }"
-        @click="selectPaymentMethod('cash')"
+        :class="{ active: paymentMethod === option.value }"
+        @click="selectPaymentMethod(option.value)"
       >
-        Cash
-      </button>
-
-      <button
-        class="payment-option-btn"
-        :class="{ active: paymentMethod === 'gcash' }"
-        @click="selectPaymentMethod('gcash')"
-      >
-        GCash
+        {{ option.label }}
       </button>
     </div>
 
@@ -1228,7 +1308,7 @@ const getDiscountPriceLabel = (item) => {
 </div>
 
 <!-- CUSTOMER MODAL -->
-<div v-if="showCustomerModal" class="modal-backdrop app-modal-backdrop">
+<div v-if="showCustomerSection && showCustomerModal" class="modal-backdrop app-modal-backdrop">
   <div class="modal app-modal-panel modal-sm modal-customer">
     <h3>Select Customer</h3>
 
@@ -1268,7 +1348,7 @@ const getDiscountPriceLabel = (item) => {
 </div>
 
 <!-- REDEEM MODAL -->
-<div v-if="showRedeemModal" class="modal-backdrop app-modal-backdrop">
+<div v-if="showCustomerSection && loyaltyEnabled && showRedeemModal" class="modal-backdrop app-modal-backdrop">
   <div class="modal app-modal-panel modal-sm">
     <h3>Redeem Points</h3>
     <p>Available: <strong>{{ customerPoints }}</strong></p>
