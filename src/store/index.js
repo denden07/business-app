@@ -4,6 +4,7 @@ import sales from './sales'
 import customers from './customer'
 import transaction from './transaction'
 import drafts from './drafts'
+import template from './template'
 
 export default createStore({
   modules: {
@@ -11,6 +12,7 @@ export default createStore({
     customers,
     items,
     sales,
-    drafts
+    drafts,
+    template
   }
 })

@@ -14,6 +14,15 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'saved'])
 const store = useStore()
+const activeTemplate = computed(() => store.getters['template/activeTemplate'] || {})
+const templateItemDefaults = computed(() => store.getters['template/itemDefaults'] || {
+  itemType: 'product',
+  trackStock: true,
+  trackBatches: false,
+  trackExpiry: false,
+})
+const templateWorkflow = computed(() => activeTemplate.value.workflow || {})
+const templateCapabilities = computed(() => activeTemplate.value.capabilities || {})
 
 const name = ref('')
 const description = ref('')
@@ -27,9 +36,52 @@ const adjustmentQty = ref(0)
 const expiryDate = ref('')
 const totalStock = ref(0)
 
+const allowProductItems = computed(() => {
+  if (props.itemToEdit?.item_type === 'product') return true
+  return templateWorkflow.value.allowProductSales !== false
+})
+
+const allowServiceItems = computed(() => {
+  if (props.itemToEdit?.item_type === 'service') return true
+  return templateWorkflow.value.allowServiceSales !== false
+})
+
+const itemTypeOptions = computed(() => {
+  const options = []
+
+  if (allowProductItems.value) {
+    options.push({ value: 'product', label: 'Product' })
+  }
+
+  if (allowServiceItems.value) {
+    options.push({ value: 'service', label: 'Service' })
+  }
+
+  return options
+})
+
+const itemTypeLocked = computed(() => itemTypeOptions.value.length <= 1)
 const isProduct = computed(() => itemType.value === 'product')
 const canTrackBatches = computed(() => isProduct.value && trackStock.value)
 const canTrackExpiry = computed(() => canTrackBatches.value && trackBatches.value)
+const stockTrackingRequired = computed(() => templateCapabilities.value.stockTracking === 'required')
+const batchTrackingRequired = computed(() => templateCapabilities.value.batchTracking === 'required')
+const expiryTrackingRequired = computed(() => templateCapabilities.value.expiryTracking === 'required')
+
+watch([allowProductItems, allowServiceItems], ([productsAllowed, servicesAllowed]) => {
+  if (productsAllowed && servicesAllowed) {
+    return
+  }
+
+  if (!productsAllowed && servicesAllowed) {
+    itemType.value = 'service'
+    return
+  }
+
+  if (productsAllowed && !servicesAllowed) {
+    itemType.value = 'product'
+  }
+}, { immediate: true })
 
 watch(isProduct, value => {
   if (!value) {
@@ -43,11 +95,20 @@ watch(isProduct, value => {
   }
 
   if (!props.itemToEdit) {
+    trackStock.value = stockTrackingRequired.value ? true : !!templateItemDefaults.value.trackStock
+  }
+
+  if (stockTrackingRequired.value) {
     trackStock.value = true
   }
 })
 
 watch(trackStock, value => {
+  if (stockTrackingRequired.value && isProduct.value && !value) {
+    trackStock.value = true
+    return
+  }
+
   if (!value) {
     trackBatches.value = false
     trackExpiry.value = false
@@ -57,11 +118,28 @@ watch(trackStock, value => {
 })
 
 watch(trackBatches, value => {
+  if (batchTrackingRequired.value && canTrackBatches.value && !value) {
+    trackBatches.value = true
+    return
+  }
+
   if (!value) {
     trackExpiry.value = false
     expiryDate.value = ''
   }
 })
+
+watch([canTrackBatches, batchTrackingRequired], ([canUseBatches, batchesRequired]) => {
+  if (canUseBatches && batchesRequired) {
+    trackBatches.value = true
+  }
+}, { immediate: true })
+
+watch([canTrackExpiry, expiryTrackingRequired], ([canUseExpiry, expiryRequired]) => {
+  if (canUseExpiry && expiryRequired) {
+    trackExpiry.value = true
+  }
+}, { immediate: true })
 
 const isValid = computed(() => name.value.trim() !== '' && Number(price1.value) > 0)
 
@@ -83,14 +161,16 @@ const loadTotalStock = async (itemId) => {
 }
 
 const loadItemData = async (item) => {
+  const defaults = templateItemDefaults.value
+
   name.value = item?.name || ''
   description.value = item?.description || ''
-  itemType.value = item?.item_type || 'product'
+  itemType.value = item?.item_type || defaults.itemType || itemTypeOptions.value[0]?.value || 'product'
   price1.value = Number(item?.price1 || 0)
   price2.value = Number(item?.price2 || 0)
-  trackStock.value = item ? !!item.track_stock : true
-  trackBatches.value = !!item?.track_batches
-  trackExpiry.value = !!item?.track_expiry
+  trackStock.value = item ? !!item.track_stock : !!defaults.trackStock
+  trackBatches.value = item ? !!item.track_batches : !!defaults.trackBatches
+  trackExpiry.value = item ? !!item.track_expiry : !!defaults.trackExpiry
   adjustmentQty.value = 0
   expiryDate.value = ''
 
@@ -98,6 +178,18 @@ const loadItemData = async (item) => {
     await loadTotalStock(item.id)
   } else {
     totalStock.value = 0
+  }
+
+  if (!item && itemType.value === 'product' && stockTrackingRequired.value) {
+    trackStock.value = true
+  }
+
+  if (!item && trackStock.value && batchTrackingRequired.value) {
+    trackBatches.value = true
+  }
+
+  if (!item && trackBatches.value && expiryTrackingRequired.value) {
+    trackExpiry.value = true
   }
 }
 
@@ -177,9 +269,8 @@ const submitForm = async () => {
       <textarea v-model="description" rows="3"></textarea>
 
       <label>Item Type</label>
-      <select v-model="itemType">
-        <option value="product">Product</option>
-        <option value="service">Service</option>
+      <select v-model="itemType" :disabled="itemTypeLocked">
+        <option v-for="option in itemTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
       </select>
 
       <label>Regular Price</label>
@@ -193,17 +284,17 @@ const submitForm = async () => {
       <h3>Inventory Rules</h3>
 
       <label class="toggle-row">
-        <input v-model="trackStock" type="checkbox" :disabled="!isProduct" />
+        <input v-model="trackStock" type="checkbox" :disabled="!isProduct || stockTrackingRequired" />
         <span>Track stock</span>
       </label>
 
       <label class="toggle-row">
-        <input v-model="trackBatches" type="checkbox" :disabled="!canTrackBatches" />
+        <input v-model="trackBatches" type="checkbox" :disabled="!canTrackBatches || batchTrackingRequired" />
         <span>Track batches</span>
       </label>
 
       <label class="toggle-row">
-        <input v-model="trackExpiry" type="checkbox" :disabled="!canTrackExpiry" />
+        <input v-model="trackExpiry" type="checkbox" :disabled="!canTrackExpiry || expiryTrackingRequired" />
         <span>Track expiry</span>
       </label>
 

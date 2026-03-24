@@ -2,6 +2,8 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { dbPromise } from '../db'
+import { pageDefinitions } from '../templates/pages'
+import { loadEffectivePageVisibility } from '../utils/templatePreferences'
 
 const router = useRouter()
 const route = useRoute()
@@ -29,16 +31,7 @@ const navigateTo = (path) => {
 }
 
 // Menu
-const menuItems = [
-  { name: 'Home', label: 'Home', path: '/', icon: '🏠' },
-  { name: 'Items', label: 'Items', path: '/items', icon: '📦' },
-  { name: 'Sales', label: 'Sales', path: '/sales', icon: '💰' },
-  { name: 'Drafts', label: 'Drafts', path: '/drafts', icon: '📝' },
-  { name: 'Customers', label: 'Customers', path: '/customers', icon: '🧑‍🤝‍🧑' },
-  { name: 'Analytics', label: 'Analytics', path: '/analytics', icon: '📊' },
-  { name: 'About', label: 'About', path: '/about', icon: 'ℹ️' },
-  { name: 'Settings', label: 'Settings', path: '/settings', icon: '⚙️' },
-]
+const menuItems = pageDefinitions.filter(item => item.path)
 
 const isActive = (path) => {
   if (path === '/') return route.path === '/'
@@ -62,21 +55,8 @@ async function loadAppName() {
 
 async function loadVisibility() {
   try {
-    const db = await dbPromise
-    const map = {}
-    const store = db.transaction('pages').objectStore('pages')
-    let count = 0
-    let cursor = await store.openCursor()
-    while (cursor) {
-      const row = cursor.value
-      map[row.name] = !!row.visible
-      count += 1
-      cursor = await cursor.continue()
-    }
-    // if no records, default to showing all
-    if (!count) {
-      menuItems.forEach(m => (map[m.name] = true))
-    }
+    await dbPromise
+    const { map } = await loadEffectivePageVisibility()
     pageVisibility.value = map
   } catch (err) {
     console.error('Failed to load page visibility', err)
@@ -100,7 +80,14 @@ onUnmounted(() => {
 
 const visibleMenu = () => {
   if (!pageVisibility.value) return menuItems
-  return menuItems.filter(m => pageVisibility.value[m.name] !== false)
+
+  return menuItems.filter(item => {
+    if (item.configurable === false) {
+      return true
+    }
+
+    return pageVisibility.value[item.name] !== false
+  })
 }
 </script>
 

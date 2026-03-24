@@ -1,6 +1,6 @@
 <template>
   <div class="app-container">
-    <Sidebar />
+    <Sidebar v-if="!route.meta?.hideSidebar" />
     <main class="main-content">
       <router-view />
     </main>
@@ -8,7 +8,10 @@
 </template>
 
 <script setup>
+import { useRoute } from 'vue-router'
 import Sidebar from '../src/components/Sidebar.vue'
+
+const route = useRoute()
 </script>
 
 <style>

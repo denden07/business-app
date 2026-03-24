@@ -9,5 +9,7 @@ import './db';
 import store from './store';
 import router from './router';
 
+await store.dispatch('template/initializeTemplate')
+
 createApp(App).use(store).use(router)
 .mount('#app')

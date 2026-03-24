@@ -114,7 +114,29 @@ Phase 4 behavior
 
 Pending next phases
 
-- Phase 5: template-specific behavior deferred for now
+- Phase 5: template foundation planning is now defined in [docs/template.md](docs/template.md)
+
+## Phase 5: Template Foundation
+
+Status: planned
+
+Planned rollout
+
+- Phase 5A: template registry and active template setting
+- Phase 5B: sari-sari store baseline template
+- Phase 5C: pharmacy template rules through config
+- Phase 5D: food cart and car wash template rollout
+- Phase 5E: repair template extension after shared flows are stable
+
+Phase 5 goals
+
+- Templates remain configurations layered on top of the shared item, POS, customer, and analytics engine
+- No separate app forks, databases, or duplicated route trees
+- Template behavior is driven by a normalized config contract covering capabilities, workflow rules, defaults, UI visibility, and reporting focus
+
+Reference
+
+- See [docs/template.md](docs/template.md) for the template capability model, schema, and rollout plan
 
 Notes
 

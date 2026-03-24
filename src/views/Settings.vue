@@ -1,22 +1,25 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
 import { dbPromise } from '../db'
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
 import { Device } from '@capacitor/device'
 import { FilePicker } from '@capawesome/capacitor-file-picker'
-import { refreshRoutes } from '../router'
 import PageVisibilitySettings from '../components/PageVisibilitySettings.vue'
 import { collectFromSource } from '../db/query'
 import Swal from 'sweetalert2'
+import { configurablePageDefinitions } from '../templates/pages'
 import {
   defaultInteractionSettings,
   loadInteractionSettings,
   saveInteractionSettings,
 } from '../utils/interactionPreferences'
+import { setOnboardingComplete } from '../utils/onboardingPreferences'
 
 const router = useRouter()
+const store = useStore()
 
 const status = ref('')
 const progress = ref(0)
@@ -28,6 +31,8 @@ const appNameStatus = ref('')
 const isDarkMode = ref(localStorage.getItem('darkMode') === 'true')
 const interactionSettings = ref({ ...defaultInteractionSettings })
 const interactionStatus = ref('')
+const pagesList = configurablePageDefinitions
+const activeTemplate = computed(() => store.getters['template/activeTemplate'])
 
 function clampAppName(value) {
   return String(value || '').slice(0, appNameLimit)
@@ -244,15 +249,28 @@ async function removePin() {
   Swal.fire({ icon: 'success', title: 'PIN removed', timer: 1400, showConfirmButton: false })
 }
 
-const pageVisibility = ref({})
-const pagesList = ref([
-  { name: 'Home', label: 'Home' },
-  { name: 'Items', label: 'Items' },
-  { name: 'Sales', label: 'Sales' },
-  { name: 'Customers', label: 'Customers' },
-  { name: 'Analytics', label: 'Analytics' },
-  { name: 'About', label: 'About' },
-])
+async function openTemplateSetup({ reset = false } = {}) {
+  if (reset) {
+    const result = await Swal.fire({
+      icon: 'question',
+      title: 'Rerun setup?',
+      text: 'This will reopen the onboarding flow so you can retest and change the current template profile.',
+      showCancelButton: true,
+      confirmButtonText: 'Rerun setup',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#1abc9c',
+      cancelButtonColor: '#888',
+    })
+
+    if (!result.isConfirmed) {
+      return
+    }
+
+    await setOnboardingComplete(false)
+  }
+
+  await router.push({ name: 'Setup' })
+}
 
 async function backupDB() {
   status.value = 'Preparing backup...'
@@ -360,54 +378,6 @@ async function restoreDB() {
   }
 }
 
-async function loadPageVisibility() {
-  try {
-    const db = await dbPromise
-    const map = {}
-    const store = db.transaction('pages').objectStore('pages')
-    // default all true
-    pagesList.value.forEach(p => (map[p.name] = true))
-    let cursor = await store.openCursor()
-    while (cursor) {
-      const row = cursor.value
-      map[row.name] = !!row.visible
-      cursor = await cursor.continue()
-    }
-    pageVisibility.value = map
-  } catch (err) {
-    console.error('Failed loading page visibility', err)
-  }
-}
-
-async function savePageVisibility() {
-  try {
-    const db = await dbPromise
-    const tx = db.transaction('pages', 'readwrite')
-    const store = tx.objectStore('pages')
-    for (const p of pagesList.value) {
-      await store.put({ name: p.name, visible: !!pageVisibility.value[p.name] })
-    }
-    await tx.done
-    status.value = 'Page visibility saved'
-    // refresh router so menu and routes reflect changes immediately
-    try { await refreshRoutes() } catch (e) { console.warn('Failed to refresh routes', e) }
-    await Swal.fire({
-      icon: 'success',
-      title: 'Page visibility saved',
-      timer: 1200,
-      showConfirmButton: false,
-    })
-  } catch (err) {
-    console.error('Failed saving page visibility', err)
-    status.value = 'Failed saving page visibility: ' + err.message
-    await Swal.fire({
-      icon: 'error',
-      title: 'Save failed',
-      text: err.message || 'Unable to save page visibility.'
-    })
-  }
-}
-
 onMounted(async () => {
   await checkPinOnEntry()
   if (pinUnlocked.value) {
@@ -415,7 +385,6 @@ onMounted(async () => {
     pinIsSet.value = !!(await getPin())
     await loadAppName()
     await loadInteractionPreferences()
-    await loadPageVisibility()
   }
 })
 </script>
@@ -555,6 +524,28 @@ onMounted(async () => {
 
       <div class="card card-section">
         <PageVisibilitySettings :pages="pagesList" />
+      </div>
+
+      <div class="card card-section">
+        <div class="section-heading">
+          <span class="section-icon">🧩</span>
+          <div>
+            <h2>Template Profile</h2>
+            <p class="muted">Review the active template or reopen setup to adjust the business profile.</p>
+          </div>
+        </div>
+
+        <div class="setting-row template-profile-row">
+          <div class="setting-copy">
+            <strong>{{ activeTemplate.label }}</strong>
+            <span>{{ activeTemplate.description }}</span>
+          </div>
+
+          <div class="template-profile-actions">
+            <button class="secondary" @click="openTemplateSetup()">Edit Template Profile</button>
+            <button class="primary" @click="openTemplateSetup({ reset: true })">Rerun Setup</button>
+          </div>
+        </div>
       </div>
 
       <div class="card card-section">
@@ -713,6 +704,14 @@ body.dark-mode .section-icon {
   border-radius: 14px;
   background: rgba(148, 163, 184, 0.08);
   border: 1px solid rgba(148, 163, 184, 0.16);
+}
+.template-profile-row {
+  align-items: flex-start;
+}
+.template-profile-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 .theme-copy { display: flex; flex-direction: column; gap: 4px; }
 .setting-copy { display: flex; flex-direction: column; gap: 4px; }

@@ -3,18 +3,16 @@ import { ref, onMounted } from 'vue'
 import { dbPromise } from '../db'
 import { refreshRoutes } from '../router'
 import Swal from 'sweetalert2'
+import { configurablePageDefinitions } from '../templates/pages'
+import {
+  loadEffectivePageVisibility,
+  loadResolvedActiveTemplate,
+} from '../utils/templatePreferences'
 
 const props = defineProps({
   pages: {
     type: Array,
-    default: () => [
-      { name: 'Home', label: 'Home' },
-      { name: 'Items', label: 'Items' },
-      { name: 'Sales', label: 'Sales' },
-      { name: 'Customers', label: 'Customers' },
-      { name: 'Analytics', label: 'Analytics' },
-    //   { name: 'Settings', label: 'Settings' },
-    ]
+    default: () => configurablePageDefinitions,
   }
 })
 
@@ -52,16 +50,7 @@ async function requirePin() {
 async function load() {
   loading.value = true
   try {
-    const db = await dbPromise
-    const map = {}
-    const store = db.transaction('pages').objectStore('pages')
-    props.pages.forEach(p => (map[p.name] = true))
-    let cursor = await store.openCursor()
-    while (cursor) {
-      const row = cursor.value
-      map[row.name] = !!row.visible
-      cursor = await cursor.continue()
-    }
+    const { map } = await loadEffectivePageVisibility()
     visibility.value = map
   } catch (err) {
     console.error('load visibility', err)
@@ -92,7 +81,12 @@ async function save() {
 }
 
 async function resetToDefaults() {
-  props.pages.forEach(p => (visibility.value[p.name] = true))
+  const template = await loadResolvedActiveTemplate()
+
+  props.pages.forEach(page => {
+    visibility.value[page.name] = template.defaultPageVisibility[page.name] !== false
+  })
+
   await save()
 }
 

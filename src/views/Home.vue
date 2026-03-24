@@ -15,6 +15,33 @@ import {
 const store = useStore()
 const router = useRouter()
 const route = useRoute()
+const activeTemplate = computed(() => store.getters['template/activeTemplate'] || {})
+const templateWorkflow = computed(() => activeTemplate.value.workflow || {})
+const allowProductSales = computed(() => templateWorkflow.value.allowProductSales !== false)
+const allowServiceSales = computed(() => templateWorkflow.value.allowServiceSales !== false)
+const catalogSearchLabel = computed(() => {
+  if (allowProductSales.value && allowServiceSales.value) {
+    return 'catalog items or services'
+  }
+
+  if (allowServiceSales.value) {
+    return 'services'
+  }
+
+  return 'catalog items'
+})
+const searchPlaceholder = computed(() => {
+  if (allowProductSales.value && allowServiceSales.value) {
+    return 'Search catalog item or service...'
+  }
+
+  if (allowServiceSales.value) {
+    return 'Search service...'
+  }
+
+  return 'Search catalog item...'
+})
+const noSearchResultsMessage = computed(() => `No ${catalogSearchLabel.value} found.`)
 
 // ======================
 // POS STATE
@@ -313,6 +340,16 @@ const catalogMap = ref({})
 const filteredCatalog = ref([])
 let catalogSearchRequestId = 0
 
+const isCatalogItemAllowedByTemplate = (item) => {
+  const itemType = item?.item_type === 'service' ? 'service' : 'product'
+
+  if (itemType === 'service') {
+    return allowServiceSales.value
+  }
+
+  return allowProductSales.value
+}
+
 watch(search, async (val) => {
   const requestId = ++catalogSearchRequestId
   const q = val.trim().toLowerCase()
@@ -331,6 +368,11 @@ watch(search, async (val) => {
   let cursor = await itemsStore.openCursor()
   while (cursor) {
     const item = cursor.value
+    if (!isCatalogItemAllowedByTemplate(item)) {
+      cursor = await cursor.continue()
+      continue
+    }
+
     const name = (item.name || '').toLowerCase()
     const description = (item.description || '').toLowerCase()
     const matchesQuery = name.startsWith(q) || description.startsWith(q)
@@ -440,6 +482,15 @@ watch(customerSearch, async (val) => {
 // CART LOGIC
 // ======================
 const addToCart = async (catalogItem) => {
+  if (!isCatalogItemAllowedByTemplate(catalogItem)) {
+    await Swal.fire({
+      icon: 'warning',
+      title: 'Unavailable for this template',
+      text: `${catalogItem.name} is not allowed by the active template profile.`,
+    })
+    return
+  }
+
   const price = selectedPriceType.value === 'regular'
     ? catalogItem.price1
     : catalogItem.price2 || catalogItem.price1
@@ -943,7 +994,7 @@ const getDiscountPriceLabel = (item) => {
   <!-- SEARCH BAR + CUSTOMER + REDEEM (ALL INLINE) -->
   <div class="top-controls">
   <div class="search-section">
-    <SearchInput v-model="search" placeholder="Search catalog item or service..." :inputClass="'input pos-search-input'" />
+    <SearchInput v-model="search" :placeholder="searchPlaceholder" :inputClass="'input pos-search-input'" />
     
     <!-- Dropdown -->
     <div v-if="search && filteredCatalog.length" class="dropdown">
@@ -968,6 +1019,10 @@ const getDiscountPriceLabel = (item) => {
           </div>
         </div>
       </div>
+    </div>
+
+    <div v-else-if="search" class="dropdown dropdown-empty">
+      <div class="dropdown-empty-copy">{{ noSearchResultsMessage }}</div>
     </div>
   </div>
 
@@ -1442,6 +1497,20 @@ const getDiscountPriceLabel = (item) => {
 }
 .dropdown-item:hover {
   background: #f0f8ff;
+}
+
+.dropdown-empty {
+  display: flex;
+  align-items: center;
+  min-height: 60px;
+}
+
+.dropdown-empty-copy {
+  width: 100%;
+  padding: 14px 12px;
+  color: #64748b;
+  font-size: 14px;
+  text-align: left;
 }
 
 /* =========================

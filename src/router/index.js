@@ -1,12 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { dbPromise } from '../db'
 import Swal from 'sweetalert2'
+import { configurablePageNames } from '../templates/pages'
+import { loadEffectivePageVisibility } from '../utils/templatePreferences'
 
 // Import pages (views)
 import Home from '../views/Home.vue'
 import Items from '../views/Items.vue'
 import ItemDetails from '../views/ItemDetails.vue'
-import Inventory from '../views/Inventory.vue'
 import Sales from '../views/Sales.vue'
 import Customers from '../views/Customers.vue'
 import Analytics from '../views/Analytics.vue'
@@ -14,14 +15,16 @@ import About from '../views/About.vue'
 import TransactionHistory from '../views/TransactionHistory.vue'
 import Settings from '../views/Settings.vue'
 import Drafts from '../views/Drafts.vue'
+import Setup from '../views/Setup.vue'
+import { isOnboardingComplete } from '../utils/onboardingPreferences'
 
 let allRoutes = [
+  { path: '/setup', name: 'Setup', component: Setup, meta: { hideSidebar: true, allowWithoutSetup: true } },
   { path: '/', name: 'Home', component: Home },
   { path: '/items', name: 'Items', component: Items },
   { path: '/items/:id', name: 'ItemDetails', component: ItemDetails },
   { path: '/medicines', redirect: '/items' },
   { path: '/medicines/:id', redirect: to => ({ path: `/items/${to.params.id}`, query: to.query }) },
-  { path: '/inventory', name: 'Inventory', component: Inventory },
   { path: '/sales', name: 'Sales', component: Sales },
   { path: '/customers', name: 'Customers', component: Customers },
   { path: '/analytics', name: 'Analytics', component: Analytics, meta: { requiresPin: true } },
@@ -41,18 +44,15 @@ let allRoutes = [
 
 async function buildRoutes() {
   try {
-    const db = await dbPromise
-    const visibleMap = {}
-    let hasRows = false
-    let cursor = await db.transaction('pages').objectStore('pages').openCursor()
-    while (cursor) {
-      hasRows = true
-      const page = cursor.value
-      visibleMap[page.name] = !!page.visible
-      cursor = await cursor.continue()
-    }
-    if (!hasRows) return allRoutes
-    return allRoutes.filter(r => !r.name || visibleMap[r.name] !== false)
+    await dbPromise
+    const { map: visibleMap } = await loadEffectivePageVisibility()
+    return allRoutes.filter(route => {
+      if (!route.name || !configurablePageNames.has(route.name)) {
+        return true
+      }
+
+      return visibleMap[route.name] !== false
+    })
   } catch (err) {
     console.error('Failed to load pages visibility', err)
     return allRoutes
@@ -108,6 +108,15 @@ async function verifyRoutePin(pageName) {
 }
 
 router.beforeEach(async (to, from) => {
+  const onboardingComplete = await isOnboardingComplete()
+
+  if (!onboardingComplete && to.name !== 'Setup') {
+    return {
+      name: 'Setup',
+      query: { redirect: to.fullPath },
+    }
+  }
+
   if (!to.meta?.requiresPin) return true
 
   const isAuthorized = await verifyRoutePin(to.name || 'this page')
