@@ -5,9 +5,10 @@ import { useStore } from 'vuex'
 import { useRouter, useRoute } from 'vue-router'
 import Swal from 'sweetalert2'
 import { dbPromise } from '../db'
-import { reduceFromSource } from '../db/query'
+import { collectFromSource } from '../db/query'
 import { Haptics } from '@capacitor/haptics'
-import { getTemplatePointsMultiplier } from '../utils/templatePresentation'
+import { summarizeExpiryForBatches, getSellableQuantityFromBatches } from '../utils/expiryAlerts'
+import { getTemplateExpiryAlertSettings, getTemplatePointsMultiplier } from '../utils/templatePresentation'
 import {
   defaultInteractionSettings,
   loadInteractionSettings,
@@ -47,6 +48,7 @@ const paymentOptions = computed(() => {
 const showPaymentMethodSelector = computed(() => paymentOptions.value.length > 1)
 const paymentMethodLabel = computed(() => paymentOptions.value.find(option => option.value === paymentMethod.value)?.label || paymentOptions.value[0]?.label || 'Cash')
 const defaultPointsMultiplier = computed(() => getTemplatePointsMultiplier(activeTemplate.value))
+const expiryAlertSettings = computed(() => getTemplateExpiryAlertSettings(activeTemplate.value))
 const catalogSearchLabel = computed(() => {
   if (allowProductSales.value && allowServiceSales.value) {
     return 'catalog items or services'
@@ -474,13 +476,13 @@ const appendNumber = async (num) => {
   }
 }
 
-const backspace = () => {
+const backspace = async () => {
   triggerNumpadFeedback(620, 0.05)
 
   if (!focusedField.value) return
 
   if (focusedField.value === 'qty' && focusedItem.value) {
-    focusedItem.value.qty = Number(String(focusedItem.value.qty).slice(0, -1) || 0)
+    await setCartItemQty(focusedItem.value, Number(String(focusedItem.value.qty).slice(0, -1) || 0))
   } else if (focusedField.value === 'professionalFee') {
     professionalFee.value = Number(String(professionalFee.value).slice(0, -1) || 0)
   } else if (focusedField.value === 'moneyGiven') {
@@ -566,12 +568,19 @@ watch(search, async (val) => {
 
     if (matchesQuery) {
       const totalStock = item.track_stock
-        ? await reduceFromSource(
-            itemBatchIndex,
-            (sum, batch) => sum + Number(batch.quantity || 0),
-            0,
-            { query: item.id }
-          )
+        ? await collectFromSource(itemBatchIndex, { query: item.id })
+        : null
+      const expirySummary = Array.isArray(totalStock)
+        ? summarizeExpiryForBatches(totalStock, {
+            trackExpiry: !!item.track_expiry,
+            ...expiryAlertSettings.value,
+          })
+        : { tracked: false, status: 'not-tracked', label: 'Not tracked' }
+      const sellableStock = Array.isArray(totalStock)
+        ? getSellableQuantityFromBatches(totalStock, {
+            trackExpiry: !!item.track_expiry,
+            ...expiryAlertSettings.value,
+          })
         : null
 
       const entry = {
@@ -579,12 +588,14 @@ watch(search, async (val) => {
         sourceType: 'item',
         sourceId: item.id,
         cartKey: `item:${item.id}`,
-        quantity: totalStock,
+        quantity: sellableStock,
         generic_name: '',
+        expirySummary,
         stockIndicator: getStockIndicator({
-          quantity: totalStock,
+          quantity: sellableStock,
           track_stock: item.track_stock,
-          item_type: item.item_type
+          item_type: item.item_type,
+          expirySummary,
         })
       }
 
@@ -997,6 +1008,33 @@ const getStockIndicator = (item) => {
   if (item.track_stock === false || item.item_type === 'service') {
     return { icon: '', color: 'blue', text: item.item_type === 'service' ? 'Service' : 'No stock tracking', quantity: null }
   }
+  if (item.expirySummary?.status === 'expired') {
+    return {
+      icon: '▲!',
+      color: 'red',
+      text: `Sellable stock: ${Number(item.quantity || 0)}`,
+      detail: `Expired qty: ${Number(item.expirySummary.expiredQuantity || 0)}`,
+      quantity: item.quantity,
+    }
+  }
+  if (item.expirySummary?.status === 'critical') {
+    return {
+      icon: '▲!',
+      color: 'orange',
+      text: `Sellable stock: ${Number(item.quantity || 0)}`,
+      detail: item.expirySummary.label,
+      quantity: item.quantity,
+    }
+  }
+  if (item.expirySummary?.status === 'warning') {
+    return {
+      icon: '▲',
+      color: 'orange',
+      text: `Sellable stock: ${Number(item.quantity || 0)}`,
+      detail: item.expirySummary.label,
+      quantity: item.quantity,
+    }
+  }
   if (!item.quantity || item.quantity <= 0) {
     return { icon: '▲!', color: 'red', text: 'Out of stock', quantity: 0 }
   } else if (item.quantity < 10) {
@@ -1126,13 +1164,14 @@ const getDiscountPriceLabel = (item) => {
             class="stock-indicator" 
             :title="catalogItem.stockIndicator.text"
             :class="{
-              'out-of-stock': catalogItem.track_stock !== false && catalogItem.quantity <= 0,
-              'low-stock': catalogItem.track_stock !== false && catalogItem.quantity > 0 && catalogItem.quantity < 10,
+              'out-of-stock': catalogItem.track_stock !== false && (catalogItem.stockIndicator.color === 'red' || catalogItem.quantity <= 0),
+              'low-stock': catalogItem.track_stock !== false && catalogItem.stockIndicator.color === 'orange',
               'normal-stock': catalogItem.track_stock === false || catalogItem.quantity >= 10
             }"
           >
-            <span v-if="catalogItem.track_stock !== false">Remaining QTY: {{ catalogItem.quantity }}</span>
-            <span v-else>{{ catalogItem.item_type === 'service' ? 'Service' : 'No stock tracking' }}</span>
+            <span v-if="catalogItem.track_stock !== false" class="stock-indicator-text">{{ catalogItem.stockIndicator.text }}</span>
+            <small v-if="catalogItem.stockIndicator.detail" class="stock-indicator-detail">{{ catalogItem.stockIndicator.detail }}</small>
+            <span v-else class="stock-indicator-text">{{ catalogItem.item_type === 'service' ? 'Service' : 'No stock tracking' }}</span>
           </div>
         </div>
       </div>
@@ -1936,7 +1975,7 @@ tbody tr:last-child td { border-bottom: none; }
 ========================= */
 .catalog-name { font-size: 20px; text-align: left;}
 .cart-item-name { font-weight:700; }
-.catalog-meta { font-size:16px; color:#888; text-align: left; }
+.catalog-meta { font-size:16px; color:#64748b; text-align: left; line-height: 1.35; }
 
 /* =========================
    CUSTOMER MODAL FIX
@@ -2091,34 +2130,50 @@ tbody tr:last-child td { border-bottom: none; }
 .dropdown-item-content {
   display: flex;
   justify-content: space-between;
-  gap:8px;
+  align-items: flex-start;
+  gap: 12px;
 }
 
 .stock-indicator {
-  font-weight: bold;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 24px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 14px;
+  display: grid;
+  gap: 4px;
+  min-width: 152px;
+  max-width: 210px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.25;
+  text-align: right;
+  border: 1px solid transparent;
+}
+
+.stock-indicator-text {
+  font-weight: 700;
+}
+
+.stock-indicator-detail {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.95;
 }
 
 /* Colors for different stock levels */
 .stock-indicator.out-of-stock {
-  color: #fff;
-  background-color: #e74c3c; /* red */
+  color: #7f1d1d;
+  background: #fef2f2;
+  border-color: #fecaca;
 }
 
 .stock-indicator.low-stock {
-  color: #fff;
-  background-color: #f39c12; /* orange */
+  color: #9a3412;
+  background: #fff7ed;
+  border-color: #fdba74;
 }
 
 .stock-indicator.normal-stock {
-  color: #fff;
-  background-color: #27ae60; /* green */
+  color: #166534;
+  background: #f0fdf4;
+  border-color: #86efac;
 }
 
 /* SweetAlert modal tweaks for small screens/tablets */
@@ -2178,6 +2233,17 @@ tbody tr:last-child td { border-bottom: none; }
     width: 100%;
     left: 0;
     right: 0;
+  }
+
+  .dropdown-item-content {
+    flex-direction: column;
+  }
+
+  .stock-indicator {
+    min-width: 0;
+    width: 100%;
+    max-width: none;
+    text-align: left;
   }
 
   .customer-section {

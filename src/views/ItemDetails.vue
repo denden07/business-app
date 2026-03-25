@@ -7,9 +7,13 @@ import SearchInput from '../components/SearchInput.vue'
 import { dbPromise } from '../db'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
+import Swal from 'sweetalert2'
 import { format } from 'date-fns'
 import { isWithinLocalDateRange } from '../utils/dateRange'
 import { collectFromSource } from '../db/query'
+import { summarizeExpiryForBatches, classifyExpiryDate, getSellableQuantityFromBatches, getDaysUntilExpiry } from '../utils/expiryAlerts'
+import { getTemplateExpiryAlertSettings } from '../utils/templatePresentation'
+import { loadResolvedActiveTemplate } from '../utils/templatePreferences'
 
 const route = useRoute()
 const router = useRouter()
@@ -21,6 +25,8 @@ const stockEntries = ref([])
 const priceEntries = ref([])
 const showForm = ref(false)
 const editingItem = ref(null)
+const expirySummary = ref(null)
+const expiryAlertSettings = ref({ warningDays: 30, criticalDays: 7 })
 
 const activeTab = ref(route.query.tab === 'prices' ? 'prices' : 'stock')
 const startDate = ref('')
@@ -29,10 +35,12 @@ const dateRange = ref(null)
 const isDark = ref(localStorage.getItem('darkMode') === 'true')
 const searchKeyword = ref('')
 const sortOrder = ref('desc')
+const stockHistoryFilter = ref('all')
 const currentPage = ref(1)
 const itemsPerPage = ref(10)
 const itemsPerPageOptions = [5, 10, 20, 50]
 const colMenuOpen = ref(false)
+const removingEntryIds = ref([])
 
 const _detailDefaultCols = {
   stock_date: true,
@@ -83,7 +91,7 @@ const lastVisibleColumnKey = computed(() => {
 
 const visibleColumnCount = computed(() => {
   const count = activeCols.value.filter(col => visibleCols.value[col.key]).length
-  return Math.max(1, count)
+  return Math.max(1, count) + (activeTab.value === 'stock' && item.value?.track_stock ? 1 : 0)
 })
 
 const toggleCol = (key) => {
@@ -110,15 +118,19 @@ const getPrice2 = (entry) => Number(entry.price2 ?? entry.new_price2 ?? entry.ol
 
 const loadItemData = async () => {
   const db = await dbPromise
+  const template = await loadResolvedActiveTemplate()
+  const expiryAlertSettings = getTemplateExpiryAlertSettings(template)
   const currentItem = await db.get('items', itemId.value)
 
   if (!currentItem) {
     item.value = null
     stockEntries.value = []
     priceEntries.value = []
+    expirySummary.value = null
     return
   }
 
+  expiryAlertSettings.value = getTemplateExpiryAlertSettings(template)
   item.value = currentItem
 
   const priceIndex = db.transaction('item_price_history').objectStore('item_price_history').index('item_id')
@@ -131,7 +143,11 @@ const loadItemData = async () => {
   }
 
   const stockIndex = db.transaction('item_batches').objectStore('item_batches').index('item_id')
-  const allStock = await collectFromSource(stockIndex, { query: IDBKeyRange.only(itemId.value) })
+  const allStock = await collectItemBatches(stockIndex, itemId.value)
+  expirySummary.value = summarizeExpiryForBatches(allStock, {
+    trackExpiry: !!currentItem.track_expiry,
+    ...expiryAlertSettings.value,
+  })
   stockEntries.value = allStock.sort((left, right) => {
     const leftDate = new Date(left.created_at || left.added_date || 0)
     const rightDate = new Date(right.created_at || right.added_date || 0)
@@ -151,12 +167,22 @@ watch(activeTab, (tab) => {
   router.replace({ query: { ...route.query, tab } })
 })
 
-watch([searchKeyword, startDate, endDate, sortOrder, itemsPerPage], () => {
+watch([searchKeyword, startDate, endDate, sortOrder, itemsPerPage, stockHistoryFilter], () => {
   currentPage.value = 1
 })
 
 const totalStock = computed(() =>
-  stockEntries.value.reduce((sum, entry) => sum + Number(entry.quantity || 0), 0)
+  getSellableQuantityFromBatches(stockEntries.value, {
+    trackExpiry: !!item.value?.track_expiry,
+    ...expiryAlertSettings.value,
+  })
+)
+
+const physicalStock = computed(() =>
+  stockEntries.value.reduce((sum, entry) => {
+    const quantity = Number(entry?.quantity || 0)
+    return quantity > 0 ? sum + quantity : sum
+  }, 0)
 )
 
 const inventoryModeLabel = computed(() => {
@@ -170,10 +196,188 @@ const inventoryModeLabel = computed(() => {
 const stockStatus = computed(() => {
   if (!item.value) return '—'
   if (!item.value.track_stock) return item.value.item_type === 'service' ? 'Service item' : 'Inventory disabled'
+  if (expirySummary.value?.status === 'expired' && totalStock.value <= 0) return 'Only expired stock remains'
   if (totalStock.value <= 0) return 'Out of stock'
   if (totalStock.value < 10) return 'Low stock'
   return 'In stock'
 })
+
+const expiryHeadline = computed(() => {
+  if (!item.value?.track_expiry) return 'Expiry tracking disabled'
+  if (!expirySummary.value) return 'Loading expiry status...'
+  if (expirySummary.value.status === 'expired') return `${expirySummary.value.expiredQuantity} unit(s) already expired`
+  if (expirySummary.value.status === 'critical') return expirySummary.value.label
+  if (expirySummary.value.status === 'warning') return expirySummary.value.label
+  if (expirySummary.value.status === 'none') return 'No dated batches yet'
+  return 'No active expiry issues'
+})
+
+const itemStateLabel = computed(() => item.value?.is_archived ? 'Archived' : 'Active')
+
+const getEntryExpiryClass = (entry) => {
+  if (!item.value?.track_expiry || !entry?.expiry_date) return 'expiry-neutral'
+
+  const status = classifyExpiryDate(entry.expiry_date, expiryAlertSettings.value).status
+  if (status === 'expired') return 'expiry-expired'
+  if (status === 'critical') return 'expiry-critical'
+  if (status === 'warning') return 'expiry-warning'
+  return 'expiry-ok'
+}
+
+const getStockRowClass = (entry) => Number(entry?.quantity || 0) > 0 ? 'stock-history-row is-positive' : 'stock-history-row is-negative'
+
+const getQuantityPillClass = (entry) => Number(entry?.quantity || 0) > 0 ? 'qty-pill qty-pill-in' : 'qty-pill qty-pill-out'
+
+const formatQuantity = (value) => {
+  const quantity = Number(value || 0)
+  return quantity > 0 ? `+${quantity}` : String(quantity)
+}
+
+const stockEntryMeta = (entry) => {
+  const parts = []
+  if (entry?.batch_number) parts.push(`Batch ${entry.batch_number}`)
+  if (entry?.reason) parts.push(formatStockReason(entry.reason))
+  return parts.join(' • ') || 'Inventory adjustment'
+}
+
+const expiryMetaLabel = (entry) => {
+  if (!entry?.expiry_date) return 'Undated batch'
+
+  const daysUntil = getDaysUntilExpiry(entry.expiry_date)
+  if (daysUntil === null) return 'Undated batch'
+  if (daysUntil < 0) return Math.abs(daysUntil) === 1 ? 'Expired 1 day ago' : `Expired ${Math.abs(daysUntil)} days ago`
+  if (daysUntil === 0) return 'Expires today'
+  if (daysUntil === 1) return 'Expires in 1 day'
+  return `Expires in ${daysUntil} days`
+}
+
+const canRemoveExpiredEntry = (entry) => {
+  const quantity = Number(entry?.quantity || 0)
+  if (!item.value?.track_expiry || quantity <= 0 || !entry?.expiry_date) {
+    return false
+  }
+
+  return classifyExpiryDate(entry.expiry_date, expiryAlertSettings.value).status === 'expired'
+}
+
+const isAdjustmentEntry = (entry) => {
+  const quantity = Number(entry?.quantity || 0)
+  const reason = String(entry?.reason || '').toUpperCase()
+  return quantity < 0 || reason.includes('ADJUST') || reason.includes('REMOVAL')
+}
+
+const isRemovingExpiredEntry = (entryId) => removingEntryIds.value.includes(entryId)
+
+const formatStockReason = (value) => {
+  const normalized = String(value || '').trim()
+  if (!normalized) return ''
+
+  return normalized
+    .replace(/[_-]+/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, letter => letter.toUpperCase())
+}
+
+const removeExpiredEntry = async (entry) => {
+  if (!item.value || !entry?.id || !canRemoveExpiredEntry(entry) || isRemovingExpiredEntry(entry.id)) {
+    return
+  }
+
+  const confirm = await Swal.fire({
+    title: 'Remove expired batch?',
+    text: `This will remove ${Number(entry.quantity || 0)} expired unit(s) from this batch.`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Remove batch',
+  })
+
+  if (!confirm.isConfirmed) return
+
+  removingEntryIds.value = [...removingEntryIds.value, entry.id]
+
+  try {
+    const db = await dbPromise
+    const tx = db.transaction(['item_batches', 'items'], 'readwrite')
+    const itemBatchStore = tx.objectStore('item_batches')
+    const itemStore = tx.objectStore('items')
+    const now = new Date().toISOString()
+
+    const latestBatch = await itemBatchStore.get(entry.id)
+    const latestQuantity = Number(latestBatch?.quantity || 0)
+
+    if (!latestBatch || latestQuantity <= 0) {
+      throw new Error('This batch no longer has removable stock.')
+    }
+
+    if (classifyExpiryDate(latestBatch.expiry_date, expiryAlertSettings.value).status !== 'expired') {
+      throw new Error('This batch is no longer expired.')
+    }
+
+    await itemBatchStore.add({
+      item_id: item.value.id,
+      quantity: -latestQuantity,
+      expiry_date: latestBatch.expiry_date || null,
+      batch_number: latestBatch.batch_number || null,
+      created_at: now,
+      reason: 'EXPIRED_REMOVAL',
+      source_batch_id: latestBatch.id,
+    })
+
+    const currentItem = await itemStore.get(item.value.id)
+    if (currentItem) {
+      await itemStore.put({
+        ...currentItem,
+        updated_at: now,
+      })
+    }
+
+    await tx.done
+
+    await loadItemData()
+
+    await Swal.fire({
+      icon: 'success',
+      title: 'Expired batch removed',
+      text: `Removed ${latestQuantity} expired unit(s) from this batch.`,
+      timer: 1800,
+      showConfirmButton: false,
+    })
+  } catch (error) {
+    console.error('Failed to remove expired stock', error)
+    await Swal.fire({
+      icon: 'error',
+      title: 'Removal failed',
+      text: error?.message || 'Unable to remove expired stock right now.',
+    })
+  } finally {
+    removingEntryIds.value = removingEntryIds.value.filter(id => id !== entry.id)
+  }
+}
+
+async function collectItemBatches(index, itemId) {
+  const directMatches = await collectFromSource(index, { query: createExactKeyQuery(itemId) })
+  if (directMatches.length) {
+    return directMatches
+  }
+
+  const numericItemId = Number(itemId)
+  const fallbackRows = await collectFromSource(index)
+  return fallbackRows.filter(batch => {
+    if (Number.isFinite(numericItemId) && Number(batch?.item_id) === numericItemId) {
+      return true
+    }
+
+    return String(batch?.item_id) === String(itemId)
+  })
+}
+
+function createExactKeyQuery(value) {
+  if (typeof IDBKeyRange !== 'undefined' && typeof IDBKeyRange.only === 'function') {
+    return IDBKeyRange.only(value)
+  }
+
+  return value
+}
 
 const fallbackPriceEntries = computed(() => {
   if (!item.value || priceEntries.value.length) return []
@@ -216,7 +420,19 @@ const filteredStockEntries = computed(() => {
       })
     : filteredByDate
 
-  return filtered.sort((left, right) => {
+  const filteredByMode = filtered.filter(entry => {
+    if (stockHistoryFilter.value === 'expired') {
+      return canRemoveExpiredEntry(entry)
+    }
+
+    if (stockHistoryFilter.value === 'adjustments') {
+      return isAdjustmentEntry(entry)
+    }
+
+    return true
+  })
+
+  return filteredByMode.sort((left, right) => {
     const leftDate = new Date(left.created_at || left.added_date || 0)
     const rightDate = new Date(right.created_at || right.added_date || 0)
     return sortOrder.value === 'asc' ? leftDate - rightDate : rightDate - leftDate
@@ -306,43 +522,75 @@ const goBack = () => {
     </div>
 
     <template v-if="item">
-      <div class="customer-summary item-summary">
-        <div class="customer-summary-card">
-          <span class="summary-label">Name</span>
-          <strong class="summary-value">{{ item.name }}</strong>
-          <span class="summary-meta">{{ item.description || 'No description' }}</span>
+      <div class="item-overview-card">
+        <div class="item-overview-copy">
+          <span class="summary-label">Item Overview</span>
+          <h2 class="item-overview-title">{{ item.name }}</h2>
+          <p class="item-overview-description">{{ item.description || 'No description added for this item yet.' }}</p>
         </div>
 
-        <div class="customer-summary-card points-card">
-          <span class="summary-label">Type</span>
-          <strong class="summary-value caps">{{ item.item_type }}</strong>
-          <span class="summary-meta">{{ inventoryModeLabel }}</span>
+        <div class="item-overview-badges">
+          <span class="overview-badge strong caps">{{ item.item_type }}</span>
+          <span class="overview-badge">{{ inventoryModeLabel }}</span>
+          <span class="overview-badge" :class="item.is_archived ? 'is-archived' : 'is-active'">{{ itemStateLabel }}</span>
+          <span class="overview-badge" :class="item.track_stock ? 'is-tracked' : 'is-untracked'">{{ item.track_stock ? stockStatus : 'Stock disabled' }}</span>
+        </div>
+      </div>
+
+      <div class="customer-summary item-summary primary-summary">
+        <div class="customer-summary-card emphasis-card">
+          <span class="summary-label">Sellable Stock</span>
+          <strong class="summary-value">{{ item.track_stock ? totalStock : 'N/A' }}</strong>
+          <span class="summary-meta">{{ item.track_expiry ? 'Ready to sell, excluding expired stock' : stockStatus }}</span>
+        </div>
+
+        <div class="customer-summary-card">
+          <span class="summary-label">Physical Stock</span>
+          <strong class="summary-value">{{ item.track_stock ? physicalStock : 'N/A' }}</strong>
+          <span class="summary-meta">All on-hand units including dated stock</span>
         </div>
 
         <div class="customer-summary-card">
           <span class="summary-label">Regular Price</span>
           <strong class="summary-value">{{ toMoney(item.price1) }}</strong>
-          <span class="summary-meta">Current selling price</span>
+          <span class="summary-meta">Current standard selling price</span>
         </div>
 
-        <div class="customer-summary-card points-card">
-          <span class="summary-label">Stock Status</span>
-          <strong class="summary-value">{{ item.track_stock ? totalStock : 'N/A' }}</strong>
-          <span class="summary-meta">{{ stockStatus }}</span>
+        <div class="customer-summary-card">
+          <span class="summary-label">Discount Price</span>
+          <strong class="summary-value">{{ toMoney(item.price2) }}</strong>
+          <span class="summary-meta">Optional alternate selling price</span>
         </div>
       </div>
 
       <div class="customer-summary item-summary secondary-summary">
         <div class="customer-summary-card">
-          <span class="summary-label">Discount Price</span>
-          <strong class="summary-value">{{ toMoney(item.price2) }}</strong>
-          <span class="summary-meta">{{ item.is_archived ? 'Archived' : 'Active' }}</span>
-        </div>
-
-        <div class="customer-summary-card">
           <span class="summary-label">Inventory Tracking</span>
           <strong class="summary-value">{{ item.track_stock ? 'Enabled' : 'Disabled' }}</strong>
           <span class="summary-meta">{{ inventoryModeLabel }}</span>
+        </div>
+
+        <div class="customer-summary-card">
+          <span class="summary-label">Availability</span>
+          <strong class="summary-value">{{ stockStatus }}</strong>
+          <span class="summary-meta">Current stock health for this item</span>
+        </div>
+
+        <div class="customer-summary-card" v-if="latestPriceEntry">
+          <span class="summary-label">Latest Price Update</span>
+          <strong class="summary-value summary-value-compact">{{ formatDateOnly(latestPriceEntry.changed_at) }}</strong>
+          <span class="summary-meta">Most recent recorded price change</span>
+        </div>
+      </div>
+
+      <div v-if="item.track_expiry" class="expiry-alert-panel" :class="expirySummary?.status || 'ok'">
+        <div class="expiry-alert-header">
+          <div class="expiry-alert-copy">
+            <strong>Expiry status</strong>
+            <span>{{ expiryHeadline }}</span>
+            <small v-if="expirySummary?.earliestExpiryDate">Nearest expiry: {{ formatDateOnly(expirySummary.earliestExpiryDate) }}</small>
+            <small v-else>No dated expiry batches recorded yet.</small>
+          </div>
         </div>
       </div>
 
@@ -359,6 +607,12 @@ const goBack = () => {
       <template v-if="activeTab === 'stock' && item.track_stock">
         <div class="top-bar">
           <SearchInput v-model="searchKeyword" placeholder="Search stock history..." />
+
+          <select v-model="stockHistoryFilter" class="select-field stock-history-filter">
+            <option value="all">All Entries</option>
+            <option value="expired">Expired Only</option>
+            <option value="adjustments">Adjustments Only</option>
+          </select>
 
           <VueDatePicker
             v-model="dateRange"
@@ -436,13 +690,35 @@ const goBack = () => {
                   </div>
                   <template v-else>Expiry</template>
                 </th>
+                <th class="col-actions">Action</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="entry in paginatedData" :key="entry.id">
-                <td v-if="visibleCols.stock_date">{{ formatDateTime(entry.created_at || entry.added_date) }}</td>
-                <td v-if="visibleCols.stock_qty" :class="Number(entry.quantity || 0) > 0 ? 'points-plus' : 'points-minus'">{{ entry.quantity }}</td>
-                <td v-if="visibleCols.stock_expiry">{{ entry.expiry_date ? formatDateOnly(entry.expiry_date) : 'No Expiry' }}</td>
+              <tr v-for="entry in paginatedData" :key="entry.id" :class="getStockRowClass(entry)">
+                <td v-if="visibleCols.stock_date">
+                  <div class="history-primary">{{ formatDateTime(entry.created_at || entry.added_date) }}</div>
+                  <div class="history-meta">{{ stockEntryMeta(entry) }}</div>
+                </td>
+                <td v-if="visibleCols.stock_qty">
+                  <span :class="getQuantityPillClass(entry)">{{ formatQuantity(entry.quantity) }}</span>
+                </td>
+                <td v-if="visibleCols.stock_expiry">
+                  <div class="history-primary">
+                    <span :class="getEntryExpiryClass(entry)">{{ entry.expiry_date ? formatDateOnly(entry.expiry_date) : 'No Expiry' }}</span>
+                  </div>
+                  <div class="history-meta">{{ expiryMetaLabel(entry) }}</div>
+                </td>
+                <td class="history-action-cell">
+                  <button
+                    v-if="canRemoveExpiredEntry(entry)"
+                    class="danger history-action-btn"
+                    :disabled="isRemovingExpiredEntry(entry.id)"
+                    @click="removeExpiredEntry(entry)"
+                  >
+                    {{ isRemovingExpiredEntry(entry.id) ? 'Removing...' : 'Remove expired' }}
+                  </button>
+                  <span v-else class="history-action-muted">No action</span>
+                </td>
               </tr>
               <tr v-if="!paginatedData.length">
                 <td :colspan="visibleColumnCount" class="empty-state-cell">No stock records found.</td>
@@ -615,8 +891,224 @@ body.dark-mode .page-subtitle {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.primary-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .secondary-summary {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.item-overview-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px;
+  margin-bottom: 16px;
+  border: 1px solid #dbe6e2;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #ffffff 0%, #f3fbf8 100%);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.07);
+}
+
+body.dark-mode .item-overview-card {
+  background: linear-gradient(180deg, #162520 0%, #121b18 100%);
+  border-color: #244034;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24);
+}
+
+.item-overview-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.item-overview-title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.1;
+  color: #0f172a;
+}
+
+body.dark-mode .item-overview-title {
+  color: #f8fafc;
+}
+
+.item-overview-description {
+  margin: 0;
+  max-width: 72ch;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+body.dark-mode .item-overview-description {
+  color: #9fb0c2;
+}
+
+.item-overview-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-content: flex-start;
+  justify-content: flex-end;
+}
+
+.overview-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.overview-badge.strong {
+  background: rgba(26, 188, 156, 0.14);
+  color: #0f766e;
+}
+
+.overview-badge.is-active,
+.overview-badge.is-tracked {
+  background: rgba(34, 197, 94, 0.12);
+  color: #166534;
+}
+
+.overview-badge.is-archived,
+.overview-badge.is-untracked {
+  background: rgba(148, 163, 184, 0.14);
+  color: #475569;
+}
+
+.expiry-alert-panel {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.expiry-alert-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.expiry-alert-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.expiry-alert-panel.warning,
+.expiry-warning {
+  color: #9a3412;
+}
+
+.expiry-alert-panel.warning {
+  background: rgba(249, 115, 22, 0.08);
+  border-color: rgba(249, 115, 22, 0.22);
+}
+
+.expiry-alert-panel.critical,
+.expiry-alert-panel.expired,
+.expiry-critical,
+.expiry-expired {
+  color: #991b1b;
+}
+
+.expiry-alert-panel.critical,
+.expiry-alert-panel.expired {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.2);
+}
+
+.history-primary {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+body.dark-mode .history-primary {
+  color: #f8fafc;
+}
+
+.history-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+body.dark-mode .history-meta {
+  color: #9fb0c2;
+}
+
+.stock-history-row td {
+  vertical-align: top;
+}
+
+.stock-history-row.is-positive td {
+  background: rgba(16, 185, 129, 0.03);
+}
+
+.stock-history-row.is-negative td {
+  background: rgba(239, 68, 68, 0.03);
+}
+
+.qty-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.qty-pill-in {
+  background: rgba(16, 185, 129, 0.14);
+  color: #047857;
+}
+
+.qty-pill-out {
+  background: rgba(239, 68, 68, 0.14);
+  color: #b91c1c;
+}
+
+.history-action-cell {
+  white-space: nowrap;
+}
+
+.history-action-btn {
+  min-width: 122px;
+}
+
+.history-action-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.history-action-muted {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+body.dark-mode .history-action-muted {
+  color: #9fb0c2;
+}
+
+.expiry-ok {
+  color: #166534;
+}
+
+.expiry-neutral {
+  color: #64748b;
 }
 
 .customer-summary {
@@ -634,6 +1126,16 @@ body.dark-mode .page-subtitle {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.emphasis-card {
+  border-color: rgba(26, 188, 156, 0.24);
+  background: linear-gradient(180deg, #ffffff 0%, #edfdf8 100%);
+}
+
+body.dark-mode .emphasis-card {
+  background: linear-gradient(180deg, #173128 0%, #13231e 100%);
+  border-color: rgba(26, 188, 156, 0.22);
 }
 
 body.dark-mode .customer-summary-card {
@@ -661,6 +1163,10 @@ body.dark-mode .customer-summary-card {
   color: #0f172a;
 }
 
+.summary-value-compact {
+  font-size: 18px;
+}
+
 body.dark-mode .summary-value {
   color: #f8fafc;
 }
@@ -682,6 +1188,10 @@ body.dark-mode .summary-meta {
 
 .caps {
   text-transform: capitalize;
+}
+
+.stock-history-filter {
+  min-width: 160px;
 }
 
 .item-details-page :deep(.dp__main) {
@@ -770,6 +1280,14 @@ body.dark-mode .empty-state-panel {
 }
 
 @media (max-width: 1024px) {
+  .item-overview-card {
+    flex-direction: column;
+  }
+
+  .item-overview-badges {
+    justify-content: flex-start;
+  }
+
   .item-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -781,7 +1299,8 @@ body.dark-mode .empty-state-panel {
 
 @media (max-width: 768px) {
   .item-details-page .top-bar > :deep(.dp__main),
-  .item-details-page .top-bar > :deep(.date-icon-btn) {
+  .item-details-page .top-bar > :deep(.date-icon-btn),
+  .stock-history-filter {
     width: 100%;
   }
 
@@ -796,6 +1315,18 @@ body.dark-mode .empty-state-panel {
   }
 
   .page-actions > button {
+    width: 100%;
+  }
+
+  .item-overview-title {
+    font-size: 24px;
+  }
+
+  .expiry-alert-header {
+    flex-direction: column;
+  }
+
+  .history-action-btn {
     width: 100%;
   }
 

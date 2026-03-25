@@ -22,6 +22,7 @@ import {
   getTemplateCatalogLabel,
   getTemplateCustomerSectionLabel,
   getTemplateDailySalesQuota,
+  getTemplateExpiryAlertSettings,
   getTemplatePaymentLabel,
   getTemplatePointsMultiplier,
   getTemplateProfessionalFeeLabel,
@@ -46,6 +47,8 @@ const templateProfileStatus = ref('')
 const templateProfileSaving = ref(false)
 const pointsMultiplier = ref(1)
 const dailySalesQuota = ref(40000)
+const expiryWarningDays = ref(30)
+const expiryCriticalDays = ref(7)
 const catalogLabel = ref('Items')
 const catalogEntryLabel = ref('Item')
 const professionalFeeLabel = ref('Additional Fee')
@@ -58,6 +61,9 @@ watch(activeTemplate, template => {
   const labels = template?.labels || {}
   pointsMultiplier.value = getTemplatePointsMultiplier(template || {})
   dailySalesQuota.value = getTemplateDailySalesQuota(template || {})
+  const expirySettings = getTemplateExpiryAlertSettings(template || {})
+  expiryWarningDays.value = expirySettings.warningDays
+  expiryCriticalDays.value = expirySettings.criticalDays
   catalogLabel.value = getTemplateCatalogLabel(labels)
   catalogEntryLabel.value = getTemplateCatalogEntryLabel(labels)
   professionalFeeLabel.value = getTemplateProfessionalFeeLabel(labels)
@@ -81,6 +87,8 @@ function buildTemplateProfileOverrides() {
     reporting: {
       ...(activeTemplate.value?.reporting || {}),
       dailySalesQuota: Number(dailySalesQuota.value),
+      expiryWarningDays: Number(expiryWarningDays.value),
+      expiryCriticalDays: Number(expiryCriticalDays.value),
     },
     labels: {
       ...(activeTemplate.value?.labels || {}),
@@ -98,6 +106,8 @@ function buildTemplateProfileOverrides() {
 async function saveTemplateProfileSettings() {
   const normalizedPointsMultiplier = Number(pointsMultiplier.value)
   const normalizedDailySalesQuota = Number(dailySalesQuota.value)
+  const normalizedExpiryWarningDays = Number(expiryWarningDays.value)
+  const normalizedExpiryCriticalDays = Number(expiryCriticalDays.value)
 
   if (!Number.isFinite(normalizedPointsMultiplier) || normalizedPointsMultiplier <= 0) {
     await Swal.fire({
@@ -113,6 +123,24 @@ async function saveTemplateProfileSettings() {
       icon: 'warning',
       title: 'Invalid daily quota',
       text: 'Enter a daily sales quota greater than 0.',
+    })
+    return
+  }
+
+  if (!Number.isFinite(normalizedExpiryWarningDays) || normalizedExpiryWarningDays <= 0) {
+    await Swal.fire({
+      icon: 'warning',
+      title: 'Invalid near-expiry window',
+      text: 'Enter a near-expiry warning window greater than 0 days.',
+    })
+    return
+  }
+
+  if (!Number.isFinite(normalizedExpiryCriticalDays) || normalizedExpiryCriticalDays <= 0 || normalizedExpiryCriticalDays > normalizedExpiryWarningDays) {
+    await Swal.fire({
+      icon: 'warning',
+      title: 'Invalid urgent expiry window',
+      text: 'Enter an urgent expiry window greater than 0 days and not larger than the near-expiry window.',
     })
     return
   }
@@ -676,6 +704,18 @@ onMounted(async () => {
             <span>Daily sales quota</span>
             <input v-model.number="dailySalesQuota" class="input" type="number" min="1" step="1" />
             <small>Used by Analytics to compare each day against your target sales amount.</small>
+          </label>
+
+          <label class="template-setting-field">
+            <span>Near-expiry warning window</span>
+            <input v-model.number="expiryWarningDays" class="input" type="number" min="1" step="1" />
+            <small>Items inside this many days before expiry are flagged in inventory views and analytics.</small>
+          </label>
+
+          <label class="template-setting-field">
+            <span>Urgent expiry window</span>
+            <input v-model.number="expiryCriticalDays" class="input" type="number" min="1" step="1" :max="expiryWarningDays || undefined" />
+            <small>Items inside this shorter window get the stronger expiry alert treatment.</small>
           </label>
 
           <label class="template-setting-field">

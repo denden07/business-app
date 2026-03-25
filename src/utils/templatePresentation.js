@@ -1,3 +1,5 @@
+import { normalizeExpiryAlertSettings } from './expiryAlerts'
+
 export function isLoyaltyEnabled(template = {}) {
   return template?.customer?.enableLoyalty !== false
 }
@@ -37,6 +39,10 @@ export function getTemplatePointsMultiplier(template = {}) {
 export function getTemplateDailySalesQuota(template = {}) {
   const parsedValue = Number(template?.reporting?.dailySalesQuota)
   return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : 40000
+}
+
+export function getTemplateExpiryAlertSettings(template = {}) {
+  return normalizeExpiryAlertSettings(template?.reporting || {})
 }
 
 export function getTemplateProfessionalFeeLabel(labels = {}) {

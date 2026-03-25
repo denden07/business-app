@@ -4,10 +4,12 @@ import { buildDateKeyRange, isWithinLocalDateRange } from '../utils/dateRange'
 import Swal from 'sweetalert2'
 import {
   getTemplatePaymentLabel,
+  getTemplateExpiryAlertSettings,
   getTemplateProfessionalFeeLabel,
   normalizePaymentMethod,
 } from '../utils/templatePresentation'
 import { loadResolvedActiveTemplate } from '../utils/templatePreferences'
+import { classifyExpiryDate, sortBatchesForSale } from '../utils/expiryAlerts'
 
 export default {
   namespaced: true,
@@ -99,6 +101,8 @@ async saveSale({ commit }, payload) {
   if (!cart.length) throw new Error('Cart is empty')
 
   const db = await dbPromise
+  const activeTemplate = await loadResolvedActiveTemplate()
+  const expiryAlertSettings = getTemplateExpiryAlertSettings(activeTemplate)
   const tx = db.transaction(
     ['sales', 'sale_items', 'item_batches', 'points_history', 'yearly_points', 'customers', 'items'],
     'readwrite'
@@ -147,6 +151,8 @@ async saveSale({ commit }, payload) {
         foreignKey: 'item_id',
         foreignId: sourceId,
         quantity: Number(item.qty || 0),
+        trackExpiry: !!catalogItem?.track_expiry,
+        expiryAlertSettings,
         now,
         autoBatchPrefix: 'AUTO-NEG-ITEM'
       })
@@ -476,19 +482,33 @@ function normalize(list) {
   }))
 }
 
-async function deductStockWithNegativeFallback({ batchStore, indexName, foreignKey, foreignId, quantity, now, autoBatchPrefix }) {
+async function deductStockWithNegativeFallback({ batchStore, indexName, foreignKey, foreignId, quantity, trackExpiry = false, expiryAlertSettings = {}, now, autoBatchPrefix }) {
   const allBatches = await collectFromSource(batchStore.index(indexName), { query: foreignId })
   const remainingQty = Number(quantity || 0)
+  const eligibleBatches = sortBatchesForSale(allBatches, {
+    trackExpiry,
+    ...expiryAlertSettings,
+  }).filter(batch => {
+    if (Number(batch.quantity || 0) <= 0) {
+      return false
+    }
 
-  const sufficientBatch = allBatches.find(batch => Number(batch.quantity || 0) >= remainingQty)
+    if (!trackExpiry) {
+      return true
+    }
+
+    return classifyExpiryDate(batch.expiry_date, expiryAlertSettings).status !== 'expired'
+  })
+
+  const sufficientBatch = eligibleBatches.find(batch => Number(batch.quantity || 0) >= remainingQty)
   if (sufficientBatch) {
     sufficientBatch.quantity = Number(sufficientBatch.quantity || 0) - remainingQty
     await batchStore.put(sufficientBatch)
     return sufficientBatch.id
   }
 
-  if (allBatches.length > 0) {
-    const firstBatch = allBatches[0]
+  if (eligibleBatches.length > 0) {
+    const firstBatch = eligibleBatches[0]
     firstBatch.quantity = Number(firstBatch.quantity || 0) - remainingQty
     await batchStore.put(firstBatch)
     return firstBatch.id

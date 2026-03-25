@@ -219,6 +219,28 @@ Completed
 
 Phase 8 behavior
 
+- About is now accessible from Settings instead of the main sidebar
+
+## Phase 9: Item Expiration Notifications
+
+Status: completed on 2026-03-25
+
+Completed
+
+- Added shared expiry alert utilities in [src/utils/expiryAlerts.js](src/utils/expiryAlerts.js) for near-expiry, urgent-expiry, expired-stock, and sellable-quantity calculations
+- Updated [src/templates/registry.js](src/templates/registry.js), [src/views/Setup.vue](src/views/Setup.vue), [src/views/Settings.vue](src/views/Settings.vue), and [src/utils/templatePresentation.js](src/utils/templatePresentation.js) so template profiles now define configurable near-expiry and urgent-expiry windows
+- Updated [src/store/items.js](src/store/items.js) and [src/views/Home.vue](src/views/Home.vue) so expired tracked batches no longer count as sellable stock in item lists or POS search results
+- Updated [src/store/sales.js](src/store/sales.js) so checkout inventory deduction avoids consuming expired tracked batches and falls back to negative inventory without mutating unusable stock
+- Updated [src/views/Items.vue](src/views/Items.vue) and [src/views/ItemDetails.vue](src/views/ItemDetails.vue) to surface expiry alert badges, summaries, and batch-level expiry visibility in inventory screens
+- Updated [src/views/Analytics.vue](src/views/Analytics.vue) to show expiry-health counts and highlighted items that are expired, urgent, or near expiry
+
+Phase 9 behavior
+
+- Tracked expiry inventory now distinguishes sellable stock from expired stock
+- Inventory screens now show which items are expired, urgently expiring, or approaching expiry
+- POS search and checkout now respect expired tracked batches instead of treating them as available stock
+- Businesses can tune the warning and urgent expiry windows from setup or settings without code changes
+
 - About is still available through its route
 - About no longer appears in the sidebar
 - About no longer appears in page visibility or template-managed navigation

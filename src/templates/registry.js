@@ -52,6 +52,8 @@ const baseTemplate = {
   reporting: {
     focus: 'mixed',
     dailySalesQuota: 40000,
+    expiryWarningDays: 30,
+    expiryCriticalDays: 7,
   },
   labels: {
     catalog: 'Items',
@@ -119,6 +121,8 @@ const templates = [
     },
     reporting: {
       focus: 'sales',
+      expiryWarningDays: 30,
+      expiryCriticalDays: 7,
     },
   }),
   defineTemplate({
@@ -150,6 +154,8 @@ const templates = [
     },
     reporting: {
       focus: 'inventory',
+      expiryWarningDays: 30,
+      expiryCriticalDays: 7,
     },
   }),
   defineTemplate({
@@ -170,6 +176,8 @@ const templates = [
     },
     reporting: {
       focus: 'mixed',
+      expiryWarningDays: 30,
+      expiryCriticalDays: 7,
     },
   }),
   defineTemplate({
@@ -200,6 +208,8 @@ const templates = [
     },
     reporting: {
       focus: 'services',
+      expiryWarningDays: 30,
+      expiryCriticalDays: 7,
     },
   }),
   defineTemplate({
@@ -233,6 +243,8 @@ const templates = [
     },
     reporting: {
       focus: 'mixed',
+      expiryWarningDays: 30,
+      expiryCriticalDays: 7,
     },
   }),
 ]

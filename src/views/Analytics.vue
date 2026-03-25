@@ -228,7 +228,7 @@ const updateCharts = async () => {
   const [sales, saleItems, items] = await Promise.all([
     db.getAll('sales'),
     db.getAll('sale_items'),
-    db.getAll('items')
+    db.getAll('items'),
   ])
   const includedSaleIds = new Set()
   const dailySalesMap = new Map()
@@ -245,7 +245,17 @@ const updateCharts = async () => {
   totalTransactions.value = 0
   totalProductUnits.value = 0
   totalServiceUnits.value = 0
-  lowStockCount.value = items.filter(item => item.track_stock !== false && Number(item.quantity || 0) > 0 && Number(item.quantity || 0) < 10).length
+  lowStockCount.value = 0
+  for (const item of items) {
+    if (item.track_stock === false) {
+      continue
+    }
+
+    const quantity = Number(item.quantity || 0)
+    if (quantity > 0 && quantity < 10) {
+      lowStockCount.value += 1
+    }
+  }
 
   for (const sale of sales) {
     const saleDate = new Date(sale.purchased_date || sale.date)

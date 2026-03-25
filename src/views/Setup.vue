@@ -9,6 +9,7 @@ import { setOnboardingComplete } from '../utils/onboardingPreferences'
 import { dbPromise } from '../db'
 import {
   getTemplateDailySalesQuota,
+  getTemplateExpiryAlertSettings,
   getTemplatePaymentLabel,
   getTemplatePointsMultiplier,
 } from '../utils/templatePresentation'
@@ -30,6 +31,8 @@ const loyaltyEnabled = ref(true)
 const requireCustomer = ref(false)
 const pointsMultiplier = ref(1)
 const dailySalesQuota = ref(40000)
+const expiryWarningDays = ref(30)
+const expiryCriticalDays = ref(7)
 const paymentMethods = ref({ cash: true, gcash: true })
 const pageVisibility = ref({})
 
@@ -56,6 +59,8 @@ const customizationSummary = computed(() => ({
   requireCustomer: requireCustomer.value,
   pointsMultiplier: pointsMultiplier.value,
   dailySalesQuota: dailySalesQuota.value,
+  expiryWarningDays: expiryWarningDays.value,
+  expiryCriticalDays: expiryCriticalDays.value,
   paymentMethods: Object.entries(paymentMethods.value)
     .filter(([, enabled]) => enabled)
     .map(([method]) => getTemplatePaymentLabel(method, selectedTemplateLabels.value)),
@@ -73,6 +78,11 @@ const canProceed = computed(() => {
       && Number(dailySalesQuota.value) > 0
       && Number.isFinite(Number(pointsMultiplier.value))
       && Number(pointsMultiplier.value) > 0
+      && Number.isFinite(Number(expiryWarningDays.value))
+      && Number(expiryWarningDays.value) > 0
+      && Number.isFinite(Number(expiryCriticalDays.value))
+      && Number(expiryCriticalDays.value) > 0
+      && Number(expiryCriticalDays.value) <= Number(expiryWarningDays.value)
    }
 
   return true
@@ -97,6 +107,9 @@ function applyTemplatePreset(template) {
   requireCustomer.value = template.workflow?.requireCustomer === true || template.customer?.requireCustomerDetails === true
   pointsMultiplier.value = getTemplatePointsMultiplier(template)
   dailySalesQuota.value = getTemplateDailySalesQuota(template)
+  const expirySettings = getTemplateExpiryAlertSettings(template)
+  expiryWarningDays.value = expirySettings.warningDays
+  expiryCriticalDays.value = expirySettings.criticalDays
   paymentMethods.value = {
     cash: (template.payments?.methods || ['cash', 'gcash']).includes('cash'),
     gcash: (template.payments?.methods || ['cash', 'gcash']).includes('gcash'),
@@ -188,6 +201,8 @@ function buildTemplateOverrides() {
     reporting: {
       focus: selectedTemplate.value?.reporting?.focus || 'mixed',
       dailySalesQuota: Number(dailySalesQuota.value),
+      expiryWarningDays: Number(expiryWarningDays.value),
+      expiryCriticalDays: Number(expiryCriticalDays.value),
     },
   }
 }
@@ -440,6 +455,33 @@ onMounted(async () => {
               />
               <small>Used by Analytics to mark when a day hits the target.</small>
             </label>
+
+            <label class="numeric-setting-card">
+              <span>Near-expiry warning window</span>
+              <input
+                v-model.number="expiryWarningDays"
+                class="input"
+                type="number"
+                min="1"
+                step="1"
+                :disabled="!trackExpiry"
+              />
+              <small>Items with tracked expiry inside this many days are flagged in inventory and analytics.</small>
+            </label>
+
+            <label class="numeric-setting-card">
+              <span>Urgent expiry window</span>
+              <input
+                v-model.number="expiryCriticalDays"
+                class="input"
+                type="number"
+                min="1"
+                step="1"
+                :max="expiryWarningDays || undefined"
+                :disabled="!trackExpiry"
+              />
+              <small>Use a smaller window for items that need stronger red alerts before expiry.</small>
+            </label>
           </div>
         </div>
 
@@ -518,6 +560,15 @@ onMounted(async () => {
           <article>
             <span>Daily sales quota</span>
             <strong class="review-value">₱{{ Number(customizationSummary.dailySalesQuota || 0).toLocaleString() }}</strong>
+          </article>
+
+          <article>
+            <span>Expiry alerts</span>
+            <strong class="review-value review-value-break">
+              {{ customizationSummary.trackExpiry
+                ? `${Number(customizationSummary.expiryCriticalDays || 0)} day urgent / ${Number(customizationSummary.expiryWarningDays || 0)} day warning`
+                : 'Disabled' }}
+            </strong>
           </article>
         </div>
 
