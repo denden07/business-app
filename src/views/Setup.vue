@@ -505,7 +505,7 @@ onMounted(async () => {
 <style scoped>
 .setup-shell {
   min-height: 100vh;
-  padding: 32px 0 48px;
+  padding: 32px 20px 48px;
   display: grid;
   gap: 24px;
   background:
@@ -514,9 +514,17 @@ onMounted(async () => {
     linear-gradient(180deg, #f4fbf8 0%, #eef4fb 100%);
 }
 
+.setup-shell,
+.setup-shell *,
+.setup-shell *::before,
+.setup-shell *::after {
+  box-sizing: border-box;
+}
+
 .setup-hero,
 .setup-card {
-  width: min(980px, calc(100vw - 32px));
+  width: min(100%, 980px);
+  max-width: 100%;
   margin: 0 auto;
 }
 
@@ -606,6 +614,7 @@ onMounted(async () => {
 
 .step-node strong {
   font-size: 13px;
+  line-height: 1.35;
 }
 
 .step-node.active,
@@ -844,15 +853,87 @@ onMounted(async () => {
   min-width: 140px;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 1024px) {
   .setup-shell {
-    padding-top: 16px;
+    padding: 24px 18px 36px;
+    gap: 20px;
   }
 
   .setup-hero,
   .setup-card {
-    width: min(100vw - 20px, 980px);
-    padding: 20px;
+    padding: 24px;
+    border-radius: 24px;
+  }
+
+  .setup-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .step-node {
+    grid-template-columns: auto 1fr;
+    justify-items: start;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    text-align: left;
+    border-radius: 18px;
+    background: rgba(248, 250, 252, 0.9);
+    border: 1px solid rgba(203, 213, 225, 0.8);
+  }
+
+  .step-node span {
+    width: 34px;
+    height: 34px;
+  }
+
+  .template-grid,
+  .page-chip-grid,
+  .review-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .segmented {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .segmented button,
+  .page-chip {
+    width: 100%;
+  }
+
+  .page-chip {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .setup-actions {
+    gap: 10px;
+  }
+
+  .setup-actions button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 820px) {
+  .setup-shell {
+    padding: 20px 14px 32px;
+  }
+
+  .setup-hero,
+  .setup-card {
+    padding: 22px;
+  }
+
+  .template-grid,
+  .page-chip-grid,
+  .review-grid,
+  .segmented {
+    grid-template-columns: 1fr;
   }
 
   .setup-actions {
@@ -862,9 +943,25 @@ onMounted(async () => {
   .setup-actions button {
     width: 100%;
   }
+}
+
+@media (max-width: 640px) {
+  .setup-shell {
+    padding: 16px 10px 24px;
+  }
+
+  .setup-hero,
+  .setup-card {
+    padding: 20px;
+    border-radius: 22px;
+  }
 
   .setup-steps {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .step-node {
+    padding: 10px 12px;
   }
 }
 </style>
