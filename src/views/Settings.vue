@@ -942,7 +942,7 @@ body.dark-mode .section-icon {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   padding: 14px 16px;
   border-radius: 14px;
   background: rgba(148, 163, 184, 0.08);
@@ -982,7 +982,16 @@ body.dark-mode .section-icon {
   line-height: 1.45;
 }
 .theme-copy { display: flex; flex-direction: column; gap: 4px; }
-.setting-copy { display: flex; flex-direction: column; gap: 4px; }
+.setting-copy {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+.setting-row > button {
+  flex: 0 0 auto;
+}
 .theme-copy strong { color: #1f2937; }
 .setting-copy strong { color: #1f2937; }
 .theme-copy span { color: #6b7280; font-size: 14px; }
