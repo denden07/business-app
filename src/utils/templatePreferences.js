@@ -18,7 +18,11 @@ function normalizeTemplateOverrides(value) {
     return {}
   }
 
-  return value
+  try {
+    return JSON.parse(JSON.stringify(value))
+  } catch {
+    return {}
+  }
 }
 
 export async function ensureTemplateSettings() {

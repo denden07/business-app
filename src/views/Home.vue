@@ -7,6 +7,7 @@ import Swal from 'sweetalert2'
 import { dbPromise } from '../db'
 import { reduceFromSource } from '../db/query'
 import { Haptics } from '@capacitor/haptics'
+import { getTemplatePointsMultiplier } from '../utils/templatePresentation'
 import {
   defaultInteractionSettings,
   loadInteractionSettings,
@@ -45,6 +46,7 @@ const paymentOptions = computed(() => {
 })
 const showPaymentMethodSelector = computed(() => paymentOptions.value.length > 1)
 const paymentMethodLabel = computed(() => paymentOptions.value.find(option => option.value === paymentMethod.value)?.label || paymentOptions.value[0]?.label || 'Cash')
+const defaultPointsMultiplier = computed(() => getTemplatePointsMultiplier(activeTemplate.value))
 const catalogSearchLabel = computed(() => {
   if (allowProductSales.value && allowServiceSales.value) {
     return 'catalog items or services'
@@ -88,7 +90,7 @@ const newCustomer = ref({ name: '', phone: '', address: '' })
 // ======================
 const showRedeemModal = ref(false)
 const customerPoints = ref(0)
-const redeemMultiplier = ref(1)
+const redeemMultiplier = ref(defaultPointsMultiplier.value)
 const pointsConfirmed = ref(false)
 
 // ======================
@@ -141,8 +143,7 @@ const saveSaleAsDraft = async () => {
     professionalFee.value = 0
     moneyGiven.value = 0
     selectedCustomer.value = null
-    pointsConfirmed.value = false
-    redeemMultiplier.value = 1
+    resetRedeemState()
     specialDiscount.value = 0
     customerPoints.value = 0
     paymentMethod.value = 'cash'
@@ -166,7 +167,7 @@ const resumeDraft = (draft) => {
   professionalFee.value = draft.professionalFee || 0
   moneyGiven.value = draft.moneyGiven || 0
   pointsConfirmed.value = draft.pointsConfirmed || false
-  redeemMultiplier.value = draft.redeemMultiplier || 1
+  redeemMultiplier.value = draft.redeemMultiplier || defaultPointsMultiplier.value
   customerPoints.value = draft.customerPoints || 0
   specialDiscount.value = draft.specialDiscount || 0
   paymentMethod.value = draft.paymentMethod || 'cash'
@@ -189,8 +190,15 @@ onMounted(async () => {
 // ======================
 const showNewCustomerForm = ref(false)
 
-const pointsUsed = computed(() => pointsConfirmed.value ? customerPoints.value * redeemMultiplier.value : 0)
-const pointsDiscount = computed(() => pointsUsed.value + specialDiscount.value)
+const pointsRedeemed = computed(() => pointsConfirmed.value ? customerPoints.value : 0)
+const redeemedPointsDiscount = computed(() => pointsRedeemed.value * redeemMultiplier.value)
+const pointsUsed = computed(() => redeemedPointsDiscount.value)
+const pointsDiscount = computed(() => redeemedPointsDiscount.value + specialDiscount.value)
+
+function resetRedeemState() {
+  redeemMultiplier.value = defaultPointsMultiplier.value
+  pointsConfirmed.value = false
+}
 
 // ======================
 // Focus tracking for number pad
@@ -726,7 +734,7 @@ const change = computed(() => Math.max((moneyGiven.value || 0) - grandTotal.valu
 // ======================
 const openRedeemModal = () => {
   if (!selectedCustomer.value) return Swal.fire('Select customer first')
-  redeemMultiplier.value = 1
+  redeemMultiplier.value = defaultPointsMultiplier.value
   showRedeemModal.value = true
 }
 
@@ -736,8 +744,7 @@ const confirmPoints = () => {
 }
 
 const removePoints = () => {
-  pointsConfirmed.value = false
-  redeemMultiplier.value = 1
+  resetRedeemState()
 }
 
 // ======================
@@ -850,9 +857,9 @@ const checkout = async () => {
       purchased_date: new Date().toISOString(),
 
       // Points
-      pointsUsed: pointsUsed.value,
+      pointsUsed: pointsRedeemed.value,
       pointsMultiplier: redeemMultiplier.value,
-      pointsDiscount: pointsDiscount.value,
+      pointsDiscount: redeemedPointsDiscount.value,
       payment_method: paymentMethod.value,
     })
 
@@ -870,8 +877,7 @@ const checkout = async () => {
     moneyGiven.value = 0
     selectedCustomer.value = null
     customerPoints.value = 0
-    redeemMultiplier.value = 1
-    pointsConfirmed.value = false
+    resetRedeemState()
     specialDiscount.value = 0
 
     // If this sale came from a draft, delete it now that it's complete
@@ -908,8 +914,7 @@ const selectCustomer = async (cust) => {
 
   customerPoints.value = yearly?.points || 0
 
-  redeemMultiplier.value = 1
-  pointsConfirmed.value = false
+  resetRedeemState()
 }
 
 
@@ -923,8 +928,7 @@ const addCustomer = async () => {
   selectedCustomer.value = { id, ...newCustomer.value }
 
   customerPoints.value = 0
-  redeemMultiplier.value = 1
-  pointsConfirmed.value = false
+  resetRedeemState()
 
   newCustomer.value = { name:'', phone:'', address:'' }
   showCustomerModal.value = false
@@ -941,9 +945,21 @@ watch(showCustomerModal, (open) => {
 })
 
 watch(showRedeemModal, (open) => {
-  if (!open) {
-    redeemMultiplier.value = 1
-    pointsConfirmed.value = false
+  if (!open && !pointsConfirmed.value) {
+    redeemMultiplier.value = defaultPointsMultiplier.value
+  }
+})
+
+watch(defaultPointsMultiplier, value => {
+  if (!pointsConfirmed.value) {
+    redeemMultiplier.value = value
+  }
+})
+
+watch(selectedCustomer, value => {
+  if (!value) {
+    customerPoints.value = 0
+    resetRedeemState()
   }
 })
 
@@ -1353,11 +1369,9 @@ const getDiscountPriceLabel = (item) => {
     <h3>Redeem Points</h3>
     <p>Available: <strong>{{ customerPoints }}</strong></p>
 
-    <div class="qty-wrapper">
-      <button class="qty-step-btn" @click="redeemMultiplier = Math.max(1, redeemMultiplier - 1)">-</button>
-      <input type="number" :value="redeemMultiplier" readonly />
-      <button class="qty-step-btn" @click="redeemMultiplier += 1">+</button>
-    </div>
+    <p>
+      Point value: <strong>₱{{ redeemMultiplier.toFixed(2) }}</strong> each
+    </p>
 
     <p>
       Discount: <strong>₱{{ redeemMultiplier * customerPoints }}</strong>
@@ -1376,7 +1390,7 @@ const getDiscountPriceLabel = (item) => {
     <h3>Special Discount</h3>
     
     <div v-if="pointsUsed > 0" style="padding: 10px; background: #e6f7ff; border-radius: 6px; margin-bottom: 10px;">
-      <small>Redeemed Points Discount: <strong>₱{{ pointsUsed }}</strong></small>
+      <small>Redeemed Points Discount: <strong>₱{{ redeemedPointsDiscount }}</strong></small>
     </div>
 
     <label style="font-weight: 600; margin-bottom: 8px;">Additional Discount Amount:</label>
@@ -1392,7 +1406,7 @@ const getDiscountPriceLabel = (item) => {
     <div v-if="specialDiscount > 0" style="padding: 10px; background: #fff3cd; border-radius: 6px; margin-bottom: 10px;">
       <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
         <span>Points Discount:</span>
-        <strong>₱{{ pointsUsed }}</strong>
+        <strong>₱{{ redeemedPointsDiscount }}</strong>
       </div>
       <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
         <span>Special Discount:</span>
@@ -1401,7 +1415,7 @@ const getDiscountPriceLabel = (item) => {
       <hr style="margin: 8px 0; border: none; border-top: 1px solid #ddd;" />
       <div style="display: flex; justify-content: space-between; font-size: 18px;">
         <span><strong>Total Discount:</strong></span>
-        <strong style="color: #e74c3c;">₱{{ pointsUsed + specialDiscount }}</strong>
+        <strong style="color: #e74c3c;">₱{{ redeemedPointsDiscount + specialDiscount }}</strong>
       </div>
     </div>
 

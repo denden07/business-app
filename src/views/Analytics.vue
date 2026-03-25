@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, watch, computed } from 'vue'
+import { useStore } from 'vuex'
 import { dbPromise } from '../db'
 import MetricCard from '../components/analytics/MetricCard.vue'
 import VueApexCharts from 'vue3-apexcharts'
@@ -7,6 +8,13 @@ import { format } from 'date-fns'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 import { getLocalDayEnd, getLocalDayStart } from '../utils/dateRange'
+import {
+  getTemplateCatalogLabel,
+  getTemplateCatalogEntryLabel,
+  getTemplateDailySalesQuota,
+} from '../utils/templatePresentation'
+
+const store = useStore()
 
 // --------------------
 // Metrics
@@ -14,6 +22,10 @@ import { getLocalDayEnd, getLocalDayStart } from '../utils/dateRange'
 const totalSales = ref(0)
 const totalItems = ref(0)
 const voidedSalesCount = ref(0)
+const totalTransactions = ref(0)
+const totalProductUnits = ref(0)
+const totalServiceUnits = ref(0)
+const lowStockCount = ref(0)
 
 // --------------------
 // Charts
@@ -25,8 +37,14 @@ const topItemsSeries = ref([])
 const calendarOptions = ref({})
 const calendarSeries = ref([])
 
-const DAILY_TARGET = 40000
 const isLoading = ref(false)
+const activeTemplate = computed(() => store.getters['template/activeTemplate'] || {})
+const reportingFocus = computed(() => store.getters['template/reportingFocus'] || activeTemplate.value.reporting?.focus || 'mixed')
+const templateLabels = computed(() => activeTemplate.value.labels || {})
+const catalogLabel = computed(() => getTemplateCatalogLabel(templateLabels.value))
+const catalogEntryLabel = computed(() => getTemplateCatalogEntryLabel(templateLabels.value))
+const dailySalesQuota = computed(() => getTemplateDailySalesQuota(activeTemplate.value))
+const quotaCalendarTitle = computed(() => `Sales Quota Calendar (₱${dailySalesQuota.value.toLocaleString()}/day)`)
 
 // --------------------
 // Date Range & Labels
@@ -67,6 +85,94 @@ const itemsLabel = computed(() => {
     case 'custom': return 'Items Sold (Custom Range)'
     default: return 'Items Sold'
   }
+})
+
+function buildTimeRangeLabel(prefix) {
+  switch (timeRange.value) {
+    case 'today': return `${prefix} Today`
+    case 'week': return `${prefix} This Week`
+    case 'month': return `${prefix} This Month`
+    case 'year': return `${prefix} This Year`
+    case 'custom': return `${prefix} (Custom Range)`
+    default: return prefix
+  }
+}
+
+const secondaryMetric = computed(() => {
+  switch (reportingFocus.value) {
+    case 'inventory':
+      return {
+        title: buildTimeRangeLabel('Product Units Moved'),
+        value: totalProductUnits.value,
+        type: 'number',
+      }
+    case 'services':
+      return {
+        title: buildTimeRangeLabel('Services Sold'),
+        value: totalServiceUnits.value,
+        type: 'number',
+      }
+    case 'sales':
+      return {
+        title: buildTimeRangeLabel('Transactions'),
+        value: totalTransactions.value,
+        type: 'number',
+      }
+    default:
+      return {
+        title: itemsLabel.value,
+        value: totalItems.value,
+        type: 'number',
+      }
+  }
+})
+
+const tertiaryMetric = computed(() => {
+  switch (reportingFocus.value) {
+    case 'inventory':
+      return {
+        title: 'Low Stock Items',
+        value: lowStockCount.value,
+        type: 'number',
+      }
+    case 'services':
+      return {
+        title: buildTimeRangeLabel('Transactions'),
+        value: totalTransactions.value,
+        type: 'number',
+      }
+    default:
+      return {
+        title: 'Voided Sales',
+        value: voidedSalesCount.value,
+        type: 'number',
+      }
+  }
+})
+
+const topChartTitle = computed(() => {
+  switch (reportingFocus.value) {
+    case 'inventory':
+      return 'Top Products'
+    case 'services':
+      return 'Top Services'
+    case 'sales':
+      return `Top ${catalogLabel.value}`
+    default:
+      return `Top ${catalogLabel.value}`
+  }
+})
+
+const topChartSeriesName = computed(() => {
+  if (reportingFocus.value === 'services') {
+    return 'Services Sold'
+  }
+
+  if (reportingFocus.value === 'inventory') {
+    return 'Units Sold'
+  }
+
+  return `Quantity Sold per ${catalogEntryLabel.value}`
 })
 
 // --------------------
@@ -136,6 +242,10 @@ const updateCharts = async () => {
   totalSales.value = 0
   totalItems.value = 0
   voidedSalesCount.value = 0
+  totalTransactions.value = 0
+  totalProductUnits.value = 0
+  totalServiceUnits.value = 0
+  lowStockCount.value = items.filter(item => item.track_stock !== false && Number(item.quantity || 0) > 0 && Number(item.quantity || 0) < 10).length
 
   for (const sale of sales) {
     const saleDate = new Date(sale.purchased_date || sale.date)
@@ -147,6 +257,7 @@ const updateCharts = async () => {
     }
 
     includedSaleIds.add(sale.id)
+  totalTransactions.value += 1
     const saleTotal = Number(sale.final_total || 0)
     totalSales.value += saleTotal
 
@@ -158,14 +269,24 @@ const updateCharts = async () => {
   for (const item of saleItems) {
     if (!includedSaleIds.has(item.sale_id)) continue
 
-    totalItems.value += Number(item.quantity || 0)
+    const quantity = Number(item.quantity || 0)
+    totalItems.value += quantity
     const itemId = Number(item.item_id || legacyItemIds.get(Number(item.medicine_id)))
     if (!Number.isFinite(itemId)) continue
+
+    const source = itemsMap.get(itemId)
+    const itemType = source?.item_type === 'service' ? 'service' : 'product'
+
+    if (itemType === 'service') {
+      totalServiceUnits.value += quantity
+    } else {
+      totalProductUnits.value += quantity
+    }
 
     const sourceKey = `item:${itemId}`
     itemTotals.set(
       sourceKey,
-      (itemTotals.get(sourceKey) || 0) + Number(item.quantity || 0)
+      (itemTotals.get(sourceKey) || 0) + quantity
     )
   }
 
@@ -201,7 +322,7 @@ const updateCharts = async () => {
     grid: { borderColor: analyticsGridColor },
     legend: { labels: { colors: analyticsCardText } },
     tooltip: { y: { formatter: val => `₱${val.toLocaleString()}` } },
-    colors: [totalSales.value >= DAILY_TARGET ? '#22c55e' : '#ef4444']
+    colors: [totalSales.value >= dailySalesQuota.value ? '#22c55e' : '#ef4444']
   }
 
   // --------------------
@@ -209,6 +330,22 @@ const updateCharts = async () => {
   // --------------------
   const topItems = await Promise.all(
     Array.from(itemTotals.entries())
+      .filter(([sourceKey]) => {
+        const [, rawId] = sourceKey.split(':')
+        const sourceId = Number(rawId)
+        const source = itemsMap.get(sourceId)
+        const itemType = source?.item_type === 'service' ? 'service' : 'product'
+
+        if (reportingFocus.value === 'services') {
+          return itemType === 'service'
+        }
+
+        if (reportingFocus.value === 'inventory') {
+          return itemType !== 'service'
+        }
+
+        return true
+      })
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(async ([sourceKey, qty]) => {
@@ -234,7 +371,11 @@ const updateCharts = async () => {
     },
     grid: { borderColor: analyticsGridColor },
     legend: { labels: { colors: analyticsCardText } },
-    tooltip: { y: { formatter: val => `${val} pcs` } }
+    tooltip: {
+      y: {
+        formatter: val => reportingFocus.value === 'services' ? `${val} services` : `${val} units`
+      }
+    }
   }
 
   // --------------------
@@ -287,8 +428,8 @@ const updateCharts = async () => {
         shadeIntensity: 0.4,
         colorScale:{
           ranges:[
-            {from:0,to:DAILY_TARGET-1,color:'#ef4444',name:'Below Target'},
-            {from:DAILY_TARGET,to:999999,color:'#22c55e',name:'Hit Target'}
+            {from:0,to:dailySalesQuota.value - 1,color:'#ef4444',name:'Below Target'},
+            {from:dailySalesQuota.value,to:999999,color:'#22c55e',name:'Hit Target'}
           ]
         }
       }
@@ -303,7 +444,7 @@ const updateCharts = async () => {
   isLoading.value = false
 }
 
-watch([timeRange, customStart, customEnd], () => updateCharts())
+watch([timeRange, customStart, customEnd, dailySalesQuota, reportingFocus], () => updateCharts())
 onMounted(updateCharts)
 </script>
 
@@ -341,14 +482,14 @@ onMounted(updateCharts)
   <!-- Metrics -->
   <div class="metrics-cards">
     <MetricCard :title="salesLabel" :value="totalSales" type="currency" />
-    <MetricCard :title="itemsLabel" :value="totalItems" type="number" />
-    <MetricCard title="Voided Sales" :value="voidedSalesCount" type="number" />
+    <MetricCard :title="secondaryMetric.title" :value="secondaryMetric.value" :type="secondaryMetric.type" />
+    <MetricCard :title="tertiaryMetric.title" :value="tertiaryMetric.value" :type="tertiaryMetric.type" />
   </div>
 
   <!-- Charts -->
   <div class="charts-section">
     <div class="chart-card">
-      <h2>Sales Quota Calendar (₱40,000/day)</h2>
+      <h2>{{ quotaCalendarTitle }}</h2>
       <VueApexCharts type="heatmap" :options="calendarOptions" :series="calendarSeries" height="260"/>
     </div>
 
@@ -358,8 +499,8 @@ onMounted(updateCharts)
     </div>
 
     <div class="chart-card">
-      <h2>Top Items</h2>
-      <VueApexCharts type="bar" :options="topItemsOptions" :series="[{ name:'Quantity Sold', data:topItemsSeries }] " height="350"/>
+      <h2>{{ topChartTitle }}</h2>
+      <VueApexCharts type="bar" :options="topItemsOptions" :series="[{ name: topChartSeriesName, data: topItemsSeries }] " height="350"/>
     </div>
   </div>
 </div>

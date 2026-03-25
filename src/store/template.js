@@ -60,7 +60,16 @@ export default {
       const template = await saveActiveTemplateSelection(templateId, overrides)
       await seedPageVisibilityFromTemplate(template, { force: forcePageVisibility })
       commit('SET_ACTIVE_TEMPLATE_ID', template.id)
-      commit('SET_ACTIVE_TEMPLATE_OVERRIDES', overrides)
+      commit('SET_ACTIVE_TEMPLATE_OVERRIDES', {
+        capabilities: template.capabilities,
+        workflow: template.workflow,
+        itemDefaults: template.itemDefaults,
+        customer: template.customer,
+        payments: template.payments,
+        pages: template.pages,
+        reporting: template.reporting,
+        labels: template.labels,
+      })
       commit('SET_READY', true)
       return template
     },

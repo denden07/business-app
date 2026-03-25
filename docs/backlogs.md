@@ -6,44 +6,20 @@ Completed work such as template foundation, first-run setup, initial template cu
 
 ## Priority Order
 
-1. Remaining template work
-	- quickest wins because the template engine and related screens already exist
-2. Item expiration notifications
+1. Item expiration notifications
 	- moderate effort because expiry data and inventory flows already exist
-3. Debt sale tracking
+2. Debt sale tracking
 	- moderate effort because it affects checkout, customers, sales history, and reporting
-4. Budgeting feature
+3. Budgeting feature
 	- moderate effort because expenses and profit reporting need new storage, UI, and analytics integration
-5. Multi-business support
+4. Multi-Business Support
 	- large change because it introduces business registry and switching
-6. Separate database per business
+5. Separate Database Per Business
 	- large change because it requires migration and business-scoped data isolation
-7. Cross-business analytics
+6. Cross-Business Analytics
 	- heaviest change because it depends on multi-business isolation and cross-database aggregation
 
-## 1. Remaining Template Work
-
-### Post-Setup Template Editing
-
-The app can already rerun setup and edit the active template profile, but deeper post-setup editing is still pending.
-
-Remaining scope:
-
-- richer label customization beyond the current payment, customer, and professional-fee labels
-- more direct Settings-based template editing without requiring a full setup rerun
-- additional template-managed page and terminology controls where useful
-
-### More Template-Driven Runtime Coverage
-
-Several core template behaviors are already wired into setup, POS, customers, history, and sales presentation.
-
-Still pending:
-
-- template-specific wording in remaining draft and historical surfaces
-- any additional validation rules not yet covered by the current shared template engine
-- further analytics emphasis and dashboard/report tailoring by reporting focus
-
-## 2. Item Expiration Notifications
+## 1. Item Expiration Notifications
 
 Add notification and visibility support for items that are near expiry or already expired.
 
@@ -54,7 +30,7 @@ Remaining goals:
 - define notification thresholds such as 7 days, 30 days, or template-driven windows
 - support operational alerts before inventory becomes unusable
 
-## 3. Debt Sale Tracking
+## 2. Debt Sale Tracking
 
 Add a way to mark and manage sales that are not fully paid at the time of checkout.
 
@@ -72,7 +48,7 @@ Notes:
 - if customer tracking is enabled, debt should be attached to the selected customer record for follow-up and settlement history
 - reporting should not treat debt the same as fully collected cash; totals should clearly separate gross sale value, collected amount, and remaining receivables where needed
 
-## 4. Budgeting Feature
+## 3. Budgeting Feature
 
 Add an expense and budgeting layer so the app can track money going out, not only sales coming in.
 
@@ -84,7 +60,7 @@ Remaining goals:
 - compute profit using sales minus expenses
 - distinguish revenue, expenses, and profit clearly in reports and dashboards
 
-## 5. Multi-Business Support
+## 4. Multi-Business Support
 
 ### Summary
 
@@ -103,7 +79,7 @@ Support multiple businesses owned by the same user, where each business has its 
 - which settings stay global versus business-specific?
 - how should backup and restore work for one business versus the full owner profile?
 
-## 6. Separate Database Per Business
+## 5. Separate Database Per Business
 
 ### Summary
 
@@ -122,7 +98,7 @@ Move from the current single-business runtime model to one operational database 
 - more migration and switching complexity
 - combined analytics becomes a cross-database aggregation problem
 
-## 7. Cross-Business Analytics
+## 6. Cross-Business Analytics
 
 ### Summary
 

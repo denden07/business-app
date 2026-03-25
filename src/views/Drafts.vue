@@ -4,6 +4,13 @@ import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
 import Pagination from '../components/Pagination.vue'
+import {
+  getTemplateCatalogEntryLabel,
+  getTemplateCatalogLabel,
+  getTemplateCustomerSectionLabel,
+  getTemplatePaymentLabel,
+  getTemplateProfessionalFeeLabel,
+} from '../utils/templatePresentation'
 
 const store = useStore()
 const router = useRouter()
@@ -22,6 +29,13 @@ const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / items
 const itemsPerPageOptions = [5, 10, 20, 50]
 const showDetailsModal = ref(false)
 const selectedDraft = ref(null)
+const activeTemplate = computed(() => store.getters['template/activeTemplate'] || {})
+const templateLabels = computed(() => activeTemplate.value.labels || {})
+const catalogLabel = computed(() => getTemplateCatalogLabel(templateLabels.value))
+const catalogEntryLabel = computed(() => getTemplateCatalogEntryLabel(templateLabels.value))
+const customerSectionLabel = computed(() => getTemplateCustomerSectionLabel(templateLabels.value))
+const professionalFeeLabel = computed(() => getTemplateProfessionalFeeLabel(templateLabels.value))
+const formatPaymentMethod = (value) => getTemplatePaymentLabel(value, templateLabels.value)
 
 onMounted(() => {
   store.dispatch('drafts/loadPage')
@@ -58,6 +72,14 @@ const closeDetailsModal = () => {
   selectedDraft.value = null
 }
 
+const formatDraftItemCount = (count) => {
+  const normalizedCount = Number(count || 0)
+  const singularLabel = catalogEntryLabel.value
+  const pluralLabel = catalogLabel.value
+
+  return `${normalizedCount} ${normalizedCount === 1 ? singularLabel : pluralLabel}`
+}
+
 /* ======================
    COLUMN VISIBILITY
 ====================== */
@@ -65,13 +87,13 @@ const _draftsDefaultCols = { draft_num: true, name: true, cart: true, customer: 
 const colMenuOpen = ref(false)
 const visibleCols = ref({ ..._draftsDefaultCols, ...JSON.parse(localStorage.getItem('col-vis-drafts') || '{}') })
 watch(visibleCols, v => localStorage.setItem('col-vis-drafts', JSON.stringify(v)), { deep: true })
-const allCols = [
+const allCols = computed(() => [
   { key: 'draft_num', label: '#' },
   { key: 'name', label: 'Label' },
-  { key: 'cart', label: 'Items' },
-  { key: 'customer', label: 'Customer' },
+  { key: 'cart', label: catalogLabel.value },
+  { key: 'customer', label: customerSectionLabel.value },
   { key: 'created_at', label: 'Saved At' },
-]
+])
 const toggleCol = (key) => { visibleCols.value[key] = !visibleCols.value[key] }
 
 const deleteDraft = async (draft) => {
@@ -119,8 +141,8 @@ const goPage = (page) => {
         <tr>
           <th v-if="visibleCols.draft_num">#</th>
           <th v-if="visibleCols.name">Label</th>
-          <th v-if="visibleCols.cart">Items</th>
-          <th v-if="visibleCols.customer">Customer</th>
+          <th v-if="visibleCols.cart">{{ catalogLabel }}</th>
+          <th v-if="visibleCols.customer">{{ customerSectionLabel }}</th>
           <th v-if="visibleCols.created_at">Saved At</th>
           <th class="col-actions">
             <div class="th-actions-head">
@@ -141,7 +163,7 @@ const goPage = (page) => {
         <tr v-for="draft in drafts" :key="draft.id">
           <td v-if="visibleCols.draft_num">{{ draft.id }}</td>
           <td v-if="visibleCols.name">{{ draft.name }}</td>
-          <td v-if="visibleCols.cart">{{ draft.cart?.length ?? 0 }} item(s)</td>
+          <td v-if="visibleCols.cart">{{ formatDraftItemCount(draft.cart?.length) }}</td>
           <td v-if="visibleCols.customer">{{ draft.customer?.name ?? 'Walk-in' }}</td>
           <td v-if="visibleCols.created_at">{{ new Date(draft.created_at).toLocaleString() }}</td>
           <td class="col-actions actions-td">
@@ -171,10 +193,10 @@ const goPage = (page) => {
               Saved {{ new Date(selectedDraft.created_at).toLocaleString() }}
             </div>
             <div class="sale-meta">
-              Customer: {{ selectedDraftCustomer ? selectedDraftCustomer.name : 'Walk-in' }}
+              {{ customerSectionLabel }}: {{ selectedDraftCustomer ? selectedDraftCustomer.name : 'Walk-in' }}
             </div>
             <div class="sale-meta">
-              Payment: {{ selectedDraft.paymentMethod || 'Cash' }}
+              Payment: {{ formatPaymentMethod(selectedDraft.paymentMethod) }}
             </div>
             <div v-if="selectedDraftCustomer?.address || selectedDraftCustomer?.phone" class="sale-meta">
               {{ selectedDraftCustomer?.address || 'No address' }}<span v-if="selectedDraftCustomer?.address && selectedDraftCustomer?.phone"> • </span>{{ selectedDraftCustomer?.phone || '' }}
@@ -190,7 +212,7 @@ const goPage = (page) => {
           <table>
             <thead>
               <tr>
-                <th>Item</th>
+                <th>{{ catalogEntryLabel }}</th>
                 <th>Qty</th>
                 <th>Price</th>
                 <th>Total</th>
@@ -208,7 +230,7 @@ const goPage = (page) => {
                 <td>₱{{ (Number(item.price || 0) * Number(item.qty || 0)).toFixed(2) }}</td>
               </tr>
               <tr v-if="!selectedDraftItems.length">
-                <td colspan="4" class="empty-state-cell">No items saved in this draft.</td>
+                <td colspan="4" class="empty-state-cell">No {{ catalogLabel.toLowerCase() }} saved in this draft.</td>
               </tr>
             </tbody>
           </table>
@@ -216,7 +238,7 @@ const goPage = (page) => {
 
         <div class="sale-summary">
           <div>Subtotal: ₱{{ selectedDraftSubtotal.toFixed(2) }}</div>
-          <div>Professional Fee: ₱{{ Number(selectedDraft.professionalFee || 0).toFixed(2) }}</div>
+          <div>{{ professionalFeeLabel }}: ₱{{ Number(selectedDraft.professionalFee || 0).toFixed(2) }}</div>
           <div>Discount: ₱{{ selectedDraftDiscount.toFixed(2) }}</div>
           <div><strong>Total: ₱{{ selectedDraftGrandTotal.toFixed(2) }}</strong></div>
 

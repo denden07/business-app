@@ -184,8 +184,7 @@ async saveSale({ commit }, payload) {
 
     // Redeem points
     if (pointsUsed > 0) {
-      const actualPointsDeducted = pointsUsed * (pointsMultiplier || 1)
-      const pointsToDeduct = Math.min(yearly.points, actualPointsDeducted)
+      const pointsToDeduct = Math.min(yearly.points, Number(pointsUsed || 0))
       yearly.points -= pointsToDeduct
 
       await pointsStore.add({
@@ -194,7 +193,7 @@ async saveSale({ commit }, payload) {
         type: 'redeem',
         related_sale_id: saleId,
         points: -pointsToDeduct,
-        description: `Redeemed ${pointsToDeduct} points × ${pointsMultiplier} = ${pointsUsed}`
+        description: `Redeemed ${pointsToDeduct} points × ${pointsMultiplier} = ${Number(pointsDiscount || 0).toFixed(2)}`
       })
     }
 

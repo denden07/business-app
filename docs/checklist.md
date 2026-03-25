@@ -161,6 +161,12 @@ Completed
 - Updated [src/views/Customers.vue](src/views/Customers.vue) so points sorting, columns, and manual point adjustments are hidden when loyalty is off while keeping customer records usable when customer selection is still required
 - Updated [src/views/TransactionHistory.vue](src/views/TransactionHistory.vue) so loyalty-off templates default to purchase history, hide points-only tabs and summaries, and use template-aware sale labels in the detail modal
 - Updated [src/views/Sales.vue](src/views/Sales.vue) and [src/store/sales.js](src/store/sales.js) so sales history and CSV export use template-aware payment and professional fee labels
+- Updated [src/views/Drafts.vue](src/views/Drafts.vue) so saved drafts now use template-aware item, customer, payment, and fee labels in both the list and detail modal
+- Updated [src/views/Setup.vue](src/views/Setup.vue), [src/views/Settings.vue](src/views/Settings.vue), [src/views/Home.vue](src/views/Home.vue), and [src/views/Analytics.vue](src/views/Analytics.vue) so template profiles can now set a daily sales quota and customer-points multiplier from setup or settings, with checkout redemption and analytics quota displays following those saved values
+- Updated [src/utils/templatePreferences.js](src/utils/templatePreferences.js) and [src/store/template.js](src/store/template.js) so template-profile saves now normalize overrides into plain serializable data before storing them in IndexedDB, fixing the Settings save failure caused by reactive objects reaching persistence
+- Expanded [src/views/Settings.vue](src/views/Settings.vue) so template profiles can now directly edit catalog, customer, fee, and payment terminology without rerunning setup
+- Updated [src/views/Analytics.vue](src/views/Analytics.vue) so reporting focus now changes which metrics and top-selling chart emphasis are shown for mixed, sales, inventory, and services templates
+- Updated [src/views/Sales.vue](src/views/Sales.vue) and [src/views/TransactionHistory.vue](src/views/TransactionHistory.vue) so sale-detail history modals now use template-aware catalog terminology for item columns and empty states
 
 Phase 7 behavior
 
@@ -169,10 +175,15 @@ Phase 7 behavior
 - Customer records can still be exposed manually from page visibility settings without re-enabling loyalty features
 - Loyalty-off templates now show customer history as purchase-first instead of points-first
 - Sales detail surfaces and exports now use the same payment and fee terminology as the active template
+- Draft history now follows active template terminology for item, customer, payment, and additional-fee labels
+- Template profiles can now directly control the analytics daily sales quota and the peso value of each redeemed customer point from setup or settings
+- Template profile changes made from Settings now persist reliably without IndexedDB clone errors
+- Template terminology can now be revised directly from Settings for catalog labels, customer wording, payment labels, and fee labels
+- Analytics now adapts its metric emphasis and top-selling chart based on the active template reporting focus
+- Sales history and customer transaction-history detail modals now follow the active template's catalog terminology more consistently
 
 Pending next phases
 
-- Deeper template-specific labeling in more historical and draft surfaces where legacy neutral copy still remains
 - Multi-business support remains deferred
 - Combined analytics remains deferred
 
@@ -215,8 +226,6 @@ Phase 8 behavior
 
 ## Remaining Backlog
 
-- Deeper template-specific labeling in more historical and draft surfaces where legacy neutral copy still remains
-- More template-driven analytics emphasis and reporting-focus behavior beyond the current foundation
 - Multi-business support
 - Separate operational database per business
 - Cross-business combined analytics

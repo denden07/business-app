@@ -21,6 +21,24 @@ export function getTemplatePaymentLabel(method, labels = {}) {
     : (labels.paymentCash || 'Cash')
 }
 
+export function getTemplateCatalogLabel(labels = {}) {
+  return labels.catalog || 'Items'
+}
+
+export function getTemplateCatalogEntryLabel(labels = {}) {
+  return labels.catalogEntry || 'Item'
+}
+
+export function getTemplatePointsMultiplier(template = {}) {
+  const parsedValue = Number(template?.customer?.pointsMultiplier)
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : 1
+}
+
+export function getTemplateDailySalesQuota(template = {}) {
+  const parsedValue = Number(template?.reporting?.dailySalesQuota)
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : 40000
+}
+
 export function getTemplateProfessionalFeeLabel(labels = {}) {
   return labels.professionalFee || 'Additional Fee'
 }

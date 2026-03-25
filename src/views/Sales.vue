@@ -11,6 +11,8 @@ import '@vuepic/vue-datepicker/dist/main.css'
 import { format } from 'date-fns'
 import { isWithinLocalDateRange } from '../utils/dateRange'
 import {
+  getTemplateCatalogEntryLabel,
+  getTemplateCatalogLabel,
   getTemplateCustomerSectionLabel,
   getTemplatePaymentLabel,
   getTemplateProfessionalFeeLabel,
@@ -23,6 +25,8 @@ const store = useStore()
 const router = useRouter()
 const activeTemplate = computed(() => store.getters['template/activeTemplate'] || {})
 const templateLabels = computed(() => activeTemplate.value.labels || {})
+const catalogLabel = computed(() => getTemplateCatalogLabel(templateLabels.value))
+const catalogEntryLabel = computed(() => getTemplateCatalogEntryLabel(templateLabels.value))
 const professionalFeeLabel = computed(() => getTemplateProfessionalFeeLabel(templateLabels.value))
 const customerSectionLabel = computed(() => getTemplateCustomerSectionLabel(templateLabels.value))
 const formatPaymentMethod = (value) => getTemplatePaymentLabel(value, templateLabels.value)
@@ -403,7 +407,7 @@ const exportCSV = async () => {
         <table>
           <thead>
             <tr>
-              <th>Item</th>
+              <th>{{ catalogEntryLabel }}</th>
               <th>Qty</th>
               <th>Price</th>
               <th>Subtotal</th>
@@ -417,7 +421,7 @@ const exportCSV = async () => {
               <td>₱{{ (item.quantity * item.price_at_sale).toFixed(2) }}</td>
             </tr>
             <tr v-if="!saleItems.length">
-              <td colspan="4" class="empty-state-cell">No sale items found.</td>
+              <td colspan="4" class="empty-state-cell">No {{ catalogLabel.toLowerCase() }} found for this sale.</td>
             </tr>
           </tbody>
         </table>

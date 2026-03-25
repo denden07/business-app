@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
 import { dbPromise } from '../db'
@@ -17,6 +17,15 @@ import {
   saveInteractionSettings,
 } from '../utils/interactionPreferences'
 import { setOnboardingComplete } from '../utils/onboardingPreferences'
+import {
+  getTemplateCatalogEntryLabel,
+  getTemplateCatalogLabel,
+  getTemplateCustomerSectionLabel,
+  getTemplateDailySalesQuota,
+  getTemplatePaymentLabel,
+  getTemplatePointsMultiplier,
+  getTemplateProfessionalFeeLabel,
+} from '../utils/templatePresentation'
 
 const router = useRouter()
 const store = useStore()
@@ -33,6 +42,111 @@ const interactionSettings = ref({ ...defaultInteractionSettings })
 const interactionStatus = ref('')
 const pagesList = configurablePageDefinitions
 const activeTemplate = computed(() => store.getters['template/activeTemplate'])
+const templateProfileStatus = ref('')
+const templateProfileSaving = ref(false)
+const pointsMultiplier = ref(1)
+const dailySalesQuota = ref(40000)
+const catalogLabel = ref('Items')
+const catalogEntryLabel = ref('Item')
+const professionalFeeLabel = ref('Additional Fee')
+const customerSectionLabel = ref('Sold to')
+const customerActionLabel = ref('Select Customer')
+const paymentCashLabel = ref('Cash')
+const paymentGcashLabel = ref('Online Bank')
+
+watch(activeTemplate, template => {
+  const labels = template?.labels || {}
+  pointsMultiplier.value = getTemplatePointsMultiplier(template || {})
+  dailySalesQuota.value = getTemplateDailySalesQuota(template || {})
+  catalogLabel.value = getTemplateCatalogLabel(labels)
+  catalogEntryLabel.value = getTemplateCatalogEntryLabel(labels)
+  professionalFeeLabel.value = getTemplateProfessionalFeeLabel(labels)
+  customerSectionLabel.value = getTemplateCustomerSectionLabel(labels)
+  customerActionLabel.value = labels.customerAction || 'Select Customer'
+  paymentCashLabel.value = getTemplatePaymentLabel('cash', labels)
+  paymentGcashLabel.value = getTemplatePaymentLabel('gcash', labels)
+}, { immediate: true })
+
+function buildTemplateProfileOverrides() {
+  return {
+    capabilities: { ...(activeTemplate.value?.capabilities || {}) },
+    workflow: { ...(activeTemplate.value?.workflow || {}) },
+    itemDefaults: { ...(activeTemplate.value?.itemDefaults || {}) },
+    customer: {
+      ...(activeTemplate.value?.customer || {}),
+      pointsMultiplier: Number(pointsMultiplier.value),
+    },
+    payments: { ...(activeTemplate.value?.payments || {}) },
+    pages: { ...(activeTemplate.value?.pages || {}) },
+    reporting: {
+      ...(activeTemplate.value?.reporting || {}),
+      dailySalesQuota: Number(dailySalesQuota.value),
+    },
+    labels: {
+      ...(activeTemplate.value?.labels || {}),
+      catalog: catalogLabel.value.trim(),
+      catalogEntry: catalogEntryLabel.value.trim(),
+      professionalFee: professionalFeeLabel.value.trim(),
+      customerSection: customerSectionLabel.value.trim(),
+      customerAction: customerActionLabel.value.trim(),
+      paymentCash: paymentCashLabel.value.trim(),
+      paymentGcash: paymentGcashLabel.value.trim(),
+    },
+  }
+}
+
+async function saveTemplateProfileSettings() {
+  const normalizedPointsMultiplier = Number(pointsMultiplier.value)
+  const normalizedDailySalesQuota = Number(dailySalesQuota.value)
+
+  if (!Number.isFinite(normalizedPointsMultiplier) || normalizedPointsMultiplier <= 0) {
+    await Swal.fire({
+      icon: 'warning',
+      title: 'Invalid points multiplier',
+      text: 'Enter a points multiplier greater than 0.',
+    })
+    return
+  }
+
+  if (!Number.isFinite(normalizedDailySalesQuota) || normalizedDailySalesQuota <= 0) {
+    await Swal.fire({
+      icon: 'warning',
+      title: 'Invalid daily quota',
+      text: 'Enter a daily sales quota greater than 0.',
+    })
+    return
+  }
+
+  if (templateProfileSaving.value) {
+    return
+  }
+
+  templateProfileSaving.value = true
+
+  try {
+    await store.dispatch('template/setActiveTemplate', {
+      templateId: activeTemplate.value?.id,
+      overrides: buildTemplateProfileOverrides(),
+    })
+    templateProfileStatus.value = 'Template profile saved'
+    await Swal.fire({
+      icon: 'success',
+      title: 'Template profile saved',
+      timer: 1400,
+      showConfirmButton: false,
+    })
+  } catch (err) {
+    console.error('Failed to save template profile settings', err)
+    templateProfileStatus.value = 'Failed to save template profile: ' + err.message
+    await Swal.fire({
+      icon: 'error',
+      title: 'Save failed',
+      text: err.message || 'Unable to save template profile settings.',
+    })
+  } finally {
+    templateProfileSaving.value = false
+  }
+}
 
 function clampAppName(value) {
   return String(value || '').slice(0, appNameLimit)
@@ -550,6 +664,72 @@ onMounted(async () => {
             <button class="primary" @click="openTemplateSetup({ reset: true })">Rerun Setup</button>
           </div>
         </div>
+
+        <div class="template-settings-grid">
+          <label class="template-setting-field">
+            <span>Customer points multiplier</span>
+            <input v-model.number="pointsMultiplier" class="input" type="number" min="0.01" step="0.01" />
+            <small>Controls how much each redeemed customer point is worth during checkout.</small>
+          </label>
+
+          <label class="template-setting-field">
+            <span>Daily sales quota</span>
+            <input v-model.number="dailySalesQuota" class="input" type="number" min="1" step="1" />
+            <small>Used by Analytics to compare each day against your target sales amount.</small>
+          </label>
+
+          <label class="template-setting-field">
+            <span>Catalog label</span>
+            <input v-model="catalogLabel" class="input" type="text" maxlength="40" placeholder="Items" />
+            <small>Used for plural catalog wording across screens.</small>
+          </label>
+
+          <label class="template-setting-field">
+            <span>Catalog entry label</span>
+            <input v-model="catalogEntryLabel" class="input" type="text" maxlength="40" placeholder="Item" />
+            <small>Used for singular catalog wording.</small>
+          </label>
+
+          <label class="template-setting-field">
+            <span>Professional fee label</span>
+            <input v-model="professionalFeeLabel" class="input" type="text" maxlength="40" placeholder="Additional Fee" />
+            <small>Controls how service or labor charges are named.</small>
+          </label>
+
+          <label class="template-setting-field">
+            <span>Customer section label</span>
+            <input v-model="customerSectionLabel" class="input" type="text" maxlength="40" placeholder="Sold to" />
+            <small>Shown where the selected customer section is named.</small>
+          </label>
+
+          <label class="template-setting-field">
+            <span>Customer action label</span>
+            <input v-model="customerActionLabel" class="input" type="text" maxlength="40" placeholder="Select Customer" />
+            <small>Used on the POS action button for choosing a customer.</small>
+          </label>
+
+          <label class="template-setting-field">
+            <span>Cash payment label</span>
+            <input v-model="paymentCashLabel" class="input" type="text" maxlength="40" placeholder="Cash" />
+            <small>Overrides the cash payment wording in checkout and history.</small>
+          </label>
+
+          <label class="template-setting-field">
+            <span>Digital payment label</span>
+            <input v-model="paymentGcashLabel" class="input" type="text" maxlength="40" placeholder="Online Bank" />
+            <small>Overrides the non-cash payment wording in checkout and history.</small>
+          </label>
+        </div>
+
+        <div class="branding-actions">
+          <button class="primary" :disabled="templateProfileSaving" @click="saveTemplateProfileSettings">
+            {{ templateProfileSaving ? 'Saving...' : 'Save Template Settings' }}
+          </button>
+        </div>
+
+        <p v-if="templateProfileStatus" class="status" :class="{ error: templateProfileStatus.includes('Failed') }">
+          {{ templateProfileStatus }}
+        </p>
       </div>
 
       <div class="card card-section">
@@ -736,6 +916,31 @@ body.dark-mode .section-icon {
   gap: 10px;
   flex-wrap: wrap;
 }
+.template-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.template-setting-field {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+.template-setting-field span {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #475569;
+}
+.template-setting-field small {
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.45;
+}
 .theme-copy { display: flex; flex-direction: column; gap: 4px; }
 .setting-copy { display: flex; flex-direction: column; gap: 4px; }
 .theme-copy strong { color: #1f2937; }
@@ -803,6 +1008,12 @@ body.dark-mode .theme-copy strong { color: #f8fafc; }
 body.dark-mode .setting-copy strong { color: #f8fafc; }
 body.dark-mode .theme-copy span { color: #cbd5e1; }
 body.dark-mode .setting-copy span { color: #cbd5e1; }
+body.dark-mode .template-setting-field {
+  background: rgba(148, 163, 184, 0.08);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+body.dark-mode .template-setting-field span { color: #cbd5e1; }
+body.dark-mode .template-setting-field small { color: #94a3b8; }
 body.dark-mode .text-limiter { color: #94a3b8; }
 body.dark-mode .text-limiter.warning { color: #fbbf24; }
 body.dark-mode .note {
@@ -844,6 +1055,10 @@ body.dark-mode .pin-inactive { background: #2a2a2a; color: #888; }
   .pin-status-row {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .template-settings-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

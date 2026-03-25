@@ -7,7 +7,11 @@ import { configurablePageDefinitions, templatePageSettingByRouteName } from '../
 import { loadResolvedActiveTemplate } from '../utils/templatePreferences'
 import { setOnboardingComplete } from '../utils/onboardingPreferences'
 import { dbPromise } from '../db'
-import { getTemplatePaymentLabel } from '../utils/templatePresentation'
+import {
+  getTemplateDailySalesQuota,
+  getTemplatePaymentLabel,
+  getTemplatePointsMultiplier,
+} from '../utils/templatePresentation'
 
 const router = useRouter()
 const route = useRoute()
@@ -24,6 +28,8 @@ const trackBatches = ref(false)
 const trackExpiry = ref(false)
 const loyaltyEnabled = ref(true)
 const requireCustomer = ref(false)
+const pointsMultiplier = ref(1)
+const dailySalesQuota = ref(40000)
 const paymentMethods = ref({ cash: true, gcash: true })
 const pageVisibility = ref({})
 
@@ -48,6 +54,8 @@ const customizationSummary = computed(() => ({
   trackExpiry: trackExpiry.value,
   loyaltyEnabled: loyaltyEnabled.value,
   requireCustomer: requireCustomer.value,
+  pointsMultiplier: pointsMultiplier.value,
+  dailySalesQuota: dailySalesQuota.value,
   paymentMethods: Object.entries(paymentMethods.value)
     .filter(([, enabled]) => enabled)
     .map(([method]) => getTemplatePaymentLabel(method, selectedTemplateLabels.value)),
@@ -61,6 +69,10 @@ const canProceed = computed(() => {
 
    if (currentStep.value === 2) {
     return Object.values(paymentMethods.value).some(Boolean)
+      && Number.isFinite(Number(dailySalesQuota.value))
+      && Number(dailySalesQuota.value) > 0
+      && Number.isFinite(Number(pointsMultiplier.value))
+      && Number(pointsMultiplier.value) > 0
    }
 
   return true
@@ -83,6 +95,8 @@ function applyTemplatePreset(template) {
   trackExpiry.value = !!template.itemDefaults?.trackExpiry
   loyaltyEnabled.value = template.customer?.enableLoyalty !== false
   requireCustomer.value = template.workflow?.requireCustomer === true || template.customer?.requireCustomerDetails === true
+  pointsMultiplier.value = getTemplatePointsMultiplier(template)
+  dailySalesQuota.value = getTemplateDailySalesQuota(template)
   paymentMethods.value = {
     cash: (template.payments?.methods || ['cash', 'gcash']).includes('cash'),
     gcash: (template.payments?.methods || ['cash', 'gcash']).includes('gcash'),
@@ -165,11 +179,16 @@ function buildTemplateOverrides() {
     customer: {
       enableLoyalty: loyaltyEnabled.value,
       requireCustomerDetails: requireCustomer.value,
+      pointsMultiplier: Number(pointsMultiplier.value),
     },
     payments: {
       methods: methods.length ? methods : ['cash'],
     },
     pages,
+    reporting: {
+      focus: selectedTemplate.value?.reporting?.focus || 'mixed',
+      dailySalesQuota: Number(dailySalesQuota.value),
+    },
   }
 }
 
@@ -395,6 +414,33 @@ onMounted(async () => {
               </div>
             </label>
           </div>
+
+          <div class="numeric-settings-grid">
+            <label class="numeric-setting-card">
+              <span>Customer points multiplier</span>
+              <input
+                v-model.number="pointsMultiplier"
+                class="input"
+                type="number"
+                min="0.01"
+                step="0.01"
+                :disabled="!loyaltyEnabled"
+              />
+              <small>Set how much discount each redeemed point is worth.</small>
+            </label>
+
+            <label class="numeric-setting-card">
+              <span>Daily sales quota</span>
+              <input
+                v-model.number="dailySalesQuota"
+                class="input"
+                type="number"
+                min="1"
+                step="1"
+              />
+              <small>Used by Analytics to mark when a day hits the target.</small>
+            </label>
+          </div>
         </div>
 
         <div class="option-group">
@@ -462,6 +508,16 @@ onMounted(async () => {
           <article>
             <span>Payment methods</span>
             <strong class="review-value review-value-break">{{ customizationSummary.paymentMethods.join(', ') }}</strong>
+          </article>
+
+          <article>
+            <span>Loyalty points value</span>
+            <strong class="review-value">₱{{ Number(customizationSummary.pointsMultiplier || 0).toFixed(2) }} per point</strong>
+          </article>
+
+          <article>
+            <span>Daily sales quota</span>
+            <strong class="review-value">₱{{ Number(customizationSummary.dailySalesQuota || 0).toLocaleString() }}</strong>
           </article>
         </div>
 
@@ -719,6 +775,35 @@ onMounted(async () => {
   font-size: 13px;
 }
 
+.numeric-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.numeric-setting-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid #dbe4ea;
+  background: #f8fbfd;
+}
+
+.numeric-setting-card span {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.numeric-setting-card small {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .segmented {
   display: inline-flex;
   flex-wrap: wrap;
@@ -889,7 +974,8 @@ onMounted(async () => {
 
   .template-grid,
   .page-chip-grid,
-  .review-grid {
+  .review-grid,
+  .numeric-settings-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -932,7 +1018,8 @@ onMounted(async () => {
   .template-grid,
   .page-chip-grid,
   .review-grid,
-  .segmented {
+  .segmented,
+  .numeric-settings-grid {
     grid-template-columns: 1fr;
   }
 

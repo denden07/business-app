@@ -35,6 +35,7 @@ const baseTemplate = {
   customer: {
     enableLoyalty: true,
     requireCustomerDetails: false,
+    pointsMultiplier: 1,
   },
   payments: {
     methods: ['cash', 'gcash'],
@@ -50,6 +51,7 @@ const baseTemplate = {
   },
   reporting: {
     focus: 'mixed',
+    dailySalesQuota: 40000,
   },
   labels: {
     catalog: 'Items',
