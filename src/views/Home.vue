@@ -435,16 +435,38 @@ const triggerNumpadFeedback = (frequency, duration) => {
   void vibrateNumpad()
 }
 
+const warnStockOverflow = async (item, requestedQty, availableQty) => {
+  await Swal.fire({
+    icon: 'warning',
+    title: 'Low Stock Warning',
+    html: `<b>${item.name}</b><br/>Available: ${availableQty}<br/>Cart Total: ${requestedQty}<br/><br/>You are exceeding available stock!`,
+    confirmButtonText: 'OK',
+    timer: 2000,
+    timerProgressBar: true,
+  })
+}
+
+const setCartItemQty = async (item, nextQty) => {
+  const normalizedQty = Math.max(0, Number(nextQty) || 0)
+  const availableQty = getAvailableStock(item)
+
+  item.qty = normalizedQty
+
+  if (availableQty !== null && normalizedQty > availableQty) {
+    await warnStockOverflow(item, normalizedQty, availableQty)
+  }
+}
+
 // ======================
 // NUMBER PAD
 // ======================
-const appendNumber = (num) => {
+const appendNumber = async (num) => {
   triggerNumpadFeedback(760, 0.045)
 
   if (!focusedField.value) return
 
   if (focusedField.value === 'qty' && focusedItem.value) {
-    focusedItem.value.qty = Number(String(focusedItem.value.qty) + num)
+    await setCartItemQty(focusedItem.value, Number(String(focusedItem.value.qty) + num))
   } else if (focusedField.value === 'professionalFee') {
     professionalFee.value = Number(String(professionalFee.value) + num)
   } else if (focusedField.value === 'moneyGiven') {
@@ -466,19 +488,19 @@ const backspace = () => {
   }
 }
 
-const clearInput = () => {
+const clearInput = async () => {
   triggerNumpadFeedback(480, 0.07)
 
   if (!focusedField.value) return
 
-  if (focusedField.value === 'qty' && focusedItem.value) focusedItem.value.qty = 1
+  if (focusedField.value === 'qty' && focusedItem.value) await setCartItemQty(focusedItem.value, 1)
   else if (focusedField.value === 'professionalFee') professionalFee.value = 0
   else if (focusedField.value === 'moneyGiven') moneyGiven.value = 0
 }
 
-const incrementQty = (item) => {
+const incrementQty = async (item) => {
   triggerNumpadFeedback(760, 0.045)
-  item.qty += 1
+  await setCartItemQty(item, Number(item.qty || 0) + 1)
 }
 
 const decrementQty = (item) => {
@@ -666,17 +688,10 @@ const addToCart = async (catalogItem) => {
   const newQty = cartQty + 1
 
   if (currentStock !== null && newQty > currentStock) {
-    await Swal.fire({
-      icon: 'warning',
-      title: 'Low Stock Warning',
-      html: `<b>${catalogItem.name}</b><br/>Available: ${currentStock}<br/>Cart Total: ${newQty}<br/><br/>You are exceeding available stock!`,
-      confirmButtonText: 'Add Anyway',
-      timer: 2000,
-      timerProgressBar: true
-    })
+    await warnStockOverflow(catalogItem, newQty, currentStock)
   }
 
-  if (existing) existing.qty += 1
+  if (existing) await setCartItemQty(existing, newQty)
   else cart.value.push({
     id: catalogItem.sourceId,
     sourceId: catalogItem.sourceId,
@@ -1211,7 +1226,7 @@ const getDiscountPriceLabel = (item) => {
             </td>
             <td>
               <div class="qty-wrapper">
-              <button class="mini danger remove-cart-item-btn" @click="removeItem(item)">✕</button>
+                <button class="qty-step-btn qty-step-btn-decrement" @click="decrementQty(item)">-</button>
                 <input
                   style="font-weight: bold"
                   type="number"
@@ -1990,6 +2005,18 @@ tbody tr:last-child td { border-bottom: none; }
   box-shadow: 0 8px 16px rgba(15, 23, 42, 0.1);
 }
 
+.qty-step-btn-decrement {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+.qty-step-btn-decrement:hover,
+.qty-step-btn-decrement:focus-visible {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
 .payment-toggle {
   display: flex;
   gap: 12px; /* visible separator between buttons */
@@ -2203,6 +2230,10 @@ tbody tr:last-child td { border-bottom: none; }
   .number-pad { grid-auto-rows: 48px; }
   table th, table td { padding: 6px; }
   .cart-totals strong { font-size: 18px; }
+}
+
+.cart-item-name {
+  text-align: left !important;
 }
 
 </style>
