@@ -1145,86 +1145,42 @@ const getDiscountPriceLabel = (item) => {
 <template>
 <div class="home-view">
  <h1>Calculator</h1>
+<div class="pos-layout">
+  <div class="catalog-panel">
+    <div class="search-section">
+      <SearchInput v-model="search" :placeholder="searchPlaceholder" :inputClass="'input pos-search-input'" />
+      
+      <div v-if="search && filteredCatalog.length" class="dropdown">
+        <div v-for="catalogItem in filteredCatalog" :key="catalogItem.cartKey" class="dropdown-item" @click="addToCart(catalogItem)">
+          <div class="dropdown-item-content">
+            <div>
+              <div class="catalog-name">{{ catalogItem.name }}</div>
+              <div class="catalog-meta" v-if="catalogItem.generic_name || catalogItem.description">{{ catalogItem.generic_name || catalogItem.description }}</div>
+            </div>
 
-  <!-- SEARCH BAR + CUSTOMER + REDEEM (ALL INLINE) -->
-  <div class="top-controls">
-  <div class="search-section">
-    <SearchInput v-model="search" :placeholder="searchPlaceholder" :inputClass="'input pos-search-input'" />
-    
-    <!-- Dropdown -->
-    <div v-if="search && filteredCatalog.length" class="dropdown">
-      <div v-for="catalogItem in filteredCatalog" :key="catalogItem.cartKey" class="dropdown-item" @click="addToCart(catalogItem)">
-        <div class="dropdown-item-content">
-          <div>
-            <div class="catalog-name">{{ catalogItem.name }}</div>
-            <div class="catalog-meta" v-if="catalogItem.generic_name || catalogItem.description">{{ catalogItem.generic_name || catalogItem.description }}</div>
-          </div>
-
-          <div 
-            class="stock-indicator" 
-            :title="catalogItem.stockIndicator.text"
-            :class="{
-              'out-of-stock': catalogItem.track_stock !== false && (catalogItem.stockIndicator.color === 'red' || catalogItem.quantity <= 0),
-              'low-stock': catalogItem.track_stock !== false && catalogItem.stockIndicator.color === 'orange',
-              'normal-stock': catalogItem.track_stock === false || catalogItem.quantity >= 10
-            }"
-          >
-            <span v-if="catalogItem.track_stock !== false" class="stock-indicator-text">{{ catalogItem.stockIndicator.text }}</span>
-            <small v-if="catalogItem.stockIndicator.detail" class="stock-indicator-detail">{{ catalogItem.stockIndicator.detail }}</small>
-            <span v-else class="stock-indicator-text">{{ catalogItem.item_type === 'service' ? 'Service' : 'No stock tracking' }}</span>
+            <div 
+              class="stock-indicator" 
+              :title="catalogItem.stockIndicator.text"
+              :class="{
+                'out-of-stock': catalogItem.track_stock !== false && (catalogItem.stockIndicator.color === 'red' || catalogItem.quantity <= 0),
+                'low-stock': catalogItem.track_stock !== false && catalogItem.stockIndicator.color === 'orange',
+                'normal-stock': catalogItem.track_stock === false || catalogItem.quantity >= 10
+              }"
+            >
+              <span v-if="catalogItem.track_stock !== false" class="stock-indicator-text">{{ catalogItem.stockIndicator.text }}</span>
+              <small v-if="catalogItem.stockIndicator.detail" class="stock-indicator-detail">{{ catalogItem.stockIndicator.detail }}</small>
+              <span v-else class="stock-indicator-text">{{ catalogItem.item_type === 'service' ? 'Service' : 'No stock tracking' }}</span>
+            </div>
           </div>
         </div>
       </div>
+
+      <div v-else-if="search" class="dropdown dropdown-empty">
+        <div class="dropdown-empty-copy">{{ noSearchResultsMessage }}</div>
+      </div>
     </div>
 
-    <div v-else-if="search" class="dropdown dropdown-empty">
-      <div class="dropdown-empty-copy">{{ noSearchResultsMessage }}</div>
-    </div>
-  </div>
-
-      <div v-if="showCustomerSection" class="sold-to">
-        <!-- CUSTOMER SECTION + REDEEM (inline together) -->
-        <div class="customer-section">
-          <label><strong>{{ customerSectionLabel }}:</strong></label>
-          <div class="customer-display">
-            <span v-if="selectedCustomer" class="customer-name">
-              👤 {{ selectedCustomer.name }} 
-            </span>
-            <button v-if="!selectedCustomer" class="btn select-customer" @click="showCustomerModal=true">
-              {{ customerActionLabel }}
-            </button>
-            <button style="margin-left: 8px" v-if="selectedCustomer" class="mini danger" @click="selectedCustomer=null">✕</button>
-          </div>
-
-          <!-- REDEEM BUTTONS (inline in same section) -->
-          <div v-if="loyaltyEnabled && selectedCustomer" class="redeem-section">
-            <button 
-              v-if="!pointsConfirmed" 
-              class="mini regular" 
-              @click="openRedeemModal"
-            >
-              🎁 Redeem
-            </button>
-
-            <button 
-              v-if="pointsConfirmed" 
-              class="mini danger" 
-              @click="removePoints"
-            >
-              Remove
-            </button>
-          </div>
-        </div>
-    </div>
-
-
-</div>
-
-
-
-<div class="pos-layout">
-  <!-- CENTER: CART -->
-  <div class="cart-wrapper">
+    <div class="cart-wrapper">
     <div class="cart-table-container">
       <table v-if="cart.length">
         <thead>
@@ -1318,10 +1274,44 @@ const getDiscountPriceLabel = (item) => {
       </div>
     </div>
 
+    </div>
   </div>
 
-  <!-- RIGHT PANEL -->
-  <div class="right-panel">
+  <div class="pos-side-panel">
+    <div v-if="showCustomerSection" class="sold-to">
+      <div class="customer-section">
+        <label><strong>{{ customerSectionLabel }}:</strong></label>
+        <div class="customer-display">
+          <span v-if="selectedCustomer" class="customer-name">
+            👤 {{ selectedCustomer.name }} 
+          </span>
+          <button v-if="!selectedCustomer" class="btn select-customer" @click="showCustomerModal=true">
+            {{ customerActionLabel }}
+          </button>
+          <button style="margin-left: 8px" v-if="selectedCustomer" class="mini danger" @click="selectedCustomer=null">✕</button>
+        </div>
+
+        <div v-if="loyaltyEnabled && selectedCustomer" class="redeem-section">
+          <button 
+            v-if="!pointsConfirmed" 
+            class="mini regular" 
+            @click="openRedeemModal"
+          >
+            🎁 Redeem
+          </button>
+
+          <button 
+            v-if="pointsConfirmed" 
+            class="mini danger" 
+            @click="removePoints"
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="right-panel">
     <label v-if="showProfessionalFee">
       {{ professionalFeeLabel }}
       <input
@@ -1374,6 +1364,7 @@ const getDiscountPriceLabel = (item) => {
 
 
     <button class="btn checkout" @click="checkout">Save Sale</button>
+    </div>
   </div>
 </div>
 
@@ -1509,12 +1500,26 @@ const getDiscountPriceLabel = (item) => {
   align-items: stretch; /* ensure children stretch to full available height */
 }
 
-/* Keep top controls fixed height and not stretching */
-.home-view > .top-controls {
-  flex: 0 0 auto;
+.home-view .catalog-panel {
+  flex: 0 0 calc((100% - 14px) * 0.7);
+  width: calc((100% - 14px) * 0.7);
+  max-width: calc((100% - 14px) * 0.7);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-/* Ensure cart-wrapper stretches vertically inside pos-layout */
+.home-view .pos-side-panel {
+  flex: 0 0 calc((100% - 14px) * 0.3);
+  width: calc((100% - 14px) * 0.3);
+  max-width: calc((100% - 14px) * 0.3);
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .home-view .cart-wrapper {
   display: flex;
   flex-direction: column;
@@ -1530,30 +1535,21 @@ const getDiscountPriceLabel = (item) => {
 
 /* Right panel should not stretch taller than the view */
 .home-view .right-panel {
-  /* flex: 0 0 220px; */
   max-height: 100%;
   overflow: auto;
   display: flex;
   flex-direction: column;
 }
 
-  /* =========================
-   TOP CONTROLS (INLINE)
-========================= */
-.top-controls {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 16px;
-  align-items: center;
-  flex-wrap: wrap;
-  width: 100%;
-}
-
 .search-section {
   display: flex;
-  flex: 1;
-  min-width: 250px;
+  width: 100%;
+  min-width: 0;
   position: relative;
+}
+
+.sold-to {
+  min-width: 0;
 }
 
 .customer-section {
@@ -1564,7 +1560,7 @@ const getDiscountPriceLabel = (item) => {
   /* background: #f9f9f9; */
   border-radius: 8px;
   flex: 1;
-  min-width: 300px;
+  /* min-width: 300px; */
   justify-content: flex-end;
 }
 
@@ -1607,7 +1603,7 @@ const getDiscountPriceLabel = (item) => {
    SEARCH BAR
 ========================= */
 .input.pos-search-input {
-  width: 70%;
+  width: 100%;
   display: block;
   min-height: 48px;
   border-radius: 14px;
@@ -1630,7 +1626,7 @@ const getDiscountPriceLabel = (item) => {
   position: absolute;
   top: 46px;
   left: 0;
-  width: 70%;
+  width: 100%;
   background: #fff;
   border: 1px solid #ccc;
   border-radius: 8px;
@@ -1849,14 +1845,14 @@ tbody tr:last-child td { border-bottom: none; }
 /* Larger, full-screen friendly number pad for wide/tall screens */
 @media (min-width: 900px) and (min-height: 700px) {
   .home-view .right-panel {
-    width: 320px;
+    width: 100%;
   }
 }
 
 /* On very large tablets or desktop-like screens, make pad visually larger and easier to tap */
 @media (min-width: 1200px) {
   .home-view .right-panel {
-    width: 380px;
+    width: 100%;
   }
 }
 /* Very tall screens: increase right-panel and scale number pad rows to fill height */
@@ -2065,6 +2061,13 @@ tbody tr:last-child td { border-bottom: none; }
   box-sizing: border-box;
 }
 
+.payment-toggle .payment-option-btn {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Make number pad buttons and payment buttons adapt on narrow screens */
 @media (max-width: 900px) {
   .number-pad { gap: 8px; }
@@ -2093,7 +2096,7 @@ tbody tr:last-child td { border-bottom: none; }
 
   /* Make numpad rows a bit tighter and ensure it fits without scrolling */
   .number-pad {
-    grid-auto-rows: 44px;
+    /* grid-auto-rows: 44px; */
     gap: 6px;
     max-height: calc(100% - 160px);
     overflow: visible;
@@ -2211,15 +2214,7 @@ tbody tr:last-child td { border-bottom: none; }
     padding: 8px 6px;
   }
 
-  /* Stack top controls vertically and make inputs full width */
-  .top-controls {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-  }
-
   .search-section {
-    flex: none;
     width: 100%;
     min-width: 0;
   }
@@ -2260,8 +2255,17 @@ tbody tr:last-child td { border-bottom: none; }
     min-height: 0;
   }
 
-  .cart-wrapper { order: 1; width: 100%; }
-  .right-panel { order: 2; width: 100%; height: auto; max-height: none; overflow: visible; }
+  .catalog-panel,
+  .pos-side-panel {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .catalog-panel { order: 1; }
+  .pos-side-panel { order: 2; }
+
+  .cart-wrapper { width: 100%; }
+  .right-panel { width: 100%; height: auto; max-height: none; overflow: visible; }
 
   /* Right panel becomes horizontally flexible and wraps its controls */
   .right-panel {
