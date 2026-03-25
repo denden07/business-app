@@ -320,7 +320,7 @@ const expiryClass = (item) => {
               <span v-if="sortBy === 'stock'">{{ sortOrder === 'asc' ? ' ↑' : ' ↓' }}</span>
             </th>
             <th v-if="visibleCols.expiry_alert">Expiry Alert</th>
-            <th class="col-actions header-with-menu">
+            <th class="col-actions">
               <div class="th-actions-head">
                 Actions
                 <div class="col-toggle-wrap">
@@ -487,25 +487,6 @@ const expiryClass = (item) => {
 .items-page .table-wrap.table-wrap-menu-open {
   overflow: visible;
   z-index: 30;
-}
-
-.items-page .table-wrap thead th {
-  position: relative;
-}
-
-.items-page .header-with-menu {
-  padding-right: 52px;
-}
-
-.items-page .th-actions-head {
-  justify-content: flex-start;
-}
-
-.items-page .col-toggle-wrap {
-  position: absolute;
-  top: 50%;
-  right: 14px;
-  transform: translateY(-50%);
 }
 
 .items-page .col-menu {

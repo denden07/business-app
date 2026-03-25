@@ -207,6 +207,9 @@ body.dark-mode .dp__theme_dark {
 }
 
 body.dark-mode .table-wrap {
+  --table-scroll-hint-solid: rgba(18, 24, 33, 0.96);
+  --table-scroll-hint-transparent: rgba(18, 24, 33, 0);
+  --table-scroll-hint-text: #7dd3c2;
   border-color: var(--table-border);
   box-shadow: 0 18px 34px rgba(0, 0, 0, 0.34);
 }
@@ -351,6 +354,47 @@ body.dark-mode .pagination button:disabled {
 
 body.dark-mode .pagination span {
   color: #b9c4cf;
+}
+
+body.dark-mode .items-page .item-description {
+  color: #94a3b8;
+}
+
+body.dark-mode .items-page .stock-cell strong {
+  color: #f8fafc;
+}
+
+body.dark-mode .items-page .stock-cell small {
+  color: #cbd5e1;
+}
+
+body.dark-mode .items-page .expiry-summary-banner {
+  background: rgba(251, 146, 60, 0.14);
+  border-color: rgba(251, 146, 60, 0.26);
+  color: #fed7aa;
+}
+
+body.dark-mode .items-page .expiry-pill {
+  border: 1px solid transparent;
+}
+
+body.dark-mode .items-page .expiry-pill.ok {
+  background: rgba(74, 222, 128, 0.18);
+  border-color: rgba(74, 222, 128, 0.3);
+  color: #dcfce7;
+}
+
+body.dark-mode .items-page .expiry-pill.warning {
+  background: rgba(251, 191, 36, 0.2);
+  border-color: rgba(251, 191, 36, 0.34);
+  color: #fef3c7;
+}
+
+body.dark-mode .items-page .expiry-pill.critical,
+body.dark-mode .items-page .expiry-pill.expired {
+  background: rgba(248, 113, 113, 0.22);
+  border-color: rgba(248, 113, 113, 0.34);
+  color: #fee2e2;
 }
 
 body.dark-mode .home-view {

@@ -348,16 +348,6 @@ h1 { margin-bottom: 16px; }
 }
 
 @media (max-width: 768px) {
-  .actions-td > button {
-    display: block;
-    width: 100%;
-    margin: 0 0 8px;
-  }
-
-  .actions-td > button:last-child {
-    margin-bottom: 0;
-  }
-
   .sale-header {
     flex-direction: column;
     align-items: stretch;

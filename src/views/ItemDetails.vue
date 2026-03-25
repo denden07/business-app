@@ -648,9 +648,12 @@ const goBack = () => {
           <table>
             <thead>
               <tr>
-                <th v-if="visibleCols.stock_date" :class="{ 'header-with-menu': lastVisibleColumnKey === 'stock_date' }">
-                  <div class="th-actions-head" v-if="lastVisibleColumnKey === 'stock_date'">
-                    <span>Date</span>
+                <th v-if="visibleCols.stock_date">Date</th>
+                <th v-if="visibleCols.stock_qty">Qty</th>
+                <th v-if="visibleCols.stock_expiry">Expiry</th>
+                <th class="col-actions">
+                  <div class="th-actions-head">
+                    Action
                     <div class="col-toggle-wrap">
                       <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
                       <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
@@ -660,37 +663,7 @@ const goBack = () => {
                       </div>
                     </div>
                   </div>
-                  <template v-else>Date</template>
                 </th>
-                <th v-if="visibleCols.stock_qty" :class="{ 'header-with-menu': lastVisibleColumnKey === 'stock_qty' }">
-                  <div class="th-actions-head" v-if="lastVisibleColumnKey === 'stock_qty'">
-                    <span>Qty</span>
-                    <div class="col-toggle-wrap">
-                      <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
-                      <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
-                      <div v-if="colMenuOpen" class="col-menu">
-                        <div class="col-menu-title">Columns</div>
-                        <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
-                      </div>
-                    </div>
-                  </div>
-                  <template v-else>Qty</template>
-                </th>
-                <th v-if="visibleCols.stock_expiry" :class="{ 'header-with-menu': lastVisibleColumnKey === 'stock_expiry' }">
-                  <div class="th-actions-head" v-if="lastVisibleColumnKey === 'stock_expiry'">
-                    <span>Expiry</span>
-                    <div class="col-toggle-wrap">
-                      <button class="col-icon-btn" @click.stop="toggleColumnMenu" title="Show / hide columns"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
-                      <div v-if="colMenuOpen" class="col-menu-backdrop" @click="colMenuOpen = false" />
-                      <div v-if="colMenuOpen" class="col-menu">
-                        <div class="col-menu-title">Columns</div>
-                        <label v-for="col in activeCols" :key="col.key"><input type="checkbox" :checked="visibleCols[col.key]" @change="toggleCol(col.key)" /> {{ col.label }}</label>
-                      </div>
-                    </div>
-                  </div>
-                  <template v-else>Expiry</template>
-                </th>
-                <th class="col-actions">Action</th>
               </tr>
             </thead>
             <tbody>

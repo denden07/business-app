@@ -23,7 +23,8 @@
 
 /* ── Table base ───────────────────────────────── */
 .table-wrap table {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   background: transparent;
   white-space: nowrap;
@@ -69,6 +70,7 @@
   right: 0;
   z-index: 1;
   border-right: none !important;
+  min-width: 152px;
 }
 .table-wrap thead .col-actions {
   background: linear-gradient(180deg, #f4fbf8 0%, #eaf7f1 100%);
@@ -101,6 +103,8 @@
   justify-content: center;
   vertical-align: middle;
   margin: 3px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* ── th row: "Actions" text + gear icon ──────── */
@@ -186,4 +190,18 @@
   width: 15px;
   height: 15px;
   flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .table-wrap .col-actions {
+    min-width: 168px;
+  }
+
+  .table-wrap thead .col-actions {
+    z-index: 12;
+  }
+
+  .table-wrap td.actions-td {
+    padding-inline: 10px;
+  }
 }
