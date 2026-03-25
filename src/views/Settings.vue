@@ -617,7 +617,7 @@ onMounted(async () => {
           <div class="setting-row">
             <div class="setting-copy">
               <strong>Numpad Vibration</strong>
-              <span>Trigger haptic feedback on keypad presses in Android builds.</span>
+              <span>Trigger haptic feedback on keypad presses in Android builds. Some devices do not support vibration, or may have haptics disabled in system settings.</span>
             </div>
 
             <button class="secondary" @click="toggleInteractionSetting('vibrationEnabled')">

@@ -4,9 +4,10 @@ import SearchInput from '../components/SearchInput.vue'
 import { useStore } from 'vuex'
 import { useRouter, useRoute } from 'vue-router'
 import Swal from 'sweetalert2'
+import { Capacitor } from '@capacitor/core'
 import { dbPromise } from '../db'
 import { collectFromSource } from '../db/query'
-import { Haptics } from '@capacitor/haptics'
+import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { summarizeExpiryForBatches, getSellableQuantityFromBatches } from '../utils/expiryAlerts'
 import { getTemplateExpiryAlertSettings, getTemplatePointsMultiplier } from '../utils/templatePresentation'
 import {
@@ -406,7 +407,7 @@ const playNumpadTone = async (frequency = 760, duration = 0.045) => {
     oscillator.frequency.setValueAtTime(frequency, startAt)
 
     gainNode.gain.setValueAtTime(0.0001, startAt)
-    gainNode.gain.exponentialRampToValueAtTime(0.028, startAt + 0.006)
+    gainNode.gain.exponentialRampToValueAtTime(0.09, startAt + 0.005)
     gainNode.gain.exponentialRampToValueAtTime(0.0001, endAt)
 
     oscillator.connect(gainNode)
@@ -419,22 +420,45 @@ const playNumpadTone = async (frequency = 760, duration = 0.045) => {
   }
 }
 
-const vibrateNumpad = async () => {
+const vibrateNumpad = async (style = ImpactStyle.Light) => {
   if (!interactionSettings.value.vibrationEnabled) return
 
+  const isNativeAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
+  const vibrationDuration = isNativeAndroid
+    ? (style === ImpactStyle.Heavy ? 90 : style === ImpactStyle.Medium ? 72 : 56)
+    : (style === ImpactStyle.Heavy ? 24 : style === ImpactStyle.Medium ? 18 : 12)
+
+  if (isNativeAndroid) {
+    try {
+      await Haptics.vibrate({ duration: vibrationDuration })
+      return
+    } catch {
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        navigator.vibrate(vibrationDuration)
+      }
+      return
+    }
+  }
+
   try {
-    await Haptics.selectionChanged()
+    await Haptics.impact({ style })
+  } catch {
+    // Fall through to explicit vibration for devices where impact feedback is unavailable.
+  }
+
+  try {
+    await Haptics.vibrate({ duration: vibrationDuration })
     return
   } catch {
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      navigator.vibrate(12)
+      navigator.vibrate(vibrationDuration)
     }
   }
 }
 
-const triggerNumpadFeedback = (frequency, duration) => {
+const triggerNumpadFeedback = (frequency, duration, hapticStyle = ImpactStyle.Light) => {
+  void vibrateNumpad(hapticStyle)
   void playNumpadTone(frequency, duration)
-  void vibrateNumpad()
 }
 
 const warnStockOverflow = async (item, requestedQty, availableQty) => {
@@ -463,7 +487,7 @@ const setCartItemQty = async (item, nextQty) => {
 // NUMBER PAD
 // ======================
 const appendNumber = async (num) => {
-  triggerNumpadFeedback(760, 0.045)
+  triggerNumpadFeedback(760, 0.055, ImpactStyle.Heavy)
 
   if (!focusedField.value) return
 
@@ -477,7 +501,7 @@ const appendNumber = async (num) => {
 }
 
 const backspace = async () => {
-  triggerNumpadFeedback(620, 0.05)
+  triggerNumpadFeedback(620, 0.06, ImpactStyle.Heavy)
 
   if (!focusedField.value) return
 
@@ -491,7 +515,7 @@ const backspace = async () => {
 }
 
 const clearInput = async () => {
-  triggerNumpadFeedback(480, 0.07)
+  triggerNumpadFeedback(480, 0.09, ImpactStyle.Heavy)
 
   if (!focusedField.value) return
 
@@ -501,22 +525,22 @@ const clearInput = async () => {
 }
 
 const incrementQty = async (item) => {
-  triggerNumpadFeedback(760, 0.045)
+  triggerNumpadFeedback(760, 0.055, ImpactStyle.Heavy)
   await setCartItemQty(item, Number(item.qty || 0) + 1)
 }
 
 const decrementQty = (item) => {
-  triggerNumpadFeedback(620, 0.05)
+  triggerNumpadFeedback(620, 0.06, ImpactStyle.Heavy)
   item.qty = Math.max(1, item.qty - 1)
 }
 
 const selectPaymentMethod = (method) => {
-  triggerNumpadFeedback(700, 0.04)
+  triggerNumpadFeedback(700, 0.05, ImpactStyle.Heavy)
   paymentMethod.value = method
 }
 
 const selectItemPriceType = (item, type) => {
-  triggerNumpadFeedback(type === 'regular' ? 720 : 680, 0.04)
+  triggerNumpadFeedback(type === 'regular' ? 720 : 680, 0.05, ImpactStyle.Heavy)
   setPriceType(item, type)
 }
 
