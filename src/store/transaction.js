@@ -1,5 +1,11 @@
 import { dbPromise } from '../db'
 import { buildCustomerDateKeyRange, buildDateKeyRange } from '../utils/dateRange'
+import {
+  getSaleAmountPaid,
+  getSaleDisplayStatus,
+  getSaleOutstandingBalance,
+  normalizeSalePaymentStatus,
+} from '../utils/saleStatus'
 
 export default {
   namespaced: true,
@@ -116,9 +122,9 @@ export default {
         cursor = await cursor.continue()
       }
 
-      commit('SET_SALES', rows)
+      commit('SET_SALES', rows.map(normalizeSaleRow))
       commit('SET_SALES_TOTAL', total)
-      return rows
+      return rows.map(normalizeSaleRow)
     },
 
     /* =========================
@@ -144,6 +150,16 @@ export default {
     totalPoints: (state) => {
       return state.pointsHistory.reduce((sum, p) => sum + p.points, 0)
     }
+  }
+}
+
+function normalizeSaleRow(sale) {
+  return {
+    ...sale,
+    payment_status: normalizeSalePaymentStatus(sale),
+    amount_paid: getSaleAmountPaid(sale),
+    outstanding_balance: getSaleOutstandingBalance(sale),
+    display_status: getSaleDisplayStatus(sale),
   }
 }
 

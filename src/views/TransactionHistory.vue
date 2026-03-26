@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import SearchInput from '../components/SearchInput.vue'
 import Pagination from '../components/Pagination.vue'
 import { useStore } from 'vuex'
+import Swal from 'sweetalert2'
 import { dbPromise } from '../db'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
@@ -18,6 +19,13 @@ import {
   getTemplateProfessionalFeeLabel,
   isLoyaltyEnabled,
 } from '../utils/templatePresentation'
+import {
+  canSettleDebtSale,
+  getSaleAmountPaid,
+  getSaleDisplayStatus,
+  getSaleOutstandingBalance,
+} from '../utils/saleStatus'
+import { openDebtSettlementPrompt } from '../utils/debtSettlementPrompt'
 
 const route = useRoute()
 const store = useStore()
@@ -28,12 +36,23 @@ const customerId = Number(route.params.id)
 const customerPoints = ref(0)
 const activeTemplate = computed(() => store.getters['template/activeTemplate'] || {})
 const templateLabels = computed(() => activeTemplate.value.labels || {})
+const templatePayments = computed(() => activeTemplate.value.payments || {})
 const catalogLabel = computed(() => getTemplateCatalogLabel(templateLabels.value))
 const catalogEntryLabel = computed(() => getTemplateCatalogEntryLabel(templateLabels.value))
 const loyaltyEnabled = computed(() => isLoyaltyEnabled(activeTemplate.value))
 const customerSectionLabel = computed(() => getTemplateCustomerSectionLabel(templateLabels.value))
 const professionalFeeLabel = computed(() => getTemplateProfessionalFeeLabel(templateLabels.value))
 const formatPaymentMethod = (value) => getTemplatePaymentLabel(value, templateLabels.value)
+const debtPaymentOptions = computed(() => {
+  const configuredMethods = Array.isArray(templatePayments.value.methods) && templatePayments.value.methods.length
+    ? templatePayments.value.methods
+    : ['cash', 'gcash']
+
+  return configuredMethods.map(method => ({
+    value: method,
+    label: formatPaymentMethod(method),
+  }))
+})
 
 function normalizeTab(value) {
   if (!loyaltyEnabled.value) {
@@ -90,6 +109,7 @@ const showSaleModal = ref(false)
 const selectedSale = ref(null)
 const saleCustomer = ref(null)
 const currentCustomer = ref(null)
+const debtPayments = ref([])
 
 /* ======================
    WATCHERS
@@ -165,6 +185,8 @@ const loadSalesPage = () => store.dispatch('transaction/loadSalesPage', {
   endDate: endDate.value,
   sortOrder: sortOrder.value
 })
+
+const resolveSaleDate = (sale) => sale?.purchased_date || sale?.created_at || ''
 
 function loadActiveTab() {
   return activeTab.value === 'points' ? loadPointsPage() : loadSalesPage()
@@ -242,13 +264,19 @@ const openSaleModal = async (saleOrId) => {
 
   if (!sale) return
 
-  // single transaction for sale lines and the unified item catalog
-  const tx = db.transaction(['sale_items', 'items'], 'readonly')
+  // Keep related reads inside one live transaction so IndexedDB does not auto-close it.
+  const tx = db.transaction(['sale_items', 'items', 'debt_payments', 'customers'], 'readonly')
   const itemsStore = tx.objectStore('sale_items')
   const itemCatalogStore = tx.objectStore('items')
+  const debtPaymentsStore = tx.objectStore('debt_payments')
+  const customersStore = tx.objectStore('customers')
   const legacyIndex = itemCatalogStore.index('legacy_medicine_id')
 
   const items = await collectFromSource(itemsStore.index('sale_id'), { query: sale.id })
+  const paymentHistory = await collectFromSource(debtPaymentsStore.index('sale_id'), {
+    query: sale.id,
+    direction: 'prev',
+  })
 
   for (const item of items) {
     const source = item.item_id
@@ -261,10 +289,12 @@ const openSaleModal = async (saleOrId) => {
   }
 
   if (sale.customer_id) {
-    saleCustomer.value = await db.get('customers', sale.customer_id)
+    saleCustomer.value = await customersStore.get(sale.customer_id)
   } else {
     saleCustomer.value = null
   }
+
+  debtPayments.value = paymentHistory
 
   await tx.done
 
@@ -281,11 +311,14 @@ const closeSaleModal = () => {
   selectedSale.value = null
   selectedSaleItems.value = []
   saleCustomer.value = null
+  debtPayments.value = []
 }
+
+const getDisplayStatus = (sale) => getSaleDisplayStatus(sale)
 
 const saleStatusLabel = computed(() => {
   if (!selectedSale.value) return ''
-  return selectedSale.value.status === 'voided' ? 'VOIDED' : 'COMPLETED'
+  return getDisplayStatus(selectedSale.value).toUpperCase()
 })
 
 const salePurchasedAt = computed(() => {
@@ -297,6 +330,45 @@ const saleDiscountAmount = computed(() => {
   if (!selectedSale.value) return 0
   return Number(selectedSale.value.discount ?? selectedSale.value.points_discount ?? 0)
 })
+const selectedSaleAmountPaid = computed(() => getSaleAmountPaid(selectedSale.value || {}))
+const selectedSaleOutstandingBalance = computed(() => getSaleOutstandingBalance(selectedSale.value || {}))
+const canSettleSelectedSale = computed(() => canSettleDebtSale(selectedSale.value || {}))
+
+async function settleDebtSale() {
+  if (!selectedSale.value?.id || !canSettleSelectedSale.value) return
+
+  const settlement = await openDebtSettlementPrompt({
+    outstandingBalance: selectedSaleOutstandingBalance.value,
+    paymentOptions: debtPaymentOptions.value,
+    title: `Settle Sale #${selectedSale.value.id}`,
+  })
+
+  if (!settlement) return
+
+  try {
+    const result = await store.dispatch('sales/settleDebtSale', {
+      saleId: selectedSale.value.id,
+      amount: settlement.amount,
+      payment_method: settlement.paymentMethod,
+      note: settlement.note,
+    })
+
+    await openSaleModal(selectedSale.value.id)
+    await loadSalesPage()
+
+    await Swal.fire({
+      icon: 'success',
+      title: result.remainingBalance > 0 ? 'Partial payment recorded' : 'Debt fully settled',
+      text: result.remainingBalance > 0
+        ? `Remaining balance: ₱${result.remainingBalance.toFixed(2)}`
+        : 'This sale is now fully paid.',
+      timer: 1600,
+      showConfirmButton: false,
+    })
+  } catch (error) {
+    await Swal.fire('Error', error.message || 'Failed to record debt payment.', 'error')
+  }
+}
 
 const currentCustomerPoints = computed(() => {
   return customerPoints.value
@@ -557,20 +629,21 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
         <tr
           v-for="s in paginatedData"
           :key="s.id"
-          @click="openSaleModal(s)"
-          style="cursor:pointer"
         >
-          <td v-if="visibleCols.pu_date">{{ new Date(s.created_at).toLocaleString() }}</td>
-          <td v-if="visibleCols.pu_id">#{{ s.id }}</td>
+          <td v-if="visibleCols.pu_date">{{ new Date(resolveSaleDate(s)).toLocaleString() }}</td>
+          <td v-if="visibleCols.pu_id">
+            <span class="sale-link" @click.stop="openSaleModal(s.id)">#{{ s.id }}</span>
+          </td>
           <td v-if="visibleCols.pu_total">₱{{ (s.final_total || 0).toFixed(2) }}</td>
           <td v-if="visibleCols.pu_status">
             <span
               :class="{
-                'status-success': s.status === 'completed',
+                'status-success': getDisplayStatus(s) === 'completed',
+                'status-debt': getDisplayStatus(s) === 'debt',
                 'status-voided': s.status === 'voided'
               }"
             >
-              {{ s.status }}
+              {{ getDisplayStatus(s) }}
             </span>
           </td>
         </tr>
@@ -603,7 +676,7 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
 
           <span
             class="badge"
-            :class="selectedSale.status === 'voided' ? 'badge-voided' : 'badge-ok'"
+            :class="getDisplayStatus(selectedSale) === 'voided' ? 'badge-voided' : getDisplayStatus(selectedSale) === 'debt' ? 'badge-debt' : 'badge-ok'"
           >
             {{ saleStatusLabel }}
           </span>
@@ -642,8 +715,25 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
           <hr />
 
           <div>Money Given: ₱{{ Number(selectedSale.money_given || 0).toFixed(2) }}</div>
+          <div>Amount Paid: ₱{{ selectedSaleAmountPaid.toFixed(2) }}</div>
+          <div v-if="selectedSaleOutstandingBalance > 0">Balance Due: ₱{{ selectedSaleOutstandingBalance.toFixed(2) }}</div>
           <div>Change: ₱{{ Number(selectedSale.change || 0).toFixed(2) }}</div>
         </div>
+
+        <div v-if="debtPayments.length" class="settlement-history">
+          <h3>Settlement History</h3>
+          <div v-for="payment in debtPayments" :key="payment.id" class="settlement-row">
+            <div>
+              <strong>₱{{ Number(payment.amount || 0).toFixed(2) }}</strong>
+              <span class="settlement-meta">{{ formatPaymentMethod(payment.payment_method) }}</span>
+            </div>
+            <div class="settlement-meta">{{ new Date(payment.paid_at).toLocaleString() }}</div>
+            <div class="settlement-meta">Balance after: ₱{{ Number(payment.balance_after || 0).toFixed(2) }}</div>
+            <div v-if="payment.note" class="settlement-note">{{ payment.note }}</div>
+          </div>
+        </div>
+
+        <button v-if="canSettleSelectedSale" class="info btn-block-mobile" @click="settleDebtSale">Record Debt Payment</button>
 
         <button class="secondary btn-block-mobile" @click="closeSaleModal">Close</button>
       </div>
@@ -781,9 +871,43 @@ body.dark-mode .summary-value {
   font-weight: 600;
 }
 
+.status-debt {
+  color: #b45309;
+  font-weight: 700;
+}
+
 .status-voided {
   color: #e74c3c;
   font-weight: 600;
+}
+
+.settlement-history {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed #cbd5e1;
+}
+
+.settlement-history h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.settlement-row {
+  padding: 10px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.settlement-meta {
+  display: inline-block;
+  margin-left: 8px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.settlement-note {
+  margin-top: 4px;
+  color: #475569;
+  font-size: 13px;
 }
 
 /* Calendar icon trigger */

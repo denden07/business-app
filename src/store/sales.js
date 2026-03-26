@@ -1,6 +1,6 @@
 import { dbPromise } from '../db'
 import { collectFromSource, reduceFromSource } from '../db/query'
-import { buildDateKeyRange, isWithinLocalDateRange } from '../utils/dateRange'
+import { buildDateKeyRange } from '../utils/dateRange'
 import Swal from 'sweetalert2'
 import {
   getTemplatePaymentLabel,
@@ -10,6 +10,13 @@ import {
 } from '../utils/templatePresentation'
 import { loadResolvedActiveTemplate } from '../utils/templatePreferences'
 import { classifyExpiryDate, sortBatchesForSale } from '../utils/expiryAlerts'
+import {
+  canSettleDebtSale,
+  getSaleAmountPaid,
+  getSaleDisplayStatus,
+  getSaleOutstandingBalance,
+  normalizeSalePaymentStatus,
+} from '../utils/saleStatus'
 
 export default {
   namespaced: true,
@@ -66,13 +73,23 @@ export default {
         { query: saleId }
       )
 
+      const debtPayments = await collectFromSource(
+        db.transaction('debt_payments').objectStore('debt_payments').index('sale_id'),
+        { query: saleId, direction: 'prev' }
+      )
+
       const itemCatalogStore = db.transaction('items').objectStore('items')
 
       for (const item of items) {
         await attachCatalogDetails(item, itemCatalogStore)
       }
 
-      commit('SET_SALE_DETAILS', { sale, customer, items })
+      commit('SET_SALE_DETAILS', {
+        sale: normalizeSaleRecord(sale),
+        customer,
+        items,
+        debtPayments: debtPayments.map(normalizeDebtPaymentRecord),
+      })
     },
 
     // ======================
@@ -116,6 +133,15 @@ async saveSale({ commit }, payload) {
   const itemCatalogStore = tx.objectStore('items')
 
   const now = new Date().toISOString()
+  const normalizedFinalTotal = Math.max(Number(finalTotal || 0), 0)
+  const normalizedMoneyGiven = Math.max(Number(moneyGiven || 0), 0)
+  const amountPaid = Math.min(normalizedMoneyGiven, normalizedFinalTotal)
+  const outstandingBalance = Math.max(normalizedFinalTotal - amountPaid, 0)
+  const paymentStatus = outstandingBalance <= 0
+    ? 'paid'
+    : amountPaid > 0
+      ? 'partial'
+      : 'unpaid'
 
   // Save sale
   const saleId = await salesStore.add({
@@ -125,9 +151,12 @@ async saveSale({ commit }, payload) {
     total_amount: subTotal,
     professional_fee: professionalFee,
     discount,
-    final_total: finalTotal,
-    money_given: moneyGiven,
+    final_total: normalizedFinalTotal,
+    money_given: normalizedMoneyGiven,
+    amount_paid: amountPaid,
     change,
+    payment_status: paymentStatus,
+    outstanding_balance: outstandingBalance,
     status: 'completed',
     points_used: pointsUsed,
     points_multiplier: pointsMultiplier,
@@ -204,7 +233,7 @@ async saveSale({ commit }, payload) {
     }
 
     // Earn points
-    const pointsEarned = finalTotal / 200
+    const pointsEarned = normalizedFinalTotal / 200
     yearly.points += pointsEarned
 
     await pointsStore.add({
@@ -224,6 +253,76 @@ async saveSale({ commit }, payload) {
   commit('SET_LAST_SALE_ID', saleId)
   return saleId
 },
+
+    async settleDebtSale({ dispatch }, { saleId, amount, payment_method = 'cash', note = '' }) {
+      const normalizedSaleId = Number(saleId)
+      const normalizedAmount = Number(amount)
+
+      if (!Number.isFinite(normalizedSaleId) || normalizedSaleId <= 0) {
+        throw new Error('Invalid sale selected for debt settlement.')
+      }
+
+      if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+        throw new Error('Enter a valid settlement amount.')
+      }
+
+      const db = await dbPromise
+      const tx = db.transaction(['sales', 'debt_payments'], 'readwrite')
+      const salesStore = tx.objectStore('sales')
+      const debtPaymentsStore = tx.objectStore('debt_payments')
+      const sale = await salesStore.get(normalizedSaleId)
+
+      if (!sale) {
+        throw new Error('Sale not found.')
+      }
+
+      if (!canSettleDebtSale(sale)) {
+        throw new Error('This sale does not have an outstanding debt balance.')
+      }
+
+      const outstandingBalance = getSaleOutstandingBalance(sale)
+      if (normalizedAmount > outstandingBalance) {
+        throw new Error(`Settlement amount cannot exceed ₱${outstandingBalance.toFixed(2)}.`)
+      }
+
+      const nextAmountPaid = getSaleAmountPaid(sale) + normalizedAmount
+      const nextOutstandingBalance = Math.max(Number(sale.final_total || 0) - nextAmountPaid, 0)
+      const nextPaymentStatus = nextOutstandingBalance <= 0
+        ? 'paid'
+        : nextAmountPaid > 0
+          ? 'partial'
+          : 'unpaid'
+      const paidAt = new Date().toISOString()
+
+      await debtPaymentsStore.add({
+        sale_id: normalizedSaleId,
+        customer_id: sale.customer_id || null,
+        amount: normalizedAmount,
+        payment_method: normalizePaymentMethod(payment_method),
+        note: String(note || '').trim(),
+        paid_at: paidAt,
+        balance_after: nextOutstandingBalance,
+        created_at: paidAt,
+      })
+
+      await salesStore.put({
+        ...sale,
+        amount_paid: nextAmountPaid,
+        money_given: Math.max(Number(sale.money_given || 0), 0) + normalizedAmount,
+        outstanding_balance: nextOutstandingBalance,
+        payment_status: nextPaymentStatus,
+        updated_at: paidAt,
+      })
+
+      await tx.done
+      await dispatch('fetchSaleDetails', normalizedSaleId)
+      return {
+        saleId: normalizedSaleId,
+        amountApplied: normalizedAmount,
+        remainingBalance: nextOutstandingBalance,
+        paymentStatus: nextPaymentStatus,
+      }
+    },
 
 
     // ======================
@@ -251,7 +350,7 @@ async saveSale({ commit }, payload) {
     async loadSalesPage({ commit, state }, filters = {}) {
       commit('SET_LOADING', true)
 
-      const { startDate, endDate, keyword } = filters
+      const { startDate, endDate, keyword, statusFilter = 'all' } = filters
 
       const db = await dbPromise
       const tx = db.transaction('sales')
@@ -265,7 +364,7 @@ async saveSale({ commit }, payload) {
       let totalCount = 0
       let cursor = await index.openCursor(range, 'prev')
       while (cursor) {
-        if (!keyword || String(cursor.value.id).includes(keyword)) totalCount++
+        if (saleMatchesFilters(cursor.value, { keyword, statusFilter })) totalCount++
         cursor = await cursor.continue()
       }
       commit('SET_TOTAL_COUNT', totalCount)
@@ -277,7 +376,7 @@ async saveSale({ commit }, payload) {
 
       cursor = await index.openCursor(range, 'prev')
       while (cursor) {
-        if (!keyword || String(cursor.value.id).includes(keyword)) {
+        if (saleMatchesFilters(cursor.value, { keyword, statusFilter })) {
           if (i >= offset && sales.length < state.itemsPerPage) sales.push(cursor.value)
           i++
         }
@@ -401,7 +500,7 @@ async voidSale(_, sale) {
   await salesTx.done
 
 },
-    async exportSalesByDateRange(_, { startDate, endDate }) {
+    async exportSalesByDateRange(_, { startDate = '', endDate = '', keyword = '', statusFilter = 'all' } = {}) {
   const activeTemplate = await loadResolvedActiveTemplate()
   const templateLabels = activeTemplate.labels || {}
   const professionalFeeLabel = getTemplateProfessionalFeeLabel(templateLabels)
@@ -421,12 +520,11 @@ async voidSale(_, sale) {
       let totalSales = 0
       let transactionCount = 0
 
-      let cursor = await salesStore.openCursor()
+      const dateRange = buildDateKeyRange(startDate, endDate)
+      let cursor = await salesStore.index('purchased_date').openCursor(dateRange, 'prev')
       while (cursor) {
         const sale = cursor.value
-        const saleDate = new Date(sale.purchased_date)
-
-        if (isWithinLocalDateRange(saleDate, startDate, endDate)) {
+        if (saleMatchesFilters(sale, { keyword, statusFilter })) {
           transactionCount++
           totalSales += Number(sale.final_total || 0)
 
@@ -453,6 +551,8 @@ async voidSale(_, sale) {
             sale_id: sale.id,
             purchased_date: sale.purchased_date,
             status: sale.status,
+            sale_status: getSaleDisplayStatus(sale),
+            payment_status: normalizeSalePaymentStatus(sale),
             customer_name: customer ? customer.name : '',
             items: itemNames.join(', '),
             subtotal: sale.total_amount,
@@ -460,7 +560,9 @@ async voidSale(_, sale) {
             discount: sale.discount,
             final_total: sale.final_total,
             money_given: sale.money_given,
+            amount_paid: getSaleAmountPaid(sale),
             change: sale.change,
+            outstanding_balance: getSaleOutstandingBalance(sale),
             payment_method: getTemplatePaymentLabel(normalizePaymentMethod(sale.payment_method), templateLabels)
           })
         }
@@ -475,11 +577,21 @@ async voidSale(_, sale) {
 }
 
 function normalize(list) {
-  return list.map(s => ({
-    ...s,
-    purchased_date: new Date(s.purchased_date),
-    status: s.status || 'completed'
-  }))
+  return list.map(normalizeSaleRecord)
+}
+
+function saleMatchesFilters(sale, { keyword = '', statusFilter = 'all' } = {}) {
+  const matchesKeyword = !keyword || String(sale.id).includes(keyword)
+  if (!matchesKeyword) {
+    return false
+  }
+
+  const displayStatus = getSaleDisplayStatus(sale)
+  if (statusFilter === 'all') {
+    return true
+  }
+
+  return displayStatus === statusFilter
 }
 
 async function deductStockWithNegativeFallback({ batchStore, indexName, foreignKey, foreignId, quantity, trackExpiry = false, expiryAlertSettings = {}, now, autoBatchPrefix }) {
@@ -564,4 +676,25 @@ async function resolveCatalogItem(item, itemCatalogStore) {
   }
 
   return itemCatalogStore.get(itemId)
+}
+
+function normalizeSaleRecord(sale = {}) {
+  return {
+    ...sale,
+    purchased_date: new Date(sale.purchased_date),
+    status: sale.status || 'completed',
+    payment_status: normalizeSalePaymentStatus(sale),
+    amount_paid: getSaleAmountPaid(sale),
+    outstanding_balance: getSaleOutstandingBalance(sale),
+    display_status: getSaleDisplayStatus(sale),
+  }
+}
+
+function normalizeDebtPaymentRecord(payment = {}) {
+  return {
+    ...payment,
+    amount: Number(payment.amount || 0),
+    balance_after: Math.max(Number(payment.balance_after || 0), 0),
+    payment_method: normalizePaymentMethod(payment.payment_method),
+  }
 }

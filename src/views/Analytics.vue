@@ -8,6 +8,7 @@ import { format } from 'date-fns'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 import { getLocalDayEnd, getLocalDayStart } from '../utils/dateRange'
+import { getSaleAmountPaid, getSaleOutstandingBalance } from '../utils/saleStatus'
 import {
   getTemplateCatalogLabel,
   getTemplateCatalogEntryLabel,
@@ -20,6 +21,11 @@ const store = useStore()
 // Metrics
 // --------------------
 const totalSales = ref(0)
+const upfrontCollected = ref(0)
+const debtPaymentsCollected = ref(0)
+const totalCashCollected = ref(0)
+const receivablesCreated = ref(0)
+const outstandingReceivables = ref(0)
 const totalItems = ref(0)
 const voidedSalesCount = ref(0)
 const totalTransactions = ref(0)
@@ -32,14 +38,24 @@ const lowStockCount = ref(0)
 // --------------------
 const salesTrendOptions = ref({})
 const salesTrendSeries = ref([])
+const debtTrendOptions = ref({})
+const debtTrendSeries = ref([])
 const topItemsOptions = ref({})
 const topItemsSeries = ref([])
+const topProductsOptions = ref({})
+const topProductsSeries = ref([])
+const topServicesOptions = ref({})
+const topServicesSeries = ref([])
 const calendarOptions = ref({})
 const calendarSeries = ref([])
 
 const isLoading = ref(false)
 const activeTemplate = computed(() => store.getters['template/activeTemplate'] || {})
 const reportingFocus = computed(() => store.getters['template/reportingFocus'] || activeTemplate.value.reporting?.focus || 'mixed')
+const canSellProducts = computed(() => activeTemplate.value.workflow?.allowProductSales !== false && activeTemplate.value.capabilities?.products !== false)
+const canSellServices = computed(() => activeTemplate.value.workflow?.allowServiceSales !== false && activeTemplate.value.capabilities?.services !== false)
+const showProductChart = computed(() => activeTemplate.value.reporting?.showProductChart !== false && canSellProducts.value)
+const showServiceChart = computed(() => activeTemplate.value.reporting?.showServiceChart !== false && canSellServices.value)
 const templateLabels = computed(() => activeTemplate.value.labels || {})
 const catalogLabel = computed(() => getTemplateCatalogLabel(templateLabels.value))
 const catalogEntryLabel = computed(() => getTemplateCatalogEntryLabel(templateLabels.value))
@@ -67,12 +83,26 @@ watch(dateRange, (range) => {
 
 const salesLabel = computed(() => {
   switch (timeRange.value) {
-    case 'today': return 'Total Sales Today'
-    case 'week': return 'Total Sales This Week'
-    case 'month': return 'Total Sales This Month'
-    case 'year': return 'Total Sales This Year'
-    case 'custom': return 'Total Sales (Custom Range)'
-    default: return 'Total Sales'
+    case 'today': return 'Gross Sales Today'
+    case 'week': return 'Gross Sales This Week'
+    case 'month': return 'Gross Sales This Month'
+    case 'year': return 'Gross Sales This Year'
+    case 'custom': return 'Gross Sales (Custom Range)'
+    default: return 'Gross Sales'
+  }
+})
+
+const cashCollectedLabel = computed(() => buildTimeRangeLabel('Cash Collected'))
+const debtPaymentsLabel = computed(() => buildTimeRangeLabel('Debt Payments Collected'))
+const receivablesCreatedLabel = computed(() => buildTimeRangeLabel('Receivables Created'))
+const outstandingReceivablesLabel = computed(() => {
+  switch (timeRange.value) {
+    case 'today': return 'Outstanding Receivables (End of Today)'
+    case 'week': return 'Outstanding Receivables (End of Week)'
+    case 'month': return 'Outstanding Receivables (End of Month)'
+    case 'year': return 'Outstanding Receivables (End of Year)'
+    case 'custom': return 'Outstanding Receivables (End of Range)'
+    default: return 'Outstanding Receivables'
   }
 })
 
@@ -150,30 +180,41 @@ const tertiaryMetric = computed(() => {
   }
 })
 
-const topChartTitle = computed(() => {
-  switch (reportingFocus.value) {
-    case 'inventory':
-      return 'Top Products'
-    case 'services':
-      return 'Top Services'
-    case 'sales':
-      return `Top ${catalogLabel.value}`
-    default:
-      return `Top ${catalogLabel.value}`
+const metricCards = computed(() => {
+  const cards = [
+    { title: salesLabel.value, value: totalSales.value, type: 'currency' },
+    { title: cashCollectedLabel.value, value: totalCashCollected.value, type: 'currency' },
+    { title: receivablesCreatedLabel.value, value: receivablesCreated.value, type: 'currency' },
+    { title: debtPaymentsLabel.value, value: debtPaymentsCollected.value, type: 'currency' },
+    { title: outstandingReceivablesLabel.value, value: outstandingReceivables.value, type: 'currency' },
+    { title: secondaryMetric.value.title, value: secondaryMetric.value.value, type: secondaryMetric.value.type },
+  ]
+
+  if (reportingFocus.value === 'services' && canSellProducts.value) {
+    cards.push({
+      title: buildTimeRangeLabel('Product Units Sold'),
+      value: totalProductUnits.value,
+      type: 'number',
+    })
   }
+
+  cards.push({ title: tertiaryMetric.value.title, value: tertiaryMetric.value.value, type: tertiaryMetric.value.type })
+  return cards
+})
+
+const topChartTitle = computed(() => {
+  return reportingFocus.value === 'inventory' ? 'Top Products' :
+         reportingFocus.value === 'services' ? 'Top Services' :
+         `Top ${catalogLabel.value}`
 })
 
 const topChartSeriesName = computed(() => {
-  if (reportingFocus.value === 'services') {
-    return 'Services Sold'
-  }
-
-  if (reportingFocus.value === 'inventory') {
-    return 'Units Sold'
-  }
-
-  return `Quantity Sold per ${catalogEntryLabel.value}`
+  return reportingFocus.value === 'services' ? 'Services Sold' :
+         reportingFocus.value === 'inventory' ? 'Units Sold' :
+         `Quantity Sold per ${catalogEntryLabel.value}`
 })
+
+const showMixedTopCharts = computed(() => reportingFocus.value === 'mixed')
 
 // --------------------
 // Date Helpers
@@ -225,21 +266,53 @@ const updateCharts = async () => {
   const startDate = getStartDate()
   const endDate = getEndDate()
   const db = await dbPromise
-  const [sales, saleItems, items] = await Promise.all([
+  const [sales, saleItems, items, debtPayments] = await Promise.all([
     db.getAll('sales'),
     db.getAll('sale_items'),
     db.getAll('items'),
+    db.getAll('debt_payments'),
   ])
   const includedSaleIds = new Set()
-  const dailySalesMap = new Map()
+  const grossSalesMap = new Map()
+  const upfrontCollectedMap = new Map()
+  const receivablesCreatedMap = new Map()
+  const debtPaymentsMap = new Map()
   const itemsMap = new Map(items.map(item => [item.id, item]))
   const legacyItemIds = new Map(
     items
       .filter(item => item.legacy_medicine_id !== undefined && item.legacy_medicine_id !== null)
       .map(item => [Number(item.legacy_medicine_id), item.id])
   )
+  const debtPaymentsBySale = new Map()
+
+  debtPaymentsCollected.value = 0
+
+  for (const payment of debtPayments) {
+    const saleId = Number(payment.sale_id)
+    if (!Number.isFinite(saleId)) continue
+
+    const amount = Math.max(Number(payment.amount || 0), 0)
+    const paidAt = new Date(payment.paid_at || payment.created_at || new Date().toISOString())
+    const existing = debtPaymentsBySale.get(saleId) || { total: 0, afterPeriodEnd: 0 }
+
+    existing.total += amount
+    if (paidAt > endDate) {
+      existing.afterPeriodEnd += amount
+    }
+    debtPaymentsBySale.set(saleId, existing)
+
+    if (paidAt < startDate || paidAt > endDate) continue
+
+    debtPaymentsCollected.value += amount
+    const dayKey = format(paidAt, 'yyyy-MM-dd')
+    debtPaymentsMap.set(dayKey, (debtPaymentsMap.get(dayKey) || 0) + amount)
+  }
 
   totalSales.value = 0
+  upfrontCollected.value = 0
+  receivablesCreated.value = 0
+  outstandingReceivables.value = 0
+  totalCashCollected.value = 0
   totalItems.value = 0
   voidedSalesCount.value = 0
   totalTransactions.value = 0
@@ -259,21 +332,40 @@ const updateCharts = async () => {
 
   for (const sale of sales) {
     const saleDate = new Date(sale.purchased_date || sale.date)
-    if (saleDate < startDate || saleDate > endDate) continue
-
     if (sale.status === 'voided') {
-      voidedSalesCount.value += 1
+      if (saleDate >= startDate && saleDate <= endDate) {
+        voidedSalesCount.value += 1
+      }
       continue
     }
 
+    const saleTotal = Math.max(Number(sale.final_total || 0), 0)
+    const currentAmountPaid = getSaleAmountPaid(sale)
+    const currentOutstandingBalance = getSaleOutstandingBalance(sale)
+    const debtStats = debtPaymentsBySale.get(Number(sale.id)) || { total: 0, afterPeriodEnd: 0 }
+    const initialAmountPaid = Math.min(Math.max(currentAmountPaid - debtStats.total, 0), saleTotal)
+    const saleReceivablesCreated = Math.max(saleTotal - initialAmountPaid, 0)
+    const outstandingAtPeriodEnd = Math.max(currentOutstandingBalance + debtStats.afterPeriodEnd, 0)
+
+    if (saleDate <= endDate) {
+      outstandingReceivables.value += outstandingAtPeriodEnd
+    }
+
+    if (saleDate < startDate || saleDate > endDate) continue
+
     includedSaleIds.add(sale.id)
-  totalTransactions.value += 1
-    const saleTotal = Number(sale.final_total || 0)
+    totalTransactions.value += 1
     totalSales.value += saleTotal
+    upfrontCollected.value += initialAmountPaid
+    receivablesCreated.value += saleReceivablesCreated
 
     const dayKey = format(saleDate, 'yyyy-MM-dd')
-    dailySalesMap.set(dayKey, (dailySalesMap.get(dayKey) || 0) + saleTotal)
+    grossSalesMap.set(dayKey, (grossSalesMap.get(dayKey) || 0) + saleTotal)
+    upfrontCollectedMap.set(dayKey, (upfrontCollectedMap.get(dayKey) || 0) + initialAmountPaid)
+    receivablesCreatedMap.set(dayKey, (receivablesCreatedMap.get(dayKey) || 0) + saleReceivablesCreated)
   }
+
+  totalCashCollected.value = upfrontCollected.value + debtPaymentsCollected.value
 
   const itemTotals = new Map()
   for (const item of saleItems) {
@@ -304,26 +396,50 @@ const updateCharts = async () => {
   // Sales Trend
   // --------------------
   const dayCount = Math.ceil((endDate - startDate) / (1000*60*60*24)) + 1
-  const trendMap = {}
+  const grossTrendMap = {}
+  const cashCollectedTrendMap = {}
+  const receivablesTrendMap = {}
+  const debtSettlementTrendMap = {}
   for (let i = 0; i < dayCount; i++) {
     const d = new Date(startDate)
     d.setDate(startDate.getDate() + i)
-    trendMap[format(d, 'MM/dd')] = 0
+    const label = format(d, 'MM/dd')
+    grossTrendMap[label] = 0
+    cashCollectedTrendMap[label] = 0
+    receivablesTrendMap[label] = 0
+    debtSettlementTrendMap[label] = 0
   }
-  dailySalesMap.forEach((value, key) => {
-    const labelDate = getLocalDayStart(key)
-    if (!labelDate) return
 
-    const label = format(labelDate, 'MM/dd')
-    if (trendMap[label] !== undefined) {
-      trendMap[label] += value
-    }
+  const mergeDailyMap = (sourceMap, targetMap) => {
+    sourceMap.forEach((value, key) => {
+      const labelDate = getLocalDayStart(key)
+      if (!labelDate) return
+
+      const label = format(labelDate, 'MM/dd')
+      if (targetMap[label] !== undefined) {
+        targetMap[label] += value
+      }
+    })
+  }
+
+  mergeDailyMap(grossSalesMap, grossTrendMap)
+  mergeDailyMap(upfrontCollectedMap, cashCollectedTrendMap)
+  mergeDailyMap(receivablesCreatedMap, receivablesTrendMap)
+  mergeDailyMap(debtPaymentsMap, debtSettlementTrendMap)
+
+  Object.keys(cashCollectedTrendMap).forEach((label) => {
+    cashCollectedTrendMap[label] += debtSettlementTrendMap[label] || 0
   })
-  salesTrendSeries.value = [{ name: 'Sales', data: Object.values(trendMap) }]
+
+  salesTrendSeries.value = [
+    { name: 'Gross Sales', data: Object.values(grossTrendMap) },
+    { name: 'Cash Collected', data: Object.values(cashCollectedTrendMap) },
+  ]
   salesTrendOptions.value = {
     chart: { type: 'line', height: 350, foreColor: analyticsMutedText },
+    stroke: { curve: 'smooth', width: 3 },
     xaxis: {
-      categories: Object.keys(trendMap),
+      categories: Object.keys(grossTrendMap),
       labels: { style: { colors: analyticsMutedText } },
     },
     yaxis: {
@@ -332,48 +448,66 @@ const updateCharts = async () => {
     grid: { borderColor: analyticsGridColor },
     legend: { labels: { colors: analyticsCardText } },
     tooltip: { y: { formatter: val => `₱${val.toLocaleString()}` } },
-    colors: [totalSales.value >= dailySalesQuota.value ? '#22c55e' : '#ef4444']
+    colors: ['#0ea5e9', '#10b981']
+  }
+
+  debtTrendSeries.value = [
+    { name: 'Receivables Created', data: Object.values(receivablesTrendMap) },
+    { name: 'Debt Settlements', data: Object.values(debtSettlementTrendMap) },
+  ]
+  debtTrendOptions.value = {
+    chart: { type: 'line', height: 350, foreColor: analyticsMutedText },
+    stroke: { curve: 'smooth', width: 3 },
+    xaxis: {
+      categories: Object.keys(receivablesTrendMap),
+      labels: { style: { colors: analyticsMutedText } },
+    },
+    yaxis: {
+      labels: { style: { colors: [analyticsMutedText] } },
+    },
+    grid: { borderColor: analyticsGridColor },
+    legend: { labels: { colors: analyticsCardText } },
+    tooltip: { y: { formatter: val => `₱${val.toLocaleString()}` } },
+    colors: ['#f59e0b', '#8b5cf6']
   }
 
   // --------------------
   // Top Items
   // --------------------
-  const topItems = await Promise.all(
-    Array.from(itemTotals.entries())
-      .filter(([sourceKey]) => {
-        const [, rawId] = sourceKey.split(':')
-        const sourceId = Number(rawId)
-        const source = itemsMap.get(sourceId)
-        const itemType = source?.item_type === 'service' ? 'service' : 'product'
+  const mapTopEntries = (filterType) => Array.from(itemTotals.entries())
+    .filter(([sourceKey]) => {
+      const [, rawId] = sourceKey.split(':')
+      const sourceId = Number(rawId)
+      const source = itemsMap.get(sourceId)
+      const itemType = source?.item_type === 'service' ? 'service' : 'product'
 
-        if (reportingFocus.value === 'services') {
-          return itemType === 'service'
-        }
+      if (filterType === 'service') {
+        return itemType === 'service'
+      }
 
-        if (reportingFocus.value === 'inventory') {
-          return itemType !== 'service'
-        }
+      if (filterType === 'product') {
+        return itemType !== 'service'
+      }
 
-        return true
-      })
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(async ([sourceKey, qty]) => {
-        const [, rawId] = sourceKey.split(':')
-        const sourceId = Number(rawId)
-        const source = itemsMap.get(sourceId)
+      return true
+    })
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([sourceKey, qty]) => {
+      const [, rawId] = sourceKey.split(':')
+      const sourceId = Number(rawId)
+      const source = itemsMap.get(sourceId)
 
-        return {
-          name: source?.name || sourceKey,
-          value: qty
-        }
-      })
-  )
-  topItemsSeries.value = topItems.map(item => item.value)
-  topItemsOptions.value = {
+      return {
+        name: source?.name || sourceKey,
+        value: qty,
+      }
+    })
+
+  const buildBarOptions = (entries, formatter) => ({
     chart: { type: 'bar', height: 350, foreColor: analyticsMutedText },
     xaxis: {
-      categories: topItems.map(item => item.name),
+      categories: entries.map(item => item.name),
       labels: { style: { colors: analyticsMutedText } },
     },
     yaxis: {
@@ -383,10 +517,18 @@ const updateCharts = async () => {
     legend: { labels: { colors: analyticsCardText } },
     tooltip: {
       y: {
-        formatter: val => reportingFocus.value === 'services' ? `${val} services` : `${val} units`
+        formatter,
       }
     }
-  }
+  })
+
+  const topProducts = mapTopEntries('product')
+  const topServices = mapTopEntries('service')
+
+  topProductsSeries.value = topProducts.map(item => item.value)
+  topServicesSeries.value = topServices.map(item => item.value)
+  topProductsOptions.value = buildBarOptions(topProducts, val => `${val} units`)
+  topServicesOptions.value = buildBarOptions(topServices, val => `${val} services`)
 
   // --------------------
   // Calendar Heatmap Dynamic
@@ -396,7 +538,7 @@ const updateCharts = async () => {
   if(timeRange.value === 'today') {
     // 1 day
     const today = new Date(startDate)
-    const total = dailySalesMap.get(format(today, 'yyyy-MM-dd')) || 0
+    const total = grossSalesMap.get(format(today, 'yyyy-MM-dd')) || 0
     heatmapSeries = [{ name: format(today,'MMM'), data:[{x: format(today,'dd'), y: total}] }]
   } else if(timeRange.value === 'week') {
     // 7 days
@@ -404,7 +546,7 @@ const updateCharts = async () => {
     for(let i=0;i<7;i++){
       const d = new Date(startDate)
       d.setDate(startDate.getDate()+i)
-      const total = dailySalesMap.get(format(d,'yyyy-MM-dd')) || 0
+      const total = grossSalesMap.get(format(d,'yyyy-MM-dd')) || 0
       heatmapSeries.push({ name: 'Week', data:[{x: format(d,'EEE'), y: total}] })
     }
   } else if(timeRange.value === 'month') {
@@ -412,7 +554,7 @@ const updateCharts = async () => {
     heatmapSeries = [{ name: format(startDate,'MMM'), data: [] }]
     for(let i=1;i<=daysInMonth;i++){
       const d = new Date(startDate.getFullYear(), startDate.getMonth(), i)
-      const total = dailySalesMap.get(format(d,'yyyy-MM-dd')) || 0
+      const total = grossSalesMap.get(format(d,'yyyy-MM-dd')) || 0
       heatmapSeries[0].data.push({x:i.toString(), y: total})
     }
   } else if(timeRange.value === 'year') {
@@ -422,7 +564,7 @@ const updateCharts = async () => {
       const monthData = { name: format(new Date(startDate.getFullYear(),m,1),'MMM'), data: [] }
       for(let d=1;d<=daysInMonth;d++){
         const dateObj = new Date(startDate.getFullYear(),m,d)
-        const total = dailySalesMap.get(format(dateObj,'yyyy-MM-dd')) || 0
+        const total = grossSalesMap.get(format(dateObj,'yyyy-MM-dd')) || 0
         monthData.data.push({ x:d.toString(), y: total })
       }
       heatmapSeries.push(monthData)
@@ -491,9 +633,13 @@ onMounted(updateCharts)
 
   <!-- Metrics -->
   <div class="metrics-cards">
-    <MetricCard :title="salesLabel" :value="totalSales" type="currency" />
-    <MetricCard :title="secondaryMetric.title" :value="secondaryMetric.value" :type="secondaryMetric.type" />
-    <MetricCard :title="tertiaryMetric.title" :value="tertiaryMetric.value" :type="tertiaryMetric.type" />
+    <MetricCard
+      v-for="card in metricCards"
+      :key="card.title"
+      :title="card.title"
+      :value="card.value"
+      :type="card.type"
+    />
   </div>
 
   <!-- Charts -->
@@ -509,8 +655,18 @@ onMounted(updateCharts)
     </div>
 
     <div class="chart-card">
-      <h2>{{ topChartTitle }}</h2>
-      <VueApexCharts type="bar" :options="topItemsOptions" :series="[{ name: topChartSeriesName, data: topItemsSeries }] " height="350"/>
+      <h2>Debt and Receivables Trend</h2>
+      <VueApexCharts type="line" :options="debtTrendOptions" :series="debtTrendSeries" height="350"/>
+    </div>
+
+    <div v-if="showProductChart" class="chart-card">
+        <h2>Top Products</h2>
+        <VueApexCharts type="bar" :options="topProductsOptions" :series="[{ name: 'Units Sold', data: topProductsSeries }]" height="350"/>
+    </div>
+
+    <div v-if="showServiceChart" class="chart-card">
+        <h2>Top Services</h2>
+        <VueApexCharts type="bar" :options="topServicesOptions" :series="[{ name: 'Services Sold', data: topServicesSeries }]" height="350"/>
     </div>
   </div>
 </div>

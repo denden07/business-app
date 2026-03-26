@@ -10,6 +10,7 @@ import { collectFromSource } from '../db/query'
 import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { summarizeExpiryForBatches, getSellableQuantityFromBatches } from '../utils/expiryAlerts'
 import { getTemplateExpiryAlertSettings, getTemplatePointsMultiplier } from '../utils/templatePresentation'
+import { normalizeSalePaymentStatus } from '../utils/saleStatus'
 import {
   defaultInteractionSettings,
   loadInteractionSettings,
@@ -299,6 +300,18 @@ const buildCheckoutSummaryHtml = () => {
     `
     : ''
 
+  const paymentStatus = normalizeSalePaymentStatus({
+    final_total: grandTotal.value,
+    money_given: moneyGiven.value,
+    amount_paid: amountPaid.value,
+    outstanding_balance: outstandingBalance.value,
+  })
+  const paymentStatusLabel = paymentStatus === 'paid'
+    ? 'Paid'
+    : paymentStatus === 'partial'
+      ? 'Partial Debt'
+      : 'Unpaid Debt'
+
   return `
     <div style="max-height: 40vh; overflow-y: auto; margin: 16px 0; border: 1px solid #ddd; border-radius: 4px;">
       <table style="width:100%; border-collapse: collapse; text-align: left;">
@@ -345,11 +358,25 @@ const buildCheckoutSummaryHtml = () => {
         <span>Money Given:</span>
         <span>₱${moneyGiven.value.toFixed(2)}</span>
       </div>
+      <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+        <span>Amount Paid:</span>
+        <span>₱${amountPaid.value.toFixed(2)}</span>
+      </div>
       <hr style="margin: 8px 0; border: none; border-top: 1px solid #ddd;" />
       <div style="display: flex; justify-content: space-between; padding: 8px 0; font-size: 18px; font-weight: bold; color: #2d3748;">
         <span>Grand Total:</span>
         <span style="color: green;">₱${grandTotal.value.toFixed(2)}</span>
       </div>
+      <div style="display: flex; justify-content: space-between; padding: 4px 0; font-weight: 600; color: ${isDebtSale.value ? '#b45309' : '#2d3748'};">
+        <span>Status:</span>
+        <span>${paymentStatusLabel}</span>
+      </div>
+      ${isDebtSale.value ? `
+        <div style="display: flex; justify-content: space-between; padding: 8px 0; font-size: 18px; font-weight: bold; color: #b45309;">
+          <span>Balance Due:</span>
+          <span>₱${outstandingBalance.value.toFixed(2)}</span>
+        </div>
+      ` : ''}
       <div style="display: flex; justify-content: space-between; padding: 8px 0; font-size: 18px; font-weight: bold; color: #2d3748;">
         <span>Change:</span>
         <span style="color: red;">₱${change.value.toFixed(2)}</span>
@@ -777,6 +804,9 @@ const getPrice = (itemId, type) => {
 // ======================
 const subTotal = computed(() => cart.value.reduce((sum, i) => sum + i.price * i.qty, 0))
 const grandTotal = computed(() => Math.max(subTotal.value + Number(professionalFee.value || 0) - Number(pointsDiscount.value || 0), 0))
+const amountPaid = computed(() => Math.min(Math.max(Number(moneyGiven.value || 0), 0), grandTotal.value))
+const outstandingBalance = computed(() => Math.max(grandTotal.value - amountPaid.value, 0))
+const isDebtSale = computed(() => outstandingBalance.value > 0)
 const change = computed(() => Math.max((moneyGiven.value || 0) - grandTotal.value, 0))
 
 // ======================
@@ -831,17 +861,12 @@ const checkout = async () => {
     })
   }
 
-  if ((moneyGiven.value || 0) < grandTotal.value) {
-    const { isConfirmed } = await Swal.fire({
+  if (isDebtSale.value && showCustomerSection.value && !selectedCustomer.value) {
+    return Swal.fire({
       icon: 'warning',
-      title: 'Insufficient payment',
-      text: 'No money given or amount is less than total. Save this sale as a draft instead?',
-      showCancelButton: true,
-      confirmButtonText: 'Save as Draft',
-      cancelButtonText: 'Back to Cart'
+      title: 'Customer required for debt sale',
+      text: 'Select a customer before saving a debt sale so the balance can be tracked.',
     })
-    if (isConfirmed) await saveSaleAsDraft()
-    return
   }
 
   // Check stock and warn for all items exceeding available quantity
@@ -867,16 +892,31 @@ const checkout = async () => {
     if (!result.isConfirmed) return
   }
 
+  if (isDebtSale.value) {
+    const debtFlowResult = await Swal.fire({
+      icon: 'warning',
+      title: 'Continue as debt sale?',
+      html: `This sale is short by <strong>₱${outstandingBalance.value.toFixed(2)}</strong> and will be recorded as debt under the selected customer.`,
+      showCancelButton: true,
+      confirmButtonText: 'Continue',
+      cancelButtonText: 'Back to Cart',
+    })
+
+    if (!debtFlowResult.isConfirmed) return
+  }
+
   // Confirmation with detailed breakdown
   const itemsTable = buildCheckoutSummaryHtml()
+  const confirmTitle = isDebtSale.value ? 'Confirm Debt Sale' : 'Confirm Checkout'
+  const confirmButtonText = isDebtSale.value ? 'Save Debt Sale' : 'Yes, Save Sale'
   
   const confirmResult = await Swal.fire({
-    title: 'Confirm Checkout',
+    title: confirmTitle,
     html: itemsTable,
     icon: 'question',
     showCancelButton: true,
     showDenyButton: true,
-    confirmButtonText: 'Yes, Save Sale',
+    confirmButtonText,
     denyButtonText: 'Save as Draft',
     cancelButtonText: 'Cancel',
     width: '96%',
@@ -915,8 +955,10 @@ const checkout = async () => {
 
     Swal.fire({
       icon: 'success',
-      title: 'Sale Completed',
-      text: `Sale #${saleId} saved`,
+      title: isDebtSale.value ? 'Debt Sale Saved' : 'Sale Completed',
+      text: isDebtSale.value
+        ? `Sale #${saleId} saved with ₱${outstandingBalance.value.toFixed(2)} balance due`
+        : `Sale #${saleId} saved`,
       timer: 1500,
       showConfirmButton: false
     })

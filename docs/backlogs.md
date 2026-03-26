@@ -6,36 +6,16 @@ Completed work such as template foundation, first-run setup, initial template cu
 
 ## Priority Order
 
-1. Debt sale tracking
-	- moderate effort because it affects checkout, customers, sales history, and reporting
-2. Budgeting feature
+1. Budgeting feature
 	- moderate effort because expenses and profit reporting need new storage, UI, and analytics integration
-3. Multi-Business Support
+2. Multi-Business Support
 	- large change because it introduces business registry and switching
-4. Separate Database Per Business
+3. Separate Database Per Business
 	- large change because it requires migration and business-scoped data isolation
-5. Cross-Business Analytics
+4. Cross-Business Analytics
 	- heaviest change because it depends on multi-business isolation and cross-database aggregation
 
-## 1. Debt Sale Tracking
-
-Add a way to mark and manage sales that are not fully paid at the time of checkout.
-
-Remaining goals:
-
-- mark a sale as debt or unpaid balance during checkout
-- connect debt records to a customer when customer tracking is enabled
-- store outstanding balance and payment status in sale records
-- distinguish fully paid, partially paid, and unpaid sales in history and reporting
-- allow later settlement or follow-up payment recording
-- define how debt sales affect total sales, collected revenue, and outstanding receivables in reporting
-
-Notes:
-
-- if customer tracking is enabled, debt should be attached to the selected customer record for follow-up and settlement history
-- reporting should not treat debt the same as fully collected cash; totals should clearly separate gross sale value, collected amount, and remaining receivables where needed
-
-## 2. Budgeting Feature
+## 1. Budgeting Feature
 
 Add an expense and budgeting layer so the app can track money going out, not only sales coming in.
 
@@ -47,7 +27,7 @@ Remaining goals:
 - compute profit using sales minus expenses
 - distinguish revenue, expenses, and profit clearly in reports and dashboards
 
-## 3. Multi-Business Support
+## 2. Multi-Business Support
 
 ### Summary
 
@@ -66,7 +46,7 @@ Support multiple businesses owned by the same user, where each business has its 
 - which settings stay global versus business-specific?
 - how should backup and restore work for one business versus the full owner profile?
 
-## 4. Separate Database Per Business
+## 3. Separate Database Per Business
 
 ### Summary
 
@@ -85,7 +65,7 @@ Move from the current single-business runtime model to one operational database 
 - more migration and switching complexity
 - combined analytics becomes a cross-database aggregation problem
 
-## 5. Cross-Business Analytics
+## 4. Cross-Business Analytics
 
 ### Summary
 

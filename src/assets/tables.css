@@ -17,8 +17,14 @@
 }
 
 .table-wrap.table-wrap-menu-open {
-  overflow: visible;
+  overflow: visible !important;
   z-index: 30;
+}
+
+.table-wrap.table-wrap-menu-open .col-toggle-wrap,
+.table-wrap.table-wrap-menu-open .col-menu,
+.table-wrap.table-wrap-menu-open .col-actions {
+  z-index: 400;
 }
 
 /* ── Table base ───────────────────────────────── */
@@ -75,11 +81,12 @@
 .table-wrap thead .col-actions {
   background: linear-gradient(180deg, #f4fbf8 0%, #eaf7f1 100%);
   box-shadow: -8px 0 18px rgba(15, 23, 42, .08);
-  z-index: 10;
+  z-index: 40;
 }
 .table-wrap tbody tr .col-actions {
   background: #ffffff;
   box-shadow: -8px 0 18px rgba(15, 23, 42, .05);
+  z-index: 2;
 }
 .table-wrap tbody tr:nth-child(even) .col-actions { background: #f6f9fb; }
 .table-wrap tbody tr:hover .col-actions { background: #eef8f4; }
@@ -156,7 +163,7 @@
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  z-index: 240;
+  z-index: 500;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
   border: 1px solid #d7e1ea;
   border-radius: 14px;

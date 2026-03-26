@@ -43,12 +43,16 @@ const interactionSettings = ref({ ...defaultInteractionSettings })
 const interactionStatus = ref('')
 const pagesList = configurablePageDefinitions
 const activeTemplate = computed(() => store.getters['template/activeTemplate'])
+const canSellProducts = computed(() => activeTemplate.value?.workflow?.allowProductSales !== false && activeTemplate.value?.capabilities?.products !== false)
+const canSellServices = computed(() => activeTemplate.value?.workflow?.allowServiceSales !== false && activeTemplate.value?.capabilities?.services !== false)
 const templateProfileStatus = ref('')
 const templateProfileSaving = ref(false)
 const pointsMultiplier = ref(1)
 const dailySalesQuota = ref(40000)
 const expiryWarningDays = ref(30)
 const expiryCriticalDays = ref(7)
+const showProductChart = ref(true)
+const showServiceChart = ref(true)
 const catalogLabel = ref('Items')
 const catalogEntryLabel = ref('Item')
 const professionalFeeLabel = ref('Additional Fee')
@@ -64,6 +68,8 @@ watch(activeTemplate, template => {
   const expirySettings = getTemplateExpiryAlertSettings(template || {})
   expiryWarningDays.value = expirySettings.warningDays
   expiryCriticalDays.value = expirySettings.criticalDays
+  showProductChart.value = template?.reporting?.showProductChart !== false
+  showServiceChart.value = template?.reporting?.showServiceChart !== false
   catalogLabel.value = getTemplateCatalogLabel(labels)
   catalogEntryLabel.value = getTemplateCatalogEntryLabel(labels)
   professionalFeeLabel.value = getTemplateProfessionalFeeLabel(labels)
@@ -89,6 +95,8 @@ function buildTemplateProfileOverrides() {
       dailySalesQuota: Number(dailySalesQuota.value),
       expiryWarningDays: Number(expiryWarningDays.value),
       expiryCriticalDays: Number(expiryCriticalDays.value),
+      showProductChart: canSellProducts.value ? showProductChart.value : false,
+      showServiceChart: canSellServices.value ? showServiceChart.value : false,
     },
     labels: {
       ...(activeTemplate.value?.labels || {}),
@@ -716,6 +724,18 @@ onMounted(async () => {
             <span>Urgent expiry window</span>
             <input v-model.number="expiryCriticalDays" class="input" type="number" min="1" step="1" :max="expiryWarningDays || undefined" />
             <small>Items inside this shorter window get the stronger expiry alert treatment.</small>
+          </label>
+
+          <label class="template-setting-field template-toggle-field">
+            <span>Show product analytics chart</span>
+            <input v-model="showProductChart" type="checkbox" :disabled="!canSellProducts" />
+            <small>Controls whether the top products chart is shown in Analytics.</small>
+          </label>
+
+          <label class="template-setting-field template-toggle-field">
+            <span>Show service analytics chart</span>
+            <input v-model="showServiceChart" type="checkbox" :disabled="!canSellServices" />
+            <small>Controls whether the top services chart is shown in Analytics.</small>
           </label>
 
           <label class="template-setting-field">

@@ -1,6 +1,7 @@
 import { dbPromise } from '../db'
 import { collectFromSource } from '../db/query'
 import Swal from 'sweetalert2'
+import { getSaleOutstandingBalance } from '../utils/saleStatus'
 
 export default {
   namespaced: true,
@@ -33,16 +34,17 @@ export default {
     ========================== */
 async loadCustomersPage(
   { commit },
-  { page = 1, perPage = 10, search = '', sortBy = 'id', sortOrder = 'desc' }
+  { page = 1, perPage = 10, search = '', sortBy = 'id', sortOrder = 'desc', debtFilter = 'all' }
 ) {
   commit('SET_LOADING', true)
 
   const db = await dbPromise
-  const tx = db.transaction(['customers', 'yearly_points'], 'readonly')
+  const tx = db.transaction(['customers', 'yearly_points', 'sales'], 'readonly')
   const store = tx.objectStore('customers')
   const yearlyStore = tx.objectStore('yearly_points')
+  const salesStore = tx.objectStore('sales')
   const query = search.trim().toLowerCase()
-  const canUseIndexedPaging = !query && sortBy !== 'points'
+  const canUseIndexedPaging = !query && debtFilter === 'all' && sortBy !== 'points' && sortBy !== 'outstanding_debt'
 
   if (canUseIndexedPaging) {
     const source = sortBy === 'name' ? store.index('name') : store
@@ -71,6 +73,7 @@ async loadCustomersPage(
     for (const customer of rows) {
       const rec = await yearlyStore.get([customer.id, year])
       customer.points = Number(rec?.points || 0)
+      customer.outstanding_debt = await getCustomerOutstandingDebt(salesStore, customer.id)
     }
 
     commit('SET_PAGE', rows)
@@ -94,6 +97,13 @@ async loadCustomersPage(
   for (const c of all) {
     const rec = await yearlyStore.get([c.id, year])
     c.points = Number(rec?.points || 0)
+    c.outstanding_debt = await getCustomerOutstandingDebt(salesStore, c.id)
+  }
+
+  if (debtFilter === 'has-debt') {
+    all = all.filter(customer => Number(customer.outstanding_debt || 0) > 0)
+  } else if (debtFilter === 'no-debt') {
+    all = all.filter(customer => Number(customer.outstanding_debt || 0) <= 0)
   }
 
   // sort (SAFE)
@@ -255,4 +265,16 @@ async addManualPoints(_, { customer_id, points, note = '' }) {
       return results
     }
   }
+}
+
+async function getCustomerOutstandingDebt(salesStore, customerId) {
+  const salesByCustomer = await collectFromSource(salesStore.index('customer_id'), { query: customerId })
+
+  return salesByCustomer.reduce((total, sale) => {
+    if (sale.status === 'voided') {
+      return total
+    }
+
+    return total + getSaleOutstandingBalance(sale)
+  }, 0)
 }

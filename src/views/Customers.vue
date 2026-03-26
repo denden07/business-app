@@ -21,6 +21,7 @@ const route = useRoute()
 const perPage = ref(10)
 
 const search = ref('')
+const debtFilter = ref('all')
 const sortBy = ref('id')    // created_at | name
 const sortOrder = ref('desc')        // asc | desc
 const activeTemplate = computed(() => store.getters['template/activeTemplate'] || {})
@@ -31,7 +32,7 @@ const showPointsFeatures = computed(() => loyaltyEnabled.value)
 /* ======================
    COLUMN VISIBILITY
 ====================== */
-const _custDefaultCols = { name: true, address: true, points: true }
+const _custDefaultCols = { name: true, address: true, outstanding_debt: true, points: true }
 const colMenuOpen = ref(false)
 const visibleCols = ref({ ..._custDefaultCols, ...JSON.parse(localStorage.getItem('col-vis-customers') || '{}') })
 watch(visibleCols, v => localStorage.setItem('col-vis-customers', JSON.stringify(v)), { deep: true })
@@ -39,6 +40,7 @@ const allCols = computed(() => {
   const columns = [
     { key: 'name', label: 'Name' },
     { key: 'address', label: 'Address' },
+    { key: 'outstanding_debt', label: 'Outstanding Debt' },
   ]
 
   if (showPointsFeatures.value) {
@@ -79,9 +81,12 @@ const totalPages = computed(() =>
 const paginated = computed(() =>
   customers.value.map(c => ({
     ...c,
-    points: Number(c.points ?? 0)
+    points: Number(c.points ?? 0),
+    outstanding_debt: Number(c.outstanding_debt ?? 0),
   }))
 )
+
+const fmtMoney = (value) => `₱${Number(value || 0).toFixed(2)}`
 
 
 const pageNumbers = computed(() =>
@@ -96,6 +101,7 @@ const load = async () => {
     page: page.value,
     perPage: perPage.value,
     search: search.value,
+    debtFilter: debtFilter.value,
     sortBy: !showPointsFeatures.value && sortBy.value === 'points' ? 'id' : sortBy.value,
     sortOrder: sortOrder.value
   })
@@ -104,7 +110,7 @@ const load = async () => {
 /* ======================
    WATCHERS
 ====================== */
-watch([search, sortBy, sortOrder, perPage], () => {
+watch([search, debtFilter, sortBy, sortOrder, perPage], () => {
   page.value = 1
   load()
 })
@@ -294,6 +300,7 @@ onMounted(() => {
   const qPage = Number(q.page || 0)
   if (qPage && qPage > 0) page.value = qPage
   if (q.search !== undefined) search.value = q.search
+  if (q.debtFilter) debtFilter.value = q.debtFilter
   const qPer = Number(q.perPage || 0)
   if (qPer && qPer > 0) perPage.value = qPer
   if (q.sortBy) sortBy.value = !showPointsFeatures.value && q.sortBy === 'points' ? 'id' : q.sortBy
@@ -324,6 +331,7 @@ function goToTransactionHistory(customerId) {
       tab: showPointsFeatures.value ? 'points' : 'purchases',
       page: page.value,
       search: search.value || undefined,
+      debtFilter: debtFilter.value !== 'all' ? debtFilter.value : undefined,
       perPage: perPage.value,
       sortBy: !showPointsFeatures.value && sortBy.value === 'points' ? 'id' : sortBy.value,
       sortOrder: sortOrder.value
@@ -349,9 +357,16 @@ function goToTransactionHistory(customerId) {
           <option :value="20">20</option>
         </select>
 
+        <select v-model="debtFilter" class="select-field">
+          <option value="all">All Customers</option>
+          <option value="has-debt">Has Debt</option>
+          <option value="no-debt">No Debt</option>
+        </select>
+
         <select v-model="sortBy" class="select-field">
         <option value="id">Newest</option>
         <option value="name">Name</option>
+        <option value="outstanding_debt">Outstanding Debt</option>
         <option v-if="showPointsFeatures" value="points">Points</option>
         </select>
 
@@ -370,6 +385,7 @@ function goToTransactionHistory(customerId) {
           <tr>
             <th v-if="visibleCols.name">Name</th>
             <th v-if="visibleCols.address">Address</th>
+            <th v-if="visibleCols.outstanding_debt">Outstanding Debt</th>
             <th v-if="showPointsFeatures && visibleCols.points">Points</th>
             <th class="col-actions">
               <div class="th-actions-head">
@@ -390,6 +406,7 @@ function goToTransactionHistory(customerId) {
           <tr v-for="c in paginated" :key="c.id" @click="goToTransactionHistory(c.id)" style="cursor: pointer;">
             <td v-if="visibleCols.name">{{ c.name }}</td>
             <td v-if="visibleCols.address">{{ c.address || '-' }}</td>
+            <td v-if="visibleCols.outstanding_debt" :class="c.outstanding_debt > 0 ? 'debt-cell' : ''">{{ fmtMoney(c.outstanding_debt) }}</td>
             <td v-if="showPointsFeatures && visibleCols.points">{{ c.points }}</td>
             <td class="col-actions actions-td">
               <button class="warning btn" @click.stop="openEdit(c)">Edit</button>
@@ -452,6 +469,11 @@ function goToTransactionHistory(customerId) {
 ====================== */
 .page-shell {
   padding: 20px;
+}
+
+.debt-cell {
+  color: #b45309;
+  font-weight: 700;
 }
 
 /* ======================

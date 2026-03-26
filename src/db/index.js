@@ -1,7 +1,7 @@
 import { openDB } from 'idb';
 
 export const DB_NAME = 'pharmacy_pos_db';
-export const DB_VERSION = 22;
+export const DB_VERSION = 24;
 
 export const dbPromise = openDB(DB_NAME, DB_VERSION, {
   upgrade(db, oldVersion, newVersion, transaction) {
@@ -118,6 +118,8 @@ export const dbPromise = openDB(DB_NAME, DB_VERSION, {
       // 🔹 NEW
       store.createIndex('points_used', 'points_used');
       store.createIndex('points_discount', 'points_discount');
+      store.createIndex('payment_status', 'payment_status');
+      store.createIndex('outstanding_balance', 'outstanding_balance');
     } else {
       const store = transaction.objectStore('sales');
       if (oldVersion < 12) {
@@ -135,6 +137,14 @@ export const dbPromise = openDB(DB_NAME, DB_VERSION, {
       }
       if (oldVersion < 18 && !store.indexNames.contains('customer_purchased_date')) {
         store.createIndex('customer_purchased_date', ['customer_id', 'purchased_date'])
+      }
+      if (oldVersion < 23) {
+        if (!store.indexNames.contains('payment_status')) {
+          store.createIndex('payment_status', 'payment_status')
+        }
+        if (!store.indexNames.contains('outstanding_balance')) {
+          store.createIndex('outstanding_balance', 'outstanding_balance')
+        }
       }
     }
 
@@ -193,6 +203,23 @@ export const dbPromise = openDB(DB_NAME, DB_VERSION, {
     ========================== */
     if (!db.objectStoreNames.contains('yearly_points')) {
       db.createObjectStore('yearly_points', { keyPath: ['customer_id', 'year'] });
+    }
+
+    /* =========================
+       DEBT PAYMENTS
+    ========================== */
+    if (!db.objectStoreNames.contains('debt_payments')) {
+      const store = db.createObjectStore('debt_payments', { keyPath: 'id', autoIncrement: true });
+      store.createIndex('sale_id', 'sale_id');
+      store.createIndex('customer_id', 'customer_id');
+      store.createIndex('customer_date', ['customer_id', 'paid_at']);
+      store.createIndex('paid_at', 'paid_at');
+    } else if (oldVersion < 24) {
+      const store = transaction.objectStore('debt_payments');
+      if (!store.indexNames.contains('sale_id')) store.createIndex('sale_id', 'sale_id');
+      if (!store.indexNames.contains('customer_id')) store.createIndex('customer_id', 'customer_id');
+      if (!store.indexNames.contains('customer_date')) store.createIndex('customer_date', ['customer_id', 'paid_at']);
+      if (!store.indexNames.contains('paid_at')) store.createIndex('paid_at', 'paid_at');
     }
 
     /* =========================

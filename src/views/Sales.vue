@@ -18,6 +18,13 @@ import {
   getTemplateProfessionalFeeLabel,
   normalizePaymentMethod,
 } from '../utils/templatePresentation'
+import {
+  canSettleDebtSale,
+  getSaleAmountPaid,
+  getSaleDisplayStatus,
+  getSaleOutstandingBalance,
+} from '../utils/saleStatus'
+import { openDebtSettlementPrompt } from '../utils/debtSettlementPrompt'
 
 
 
@@ -25,11 +32,22 @@ const store = useStore()
 const router = useRouter()
 const activeTemplate = computed(() => store.getters['template/activeTemplate'] || {})
 const templateLabels = computed(() => activeTemplate.value.labels || {})
+const templatePayments = computed(() => activeTemplate.value.payments || {})
 const catalogLabel = computed(() => getTemplateCatalogLabel(templateLabels.value))
 const catalogEntryLabel = computed(() => getTemplateCatalogEntryLabel(templateLabels.value))
 const professionalFeeLabel = computed(() => getTemplateProfessionalFeeLabel(templateLabels.value))
 const customerSectionLabel = computed(() => getTemplateCustomerSectionLabel(templateLabels.value))
 const formatPaymentMethod = (value) => getTemplatePaymentLabel(value, templateLabels.value)
+const debtPaymentOptions = computed(() => {
+  const configuredMethods = Array.isArray(templatePayments.value.methods) && templatePayments.value.methods.length
+    ? templatePayments.value.methods
+    : ['cash', 'gcash']
+
+  return configuredMethods.map(method => ({
+    value: method,
+    label: formatPaymentMethod(method),
+  }))
+})
 
 /* ======================
    SORTING
@@ -70,6 +88,7 @@ const toggleCol = (key) => { visibleCols.value[key] = !visibleCols.value[key] }
    FILTERS & PAGINATION
 ====================== */
 const searchKeyword = ref('')
+const statusFilter = ref('all')
 const startDate = ref('')
 const endDate = ref('')
 const dateRange = ref(null)
@@ -108,7 +127,8 @@ const loadSales = () => {
     itemsPerPage: itemsPerPage.value,
     startDate: startDate.value,
     endDate: endDate.value,
-    keyword: searchKeyword.value
+    keyword: searchKeyword.value,
+    statusFilter: statusFilter.value,
   })
 }
 
@@ -223,13 +243,21 @@ const goToHome = () => {
   router.push({ name: 'Home' })
 }
 
+const getDisplayStatus = (sale) => getSaleDisplayStatus(sale)
+const getStatusClass = (sale) => {
+  const displayStatus = getDisplayStatus(sale)
+  if (displayStatus === 'voided') return 'status-voided'
+  if (displayStatus === 'debt') return 'status-debt'
+  return 'status-ok'
+}
+
 
 const saleStatusLabel = computed(() => {
   if (!selectedSale.value) return ''
-  return selectedSale.value.status === 'voided' ? 'VOIDED' : 'COMPLETED'
+  return getDisplayStatus(selectedSale.value).toUpperCase()
 })
 
-watch([searchKeyword, startDate, endDate, itemsPerPage], () => {
+watch([searchKeyword, statusFilter, startDate, endDate, itemsPerPage], () => {
   store.commit('sales/SET_CURRENT_PAGE', 1)
   loadSales()
 })
@@ -240,7 +268,11 @@ watch(currentPage, () => loadSales())
 const saleDetails = computed(() => store.state.sales.saleDetails)
 const saleItems = computed(() => saleDetails.value?.items || [])
 const saleCustomer = computed(() => saleDetails.value?.customer || null)
+const debtPayments = computed(() => saleDetails.value?.debtPayments || [])
 const selectedSale = computed(() => saleDetails.value?.sale || {})
+const selectedSaleAmountPaid = computed(() => getSaleAmountPaid(selectedSale.value))
+const selectedSaleOutstandingBalance = computed(() => getSaleOutstandingBalance(selectedSale.value))
+const canSettleSelectedSale = computed(() => canSettleDebtSale(selectedSale.value))
 
 
 async function openSaleModal(sale) {
@@ -253,19 +285,69 @@ function closeModal() {
   store.commit('sales/SET_SALE_DETAILS', null)
 }
 
-const exportCSV = async () => {
-  if (!startDate.value || !endDate.value) {
-    return Swal.fire('Error', 'Select date range first', 'error')
-  }
+async function settleDebtSale() {
+  if (!canSettleSelectedSale.value) return
 
+  const settlement = await openDebtSettlementPrompt({
+    outstandingBalance: selectedSaleOutstandingBalance.value,
+    paymentOptions: debtPaymentOptions.value,
+    title: `Settle Sale #${selectedSale.value.id}`,
+  })
+
+  if (!settlement) return
+
+  try {
+    const result = await store.dispatch('sales/settleDebtSale', {
+      saleId: selectedSale.value.id,
+      amount: settlement.amount,
+      payment_method: settlement.paymentMethod,
+      note: settlement.note,
+    })
+
+    await loadSales()
+
+    await Swal.fire({
+      icon: 'success',
+      title: result.remainingBalance > 0 ? 'Partial payment recorded' : 'Debt fully settled',
+      text: result.remainingBalance > 0
+        ? `Remaining balance: ₱${result.remainingBalance.toFixed(2)}`
+        : 'This sale is now fully paid.',
+      timer: 1600,
+      showConfirmButton: false,
+    })
+  } catch (error) {
+    await Swal.fire('Error', error.message || 'Failed to record debt payment.', 'error')
+  }
+}
+
+const exportCSV = async () => {
   const { rows, transactionCount, totalSales } =
     await store.dispatch('sales/exportSalesByDateRange', {
       startDate: startDate.value,
-      endDate: endDate.value
+      endDate: endDate.value,
+      keyword: searchKeyword.value,
+      statusFilter: statusFilter.value,
     })
 
+  if (!rows.length) {
+    return Swal.fire('Error', 'No sales match the current filters', 'error')
+  }
+
+  const filenameParts = ['sales']
+  if (statusFilter.value !== 'all') {
+    filenameParts.push(statusFilter.value)
+  }
+  if (startDate.value || endDate.value) {
+    filenameParts.push(startDate.value || 'start')
+    filenameParts.push('to')
+    filenameParts.push(endDate.value || 'end')
+  }
+  if (searchKeyword.value) {
+    filenameParts.push(`search-${String(searchKeyword.value).trim().replace(/\s+/g, '-')}`)
+  }
+
   downloadCSV(
-    `sales_${startDate.value}_to_${endDate.value}.csv`,
+    `${filenameParts.join('_')}.csv`,
     rows,
     [
       `TOTAL_TRANSACTIONS,${transactionCount}`,
@@ -311,6 +393,13 @@ const exportCSV = async () => {
         <option v-for="o in itemsPerPageOptions" :key="o" :value="o">{{ o }}</option>
       </select>
 
+      <select v-model="statusFilter" class="select-field">
+        <option value="all">All Statuses</option>
+        <option value="completed">Completed</option>
+        <option value="debt">Unpaid / Debt</option>
+        <option value="voided">Voided</option>
+      </select>
+
       <button @click="goToHome">Add Sale</button>
 
       <!-- EXPORT -->
@@ -322,7 +411,7 @@ const exportCSV = async () => {
 
 
     <!-- TABLE -->
-    <div class="table-wrap" :class="{ 'table-wrap-menu-open': colMenuOpen }">
+    <div class="table-wrap sales-table-shell" :class="{ 'table-wrap-menu-open': colMenuOpen }">
     <table>
       <thead>
         <tr>
@@ -362,7 +451,7 @@ const exportCSV = async () => {
           <td v-if="visibleCols.professional_fee">₱{{ fmt(sale.professional_fee) }}</td>
           <td v-if="visibleCols.final_total"><strong>₱{{ fmt(sale.final_total) }}</strong></td>
           <td v-if="visibleCols.payment_method">{{ formatPaymentMethod(sale.payment_method) }}</td>
-          <td v-if="visibleCols.status" :class="sale.status === 'voided' ? 'status-voided' : 'status-ok'">{{ sale.status }}</td>
+          <td v-if="visibleCols.status" :class="getStatusClass(sale)">{{ getDisplayStatus(sale) }}</td>
           <td class="col-actions actions-td">
             <button class="info btn" @click="openSaleModal(sale)">View</button>
             <button v-if="sale.status === 'completed'" class="danger btn" @click="voidSale(sale)">Void</button>
@@ -397,7 +486,7 @@ const exportCSV = async () => {
 
           <span
             class="badge"
-            :class="selectedSale.status === 'voided' ? 'badge-voided' : 'badge-ok'"
+            :class="getDisplayStatus(selectedSale) === 'voided' ? 'badge-voided' : getDisplayStatus(selectedSale) === 'debt' ? 'badge-debt' : 'badge-ok'"
           >
             {{ saleStatusLabel }}
           </span>
@@ -435,8 +524,25 @@ const exportCSV = async () => {
           <hr />
 
           <div>Money Given: ₱{{ (selectedSale.money_given || 0).toFixed(2) }}</div>
+          <div>Amount Paid: ₱{{ selectedSaleAmountPaid.toFixed(2) }}</div>
+          <div v-if="selectedSaleOutstandingBalance > 0">Balance Due: ₱{{ selectedSaleOutstandingBalance.toFixed(2) }}</div>
           <div>Change: ₱{{ (selectedSale.change || 0).toFixed(2) }}</div>
         </div>
+
+        <div v-if="debtPayments.length" class="settlement-history">
+          <h3>Settlement History</h3>
+          <div v-for="payment in debtPayments" :key="payment.id" class="settlement-row">
+            <div>
+              <strong>₱{{ fmt(payment.amount) }}</strong>
+              <span class="settlement-meta">{{ formatPaymentMethod(payment.payment_method) }}</span>
+            </div>
+            <div class="settlement-meta">{{ new Date(payment.paid_at).toLocaleString() }}</div>
+            <div class="settlement-meta">Balance after: ₱{{ fmt(payment.balance_after) }}</div>
+            <div v-if="payment.note" class="settlement-note">{{ payment.note }}</div>
+          </div>
+        </div>
+
+        <button v-if="canSettleSelectedSale" class="info btn-block-mobile" @click="settleDebtSale">Record Debt Payment</button>
 
         <button class="secondary btn-block-mobile" @click="closeModal">Close</button>
       </div>
@@ -448,12 +554,65 @@ const exportCSV = async () => {
 
 <style scoped>
 /* Reuse previous styles + voided status */
-.page-shell { margin: auto; padding: 20px; overflow-x: hidden; }
+.page-shell { margin: auto; padding: 20px; overflow: visible; }
+
+.sales-table-shell {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sales-table-shell.table-wrap-menu-open {
+  overflow: visible !important;
+  z-index: 60;
+}
+
+.sales-table-shell.table-wrap-menu-open .col-menu {
+  z-index: 700;
+}
+
+.sales-table-shell.table-wrap-menu-open thead .col-actions {
+  z-index: 650;
+}
+
+.sales-table-shell.table-wrap-menu-open tbody .col-actions {
+  z-index: 2;
+}
 
 .actions-td button { padding: 6px 10px; }
 
 .status-ok { color: #1abc9c; font-weight: 600; }
+.status-debt { color: #b45309; font-weight: 700; }
 .status-voided { color: #e74c3c; font-weight: 700; }
+
+.settlement-history {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed #cbd5e1;
+}
+
+.settlement-history h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.settlement-row {
+  padding: 10px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.settlement-meta {
+  display: inline-block;
+  margin-left: 8px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.settlement-note {
+  margin-top: 4px;
+  color: #475569;
+  font-size: 13px;
+}
 
 @media (max-width: 768px) {
   .top-bar > :deep(.date-icon-btn) { width: 100%; }

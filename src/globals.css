@@ -36,6 +36,10 @@
   --modal-border: rgba(15, 23, 42, 0.08);
 }
 
+.page-shell {
+  height: 100%;
+}
+
 .app-modal-backdrop,
 .modal-backdrop,
 .modal-overlay,
@@ -600,6 +604,11 @@ button:disabled,
   color: #fff;
 }
 
+.badge-debt {
+  background: #b45309;
+  color: #fff;
+}
+
 .badge-voided {
   background: #e74c3c;
   color: #fff;
@@ -694,6 +703,14 @@ button:disabled,
   font-size: 11px;
   line-height: 16px;
   text-align: center;
+}
+
+.dp--menu-wrapper,
+.dp__menu,
+.dp__outer_menu_wrap,
+.dp__overlay,
+.dp__instance_calendar {
+  z-index: 4000 !important;
 }
 
 .mini {

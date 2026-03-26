@@ -23,12 +23,14 @@ const route = useRoute()
 <style scoped>
 .app-container {
   width: 100%;
+  min-height: 100%;
 }
 
 /* Main content takes full width */
 .main-content {
   width: 100%;
-  min-height: 100vh;
+  min-height: 100%;
+  min-height: 100dvh;
   padding: 0 16px;
   box-sizing: border-box;
 }

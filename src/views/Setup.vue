@@ -33,6 +33,8 @@ const pointsMultiplier = ref(1)
 const dailySalesQuota = ref(40000)
 const expiryWarningDays = ref(30)
 const expiryCriticalDays = ref(7)
+const showProductChart = ref(true)
+const showServiceChart = ref(true)
 const paymentMethods = ref({ cash: true, gcash: true })
 const pageVisibility = ref({})
 
@@ -61,6 +63,8 @@ const customizationSummary = computed(() => ({
   dailySalesQuota: dailySalesQuota.value,
   expiryWarningDays: expiryWarningDays.value,
   expiryCriticalDays: expiryCriticalDays.value,
+  showProductChart: showProductChart.value,
+  showServiceChart: showServiceChart.value,
   paymentMethods: Object.entries(paymentMethods.value)
     .filter(([, enabled]) => enabled)
     .map(([method]) => getTemplatePaymentLabel(method, selectedTemplateLabels.value)),
@@ -110,6 +114,8 @@ function applyTemplatePreset(template) {
   const expirySettings = getTemplateExpiryAlertSettings(template)
   expiryWarningDays.value = expirySettings.warningDays
   expiryCriticalDays.value = expirySettings.criticalDays
+  showProductChart.value = template.reporting?.showProductChart !== false
+  showServiceChart.value = template.reporting?.showServiceChart !== false
   paymentMethods.value = {
     cash: (template.payments?.methods || ['cash', 'gcash']).includes('cash'),
     gcash: (template.payments?.methods || ['cash', 'gcash']).includes('gcash'),
@@ -203,6 +209,8 @@ function buildTemplateOverrides() {
       dailySalesQuota: Number(dailySalesQuota.value),
       expiryWarningDays: Number(expiryWarningDays.value),
       expiryCriticalDays: Number(expiryCriticalDays.value),
+      showProductChart: productsEnabled ? showProductChart.value : false,
+      showServiceChart: servicesEnabled ? showServiceChart.value : false,
     },
   }
 }
@@ -280,6 +288,17 @@ watch(catalogMode, value => {
     trackStock.value = false
     trackBatches.value = false
     trackExpiry.value = false
+  }
+
+  if (value === 'products') {
+    showServiceChart.value = false
+    showProductChart.value = true
+  } else if (value === 'services') {
+    showProductChart.value = false
+    showServiceChart.value = true
+  } else {
+    showProductChart.value = true
+    showServiceChart.value = true
   }
 })
 
@@ -486,6 +505,27 @@ onMounted(async () => {
         </div>
 
         <div class="option-group">
+          <span class="group-label">Analytics charts</span>
+          <div class="toggle-stack compact-stack">
+            <label class="toggle-row">
+              <input v-model="showProductChart" type="checkbox" :disabled="catalogMode === 'services'" />
+              <div>
+                <strong>Show product chart</strong>
+                <span>Display the top products chart in Analytics when product sales are enabled.</span>
+              </div>
+            </label>
+
+            <label class="toggle-row">
+              <input v-model="showServiceChart" type="checkbox" :disabled="catalogMode === 'products'" />
+              <div>
+                <strong>Show service chart</strong>
+                <span>Display the top services chart in Analytics when service sales are enabled.</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div class="option-group">
           <span class="group-label">Payment methods</span>
           <div class="page-chip-grid">
             <button
@@ -568,6 +608,16 @@ onMounted(async () => {
               {{ customizationSummary.trackExpiry
                 ? `${Number(customizationSummary.expiryCriticalDays || 0)} day urgent / ${Number(customizationSummary.expiryWarningDays || 0)} day warning`
                 : 'Disabled' }}
+            </strong>
+          </article>
+
+          <article>
+            <span>Analytics charts</span>
+            <strong class="review-value review-value-break">
+              {{ [
+                customizationSummary.showProductChart ? 'products' : null,
+                customizationSummary.showServiceChart ? 'services' : null,
+              ].filter(Boolean).join(', ') || 'Hidden' }}
             </strong>
           </article>
         </div>
