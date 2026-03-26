@@ -6,14 +6,43 @@ Completed work such as template foundation, first-run setup, initial template cu
 
 ## Priority Order
 
-1. Multi-Business Support
+1. Inventory Purchase Cost and COGS Tracking
+	- highest priority because true profit, loss, and margin reporting depend on purchase-cost tracking instead of sales-minus-expenses only
+2. Multi-Business Support
 	- large change because it introduces business registry and switching
-2. Separate Database Per Business
+3. Separate Database Per Business
 	- large change because it requires migration and business-scoped data isolation
-3. Cross-Business Analytics
+4. Cross-Business Analytics
 	- heaviest change because it depends on multi-business isolation and cross-database aggregation
 
-## 1. Multi-Business Support
+## 1. Inventory Purchase Cost and COGS Tracking
+
+### Summary
+
+Track inventory purchases and batch-level purchase cost so analytics can compute cost of goods sold, gross profit, and more accurate net profit instead of relying on sales minus expenses alone.
+
+### Remaining goals
+
+- add purchase-cost fields to stock batches or a dedicated purchase ledger
+- distinguish inventory purchases from generic stock adjustments
+- capture supplier or purchase reference details where useful
+- record cost consumed when stock is sold so each sale can carry a stable historical cost
+- compute cost of goods sold (COGS) for the selected reporting period
+- add gross profit and net profit reporting based on revenue, COGS, and operating expenses
+
+### Open questions
+
+- should cost live directly on `item_batches`, or in a separate purchases table linked to batches?
+- should service items support optional direct cost or labor-cost tracking too?
+- should manual stock adjustments affect COGS, or stay separate as inventory corrections?
+
+### Tradeoffs to keep in mind
+
+- batch-level cost is more accurate than a single per-item purchase cost
+- storing cost at sale time makes historical profit reporting more stable
+- inventory purchases should not be treated the same way as operating expenses if profit accuracy matters
+
+## 2. Multi-Business Support
 
 ### Summary
 
@@ -32,7 +61,7 @@ Support multiple businesses owned by the same user, where each business has its 
 - which settings stay global versus business-specific?
 - how should backup and restore work for one business versus the full owner profile?
 
-## 2. Separate Database Per Business
+## 3. Separate Database Per Business
 
 ### Summary
 
@@ -51,7 +80,7 @@ Move from the current single-business runtime model to one operational database 
 - more migration and switching complexity
 - combined analytics becomes a cross-database aggregation problem
 
-## 3. Cross-Business Analytics
+## 4. Cross-Business Analytics
 
 ### Summary
 
