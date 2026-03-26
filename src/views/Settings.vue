@@ -35,6 +35,7 @@ const status = ref('')
 const progress = ref(0)
 const fileName = ref('business_companion_backup.json')
 const restoreInput = ref(null)
+const activeTab = ref('general')
 const appNameLimit = 40
 const appName = ref('Business Companion')
 const appNameStatus = ref('')
@@ -47,6 +48,11 @@ const canSellProducts = computed(() => activeTemplate.value?.workflow?.allowProd
 const canSellServices = computed(() => activeTemplate.value?.workflow?.allowServiceSales !== false && activeTemplate.value?.capabilities?.services !== false)
 const templateProfileStatus = ref('')
 const templateProfileSaving = ref(false)
+const trackStock = ref(false)
+const trackBatches = ref(false)
+const trackExpiry = ref(false)
+const loyaltyEnabled = ref(true)
+const requireCustomer = ref(false)
 const pointsMultiplier = ref(1)
 const dailySalesQuota = ref(40000)
 const expiryWarningDays = ref(30)
@@ -61,8 +67,21 @@ const customerActionLabel = ref('Select Customer')
 const paymentCashLabel = ref('Cash')
 const paymentGcashLabel = ref('Online Bank')
 
-watch(activeTemplate, template => {
+const settingsTabs = [
+  { id: 'general', label: 'General' },
+  { id: 'template', label: 'Template' },
+  { id: 'data', label: 'Data' },
+  { id: 'security', label: 'Security' },
+  { id: 'about', label: 'About' },
+]
+
+function applyTemplateProfileForm(template) {
   const labels = template?.labels || {}
+  trackStock.value = !!template?.itemDefaults?.trackStock
+  trackBatches.value = !!template?.itemDefaults?.trackBatches
+  trackExpiry.value = !!template?.itemDefaults?.trackExpiry
+  loyaltyEnabled.value = template?.customer?.enableLoyalty !== false
+  requireCustomer.value = template?.workflow?.requireCustomer === true || template?.customer?.requireCustomerDetails === true
   pointsMultiplier.value = getTemplatePointsMultiplier(template || {})
   dailySalesQuota.value = getTemplateDailySalesQuota(template || {})
   const expirySettings = getTemplateExpiryAlertSettings(template || {})
@@ -77,19 +96,56 @@ watch(activeTemplate, template => {
   customerActionLabel.value = labels.customerAction || 'Select Customer'
   paymentCashLabel.value = getTemplatePaymentLabel('cash', labels)
   paymentGcashLabel.value = getTemplatePaymentLabel('gcash', labels)
+}
+
+watch(activeTemplate, template => {
+  applyTemplateProfileForm(template)
 }, { immediate: true })
 
+watch(trackStock, value => {
+  if (!value) {
+    trackBatches.value = false
+    trackExpiry.value = false
+  }
+})
+
+watch(trackBatches, value => {
+  if (!value) {
+    trackExpiry.value = false
+  }
+})
+
 function buildTemplateProfileOverrides() {
+  const nextTrackStock = canSellProducts.value && trackStock.value
+  const nextTrackBatches = nextTrackStock && trackBatches.value
+  const nextTrackExpiry = nextTrackBatches && trackExpiry.value
+
   return {
-    capabilities: { ...(activeTemplate.value?.capabilities || {}) },
-    workflow: { ...(activeTemplate.value?.workflow || {}) },
-    itemDefaults: { ...(activeTemplate.value?.itemDefaults || {}) },
     customer: {
       ...(activeTemplate.value?.customer || {}),
+      enableLoyalty: loyaltyEnabled.value,
+      requireCustomerDetails: requireCustomer.value,
       pointsMultiplier: Number(pointsMultiplier.value),
     },
     payments: { ...(activeTemplate.value?.payments || {}) },
     pages: { ...(activeTemplate.value?.pages || {}) },
+    capabilities: {
+      ...(activeTemplate.value?.capabilities || {}),
+      stockTracking: nextTrackStock ? 'required' : false,
+      batchTracking: nextTrackBatches ? 'required' : false,
+      expiryTracking: nextTrackExpiry ? 'required' : false,
+    },
+    workflow: {
+      ...(activeTemplate.value?.workflow || {}),
+      requireBatchSelection: nextTrackBatches,
+      requireCustomer: requireCustomer.value,
+    },
+    itemDefaults: {
+      ...(activeTemplate.value?.itemDefaults || {}),
+      trackStock: nextTrackStock,
+      trackBatches: nextTrackBatches,
+      trackExpiry: nextTrackExpiry,
+    },
     reporting: {
       ...(activeTemplate.value?.reporting || {}),
       dailySalesQuota: Number(dailySalesQuota.value),
@@ -160,10 +216,11 @@ async function saveTemplateProfileSettings() {
   templateProfileSaving.value = true
 
   try {
-    await store.dispatch('template/setActiveTemplate', {
+    const savedTemplate = await store.dispatch('template/setActiveTemplate', {
       templateId: activeTemplate.value?.id,
       overrides: buildTemplateProfileOverrides(),
     })
+    applyTemplateProfileForm(savedTemplate)
     templateProfileStatus.value = 'Template profile saved'
     await Swal.fire({
       icon: 'success',
@@ -554,8 +611,23 @@ onMounted(async () => {
             <p class="muted">Manage branding, appearance, data safety, and access controls from one place.</p>
           </div>
         </div>
+
+        <div class="settings-tabs" role="tablist" aria-label="Settings categories">
+          <button
+            v-for="tab in settingsTabs"
+            :key="tab.id"
+            type="button"
+            class="settings-tab"
+            :class="{ active: activeTab === tab.id }"
+            :aria-selected="activeTab === tab.id"
+            @click="activeTab = tab.id"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
       </div>
 
+      <template v-if="activeTab === 'general'">
       <div class="card card-section">
         <div class="section-heading">
           <span class="section-icon">🏷️</span>
@@ -638,7 +710,9 @@ onMounted(async () => {
           {{ interactionStatus }}
         </p>
       </div>
+      </template>
 
+      <template v-if="activeTab === 'data'">
       <div class="card card-section card-emphasis">
         <div class="section-heading">
           <span class="section-icon">🗄️</span>
@@ -679,7 +753,9 @@ onMounted(async () => {
       <div class="card card-section">
         <PageVisibilitySettings :pages="pagesList" />
       </div>
+      </template>
 
+      <template v-if="activeTab === 'template'">
       <div class="card card-section">
         <div class="section-heading">
           <span class="section-icon">🧩</span>
@@ -701,84 +777,169 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div class="template-settings-grid">
-          <label class="template-setting-field">
-            <span>Customer points multiplier</span>
-            <input v-model.number="pointsMultiplier" class="input" type="number" min="0.01" step="0.01" />
-            <small>Controls how much each redeemed customer point is worth during checkout.</small>
-          </label>
+        <div class="template-settings-sections">
+          <section class="template-settings-section">
+            <div class="template-section-header">
+              <div>
+                <h3>Workflow</h3>
+                <p class="muted">Core checkout and customer behavior for the active template.</p>
+              </div>
+            </div>
 
-          <label class="template-setting-field">
-            <span>Daily sales quota</span>
-            <input v-model.number="dailySalesQuota" class="input" type="number" min="1" step="1" />
-            <small>Used by Analytics to compare each day against your target sales amount.</small>
-          </label>
+            <div class="template-settings-grid">
+              <label class="template-setting-field template-toggle-field">
+                <span>Enable loyalty</span>
+                <input v-model="loyaltyEnabled" type="checkbox" />
+                <small>Keep customer points and redemption available in the sales flow.</small>
+              </label>
 
-          <label class="template-setting-field">
-            <span>Near-expiry warning window</span>
-            <input v-model.number="expiryWarningDays" class="input" type="number" min="1" step="1" />
-            <small>Items inside this many days before expiry are flagged in inventory views and analytics.</small>
-          </label>
+              <label class="template-setting-field template-toggle-field">
+                <span>Require customer selection</span>
+                <input v-model="requireCustomer" type="checkbox" />
+                <small>Require choosing a customer before completing checkout.</small>
+              </label>
 
-          <label class="template-setting-field">
-            <span>Urgent expiry window</span>
-            <input v-model.number="expiryCriticalDays" class="input" type="number" min="1" step="1" :max="expiryWarningDays || undefined" />
-            <small>Items inside this shorter window get the stronger expiry alert treatment.</small>
-          </label>
+              <label class="template-setting-field">
+                <span>Customer points multiplier</span>
+                <input v-model.number="pointsMultiplier" class="input" type="number" min="0.01" step="0.01" />
+                <small>Controls how much each redeemed customer point is worth during checkout.</small>
+              </label>
 
-          <label class="template-setting-field template-toggle-field">
-            <span>Show product analytics chart</span>
-            <input v-model="showProductChart" type="checkbox" :disabled="!canSellProducts" />
-            <small>Controls whether the top products chart is shown in Analytics.</small>
-          </label>
+              <label class="template-setting-field">
+                <span>Daily sales quota</span>
+                <input v-model.number="dailySalesQuota" class="input" type="number" min="1" step="1" />
+                <small>Used by Analytics to compare each day against your target sales amount.</small>
+              </label>
+            </div>
+          </section>
 
-          <label class="template-setting-field template-toggle-field">
-            <span>Show service analytics chart</span>
-            <input v-model="showServiceChart" type="checkbox" :disabled="!canSellServices" />
-            <small>Controls whether the top services chart is shown in Analytics.</small>
-          </label>
+          <section class="template-settings-section">
+            <div class="template-section-header">
+              <div>
+                <h3>Inventory Tracking</h3>
+                <p class="muted">Product stock controls and expiry alerts used across inventory and analytics.</p>
+              </div>
+            </div>
 
-          <label class="template-setting-field">
-            <span>Catalog label</span>
-            <input v-model="catalogLabel" class="input" type="text" maxlength="40" placeholder="Items" />
-            <small>Used for plural catalog wording across screens.</small>
-          </label>
+            <div class="template-settings-grid">
+              <label class="template-setting-field template-toggle-field">
+                <span>Track stock</span>
+                <input v-model="trackStock" type="checkbox" :disabled="!canSellProducts" />
+                <small>Enable quantity-based product inventory tracking.</small>
+              </label>
 
-          <label class="template-setting-field">
-            <span>Catalog entry label</span>
-            <input v-model="catalogEntryLabel" class="input" type="text" maxlength="40" placeholder="Item" />
-            <small>Used for singular catalog wording.</small>
-          </label>
+              <label class="template-setting-field template-toggle-field">
+                <span>Track batches</span>
+                <input v-model="trackBatches" type="checkbox" :disabled="!canSellProducts || !trackStock" />
+                <small>Track grouped inventory batches for stocked products.</small>
+              </label>
 
-          <label class="template-setting-field">
-            <span>Professional fee label</span>
-            <input v-model="professionalFeeLabel" class="input" type="text" maxlength="40" placeholder="Additional Fee" />
-            <small>Controls how service or labor charges are named.</small>
-          </label>
+              <label class="template-setting-field template-toggle-field">
+                <span>Track expiry</span>
+                <input v-model="trackExpiry" type="checkbox" :disabled="!canSellProducts || !trackBatches" />
+                <small>Flag products by expiry date in inventory and analytics.</small>
+              </label>
 
-          <label class="template-setting-field">
-            <span>Customer section label</span>
-            <input v-model="customerSectionLabel" class="input" type="text" maxlength="40" placeholder="Sold to" />
-            <small>Shown where the selected customer section is named.</small>
-          </label>
+              <label class="template-setting-field">
+                <span>Near-expiry warning window</span>
+                <input v-model.number="expiryWarningDays" class="input" type="number" min="1" step="1" />
+                <small>Items inside this many days before expiry are flagged in inventory views and analytics.</small>
+              </label>
 
-          <label class="template-setting-field">
-            <span>Customer action label</span>
-            <input v-model="customerActionLabel" class="input" type="text" maxlength="40" placeholder="Select Customer" />
-            <small>Used on the POS action button for choosing a customer.</small>
-          </label>
+              <label class="template-setting-field">
+                <span>Urgent expiry window</span>
+                <input v-model.number="expiryCriticalDays" class="input" type="number" min="1" step="1" :max="expiryWarningDays || undefined" />
+                <small>Items inside this shorter window get the stronger expiry alert treatment.</small>
+              </label>
+            </div>
+          </section>
 
-          <label class="template-setting-field">
-            <span>Cash payment label</span>
-            <input v-model="paymentCashLabel" class="input" type="text" maxlength="40" placeholder="Cash" />
-            <small>Overrides the cash payment wording in checkout and history.</small>
-          </label>
+          <section class="template-settings-section">
+            <div class="template-section-header">
+              <div>
+                <h3>Analytics Display</h3>
+                <p class="muted">Control which business charts stay visible for this template.</p>
+              </div>
+            </div>
 
-          <label class="template-setting-field">
-            <span>Digital payment label</span>
-            <input v-model="paymentGcashLabel" class="input" type="text" maxlength="40" placeholder="Online Bank" />
-            <small>Overrides the non-cash payment wording in checkout and history.</small>
-          </label>
+            <div class="template-settings-grid template-settings-grid-compact">
+              <label class="template-setting-field template-toggle-field">
+                <span>Show product analytics chart</span>
+                <input v-model="showProductChart" type="checkbox" :disabled="!canSellProducts" />
+                <small>Controls whether the top products chart is shown in Analytics.</small>
+              </label>
+
+              <label class="template-setting-field template-toggle-field">
+                <span>Show service analytics chart</span>
+                <input v-model="showServiceChart" type="checkbox" :disabled="!canSellServices" />
+                <small>Controls whether the top services chart is shown in Analytics.</small>
+              </label>
+            </div>
+          </section>
+
+          <section class="template-settings-section">
+            <div class="template-section-header">
+              <div>
+                <h3>Screen Labels</h3>
+                <p class="muted">Rename common terms shown in the catalog, POS flow, and customer sections.</p>
+              </div>
+            </div>
+
+            <div class="template-settings-grid">
+              <label class="template-setting-field">
+                <span>Catalog label</span>
+                <input v-model="catalogLabel" class="input" type="text" maxlength="40" placeholder="Items" />
+                <small>Used for plural catalog wording across screens.</small>
+              </label>
+
+              <label class="template-setting-field">
+                <span>Catalog entry label</span>
+                <input v-model="catalogEntryLabel" class="input" type="text" maxlength="40" placeholder="Item" />
+                <small>Used for singular catalog wording.</small>
+              </label>
+
+              <label class="template-setting-field">
+                <span>Professional fee label</span>
+                <input v-model="professionalFeeLabel" class="input" type="text" maxlength="40" placeholder="Additional Fee" />
+                <small>Controls how service or labor charges are named.</small>
+              </label>
+
+              <label class="template-setting-field">
+                <span>Customer section label</span>
+                <input v-model="customerSectionLabel" class="input" type="text" maxlength="40" placeholder="Sold to" />
+                <small>Shown where the selected customer section is named.</small>
+              </label>
+
+              <label class="template-setting-field">
+                <span>Customer action label</span>
+                <input v-model="customerActionLabel" class="input" type="text" maxlength="40" placeholder="Select Customer" />
+                <small>Used on the POS action button for choosing a customer.</small>
+              </label>
+            </div>
+          </section>
+
+          <section class="template-settings-section">
+            <div class="template-section-header">
+              <div>
+                <h3>Payment Wording</h3>
+                <p class="muted">Adjust payment labels used during checkout and in history views.</p>
+              </div>
+            </div>
+
+            <div class="template-settings-grid template-settings-grid-compact">
+              <label class="template-setting-field">
+                <span>Cash payment label</span>
+                <input v-model="paymentCashLabel" class="input" type="text" maxlength="40" placeholder="Cash" />
+                <small>Overrides the cash payment wording in checkout and history.</small>
+              </label>
+
+              <label class="template-setting-field">
+                <span>Digital payment label</span>
+                <input v-model="paymentGcashLabel" class="input" type="text" maxlength="40" placeholder="Online Bank" />
+                <small>Overrides the non-cash payment wording in checkout and history.</small>
+              </label>
+            </div>
+          </section>
         </div>
 
         <div class="branding-actions">
@@ -791,7 +952,9 @@ onMounted(async () => {
           {{ templateProfileStatus }}
         </p>
       </div>
+      </template>
 
+      <template v-if="activeTab === 'security'">
       <div class="card card-section">
         <div class="section-heading">
           <span class="section-icon">🔒</span>
@@ -813,7 +976,9 @@ onMounted(async () => {
           </div>
         </div>
       </div>
+      </template>
 
+      <template v-if="activeTab === 'about'">
       <div class="card card-section">
         <div class="section-heading">
           <span class="section-icon">ℹ️</span>
@@ -832,6 +997,7 @@ onMounted(async () => {
           <button class="secondary" @click="openAboutPage">Go To About</button>
         </div>
       </div>
+      </template>
     </div>
 
     <!-- <div class="right-col">
@@ -877,6 +1043,35 @@ body.dark-mode .card {
 
 .card-hero {
   padding: 22px;
+}
+
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.settings-tab {
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.82);
+  color: #334155;
+  font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.settings-tab:hover {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.settings-tab.active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #f8fafc;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.18);
 }
 
 .card-section {
@@ -934,6 +1129,24 @@ body.dark-mode .section-icon {
   background: linear-gradient(135deg, rgba(71, 215, 181, 0.18), rgba(125, 211, 252, 0.18));
 }
 
+body.dark-mode .settings-tab {
+  background: rgba(49, 59, 69, 0.88);
+  border-color: rgba(148, 163, 184, 0.24);
+  color: #dbe6f2;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+body.dark-mode .settings-tab:hover {
+  background: rgba(58, 69, 80, 0.96);
+}
+
+body.dark-mode .settings-tab.active {
+  background: #1abc9c;
+  border-color: #1abc9c;
+  color: #07261f;
+  box-shadow: 0 12px 24px rgba(26, 188, 156, 0.24);
+}
+
 /* reuse some existing styles */
 .muted { color: #666; }
 .branding-form { display: flex; flex-direction: column; gap: 10px; }
@@ -976,11 +1189,50 @@ body.dark-mode .section-icon {
   gap: 10px;
   flex-wrap: wrap;
 }
+.template-settings-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.template-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(241, 245, 249, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.template-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.template-section-header h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.template-section-header p {
+  margin: 4px 0 0;
+}
+
 .template-settings-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
+
+.template-settings-grid-compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .template-setting-field {
   display: grid;
   gap: 8px;
@@ -1000,6 +1252,16 @@ body.dark-mode .section-icon {
   color: #6b7280;
   font-size: 13px;
   line-height: 1.45;
+}
+
+.template-toggle-field {
+  align-content: start;
+}
+
+.template-toggle-field input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
 }
 .theme-copy { display: flex; flex-direction: column; gap: 4px; }
 .setting-copy {
@@ -1081,6 +1343,11 @@ body.dark-mode .template-setting-field {
   background: rgba(148, 163, 184, 0.08);
   border-color: rgba(148, 163, 184, 0.18);
 }
+body.dark-mode .template-settings-section {
+  background: rgba(51, 65, 85, 0.34);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+body.dark-mode .template-section-header h3 { color: #f8fafc; }
 body.dark-mode .template-setting-field span { color: #cbd5e1; }
 body.dark-mode .template-setting-field small { color: #94a3b8; }
 body.dark-mode .text-limiter { color: #94a3b8; }
@@ -1102,6 +1369,15 @@ body.dark-mode .pin-inactive { background: #2a2a2a; color: #888; }
 @media (max-width: 768px) {
   .settings-grid {
     padding: 16px;
+  }
+
+  .settings-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-tab {
+    width: 100%;
   }
 
   .section-heading {
@@ -1127,6 +1403,10 @@ body.dark-mode .pin-inactive { background: #2a2a2a; color: #888; }
   }
 
   .template-settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .template-settings-grid-compact {
     grid-template-columns: 1fr;
   }
 }

@@ -23,6 +23,7 @@ const currentStep = ref(0)
 const isSaving = ref(false)
 const appName = ref('')
 const selectedTemplateId = ref('generic')
+const persistedActiveTemplate = ref(null)
 const catalogMode = ref('mixed')
 const trackStock = ref(false)
 const trackBatches = ref(false)
@@ -139,6 +140,15 @@ function goBack() {
   currentStep.value -= 1
 }
 
+function goToPreviousPage() {
+  if (window.history.length > 1) {
+    router.back()
+    return
+  }
+
+  router.push('/settings')
+}
+
 function togglePageVisibility(pageName) {
   pageVisibility.value[pageName] = pageVisibility.value[pageName] === false
 }
@@ -230,6 +240,7 @@ async function saveSetup() {
       overrides,
       forcePageVisibility: true,
     })
+    persistedActiveTemplate.value = template
     const db = await dbPromise
 
     await db.put('app_settings', {
@@ -264,11 +275,21 @@ async function saveSetup() {
   }
 }
 
-watch(selectedTemplate, template => {
+watch(selectedTemplateId, templateId => {
+  if (!templateId) {
+    return
+  }
+
+  if (persistedActiveTemplate.value?.id === templateId) {
+    applyTemplatePreset(persistedActiveTemplate.value)
+    return
+  }
+
+  const template = availableTemplates.value.find(entry => entry.id === templateId)
   if (template) {
     applyTemplatePreset(template)
   }
-}, { immediate: false })
+})
 
 watch(trackStock, value => {
   if (!value) {
@@ -304,6 +325,7 @@ watch(catalogMode, value => {
 
 onMounted(async () => {
   const currentTemplate = await loadResolvedActiveTemplate()
+  persistedActiveTemplate.value = currentTemplate
   const db = await dbPromise
   const appNameRow = await db.get('app_settings', 'app-name')
 
@@ -373,7 +395,7 @@ onMounted(async () => {
         <h2>Quick customization</h2>
         <p class="muted">Adjust only the essentials for now. Deeper tuning can come later.</p>
 
-        <div class="option-group">
+        <div class="option-group option-card">
           <span class="group-label">What do you sell?</span>
           <div class="segmented">
             <button type="button" :class="{ active: catalogMode === 'products' }" @click="catalogMode = 'products'">Products</button>
@@ -382,7 +404,9 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div v-if="!isServiceOnlyMode" class="toggle-stack">
+        <div v-if="!isServiceOnlyMode" class="option-group option-card">
+          <span class="group-label">Inventory behavior</span>
+          <div class="toggle-stack">
           <label class="toggle-row">
             <input v-model="trackStock" type="checkbox" />
             <div>
@@ -406,14 +430,15 @@ onMounted(async () => {
               <span>Recommended for regulated or perishable inventory.</span>
             </div>
           </label>
+          </div>
         </div>
 
-        <div v-else class="service-note">
+        <div v-else class="option-group option-card service-note">
           <strong>Service-only mode selected.</strong>
           <span>Inventory tracking options are hidden because services do not use stock, batches, or expiry tracking.</span>
         </div>
 
-        <div class="option-group">
+        <div class="option-group option-card">
           <span class="group-label">Default visible pages</span>
           <div class="page-chip-grid">
             <button
@@ -429,7 +454,7 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div class="option-group">
+        <div class="option-group option-card">
           <span class="group-label">Customer and loyalty</span>
           <div class="toggle-stack compact-stack">
             <label class="toggle-row">
@@ -504,7 +529,7 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div class="option-group">
+        <div class="option-group option-card">
           <span class="group-label">Analytics charts</span>
           <div class="toggle-stack compact-stack">
             <label class="toggle-row">
@@ -525,7 +550,7 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div class="option-group">
+        <div class="option-group option-card">
           <span class="group-label">Payment methods</span>
           <div class="page-chip-grid">
             <button
@@ -633,7 +658,14 @@ onMounted(async () => {
       </div>
 
       <div class="setup-actions">
-        <button class="secondary" type="button" :disabled="currentStep === 0 || isSaving" @click="goBack">Back</button>
+        <button
+          class="secondary"
+          type="button"
+          :disabled="isSaving"
+          @click="currentStep === 0 ? goToPreviousPage() : goBack()"
+        >
+          Back
+        </button>
 
         <button
           v-if="currentStep < steps.length - 1"
@@ -868,6 +900,14 @@ onMounted(async () => {
   gap: 12px;
 }
 
+.option-card {
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid #dbe4ea;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
 .compact-stack {
   gap: 10px;
 }
@@ -984,8 +1024,6 @@ onMounted(async () => {
 .service-note {
   display: grid;
   gap: 6px;
-  padding: 18px 20px;
-  border-radius: 18px;
   border: 1px solid rgba(15, 118, 110, 0.18);
   background: linear-gradient(180deg, rgba(15, 118, 110, 0.08) 0%, rgba(255, 255, 255, 0.96) 100%);
 }
@@ -1114,6 +1152,11 @@ onMounted(async () => {
   .setup-hero,
   .setup-card {
     padding: 22px;
+  }
+
+  .option-card {
+    padding: 16px;
+    border-radius: 18px;
   }
 
   .template-grid,
