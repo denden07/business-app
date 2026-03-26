@@ -21,6 +21,8 @@ const store = useStore()
 // Metrics
 // --------------------
 const totalSales = ref(0)
+const totalExpenses = ref(0)
+const totalProfit = ref(0)
 const upfrontCollected = ref(0)
 const debtPaymentsCollected = ref(0)
 const totalCashCollected = ref(0)
@@ -38,6 +40,8 @@ const lowStockCount = ref(0)
 // --------------------
 const salesTrendOptions = ref({})
 const salesTrendSeries = ref([])
+const financeTrendOptions = ref({})
+const financeTrendSeries = ref([])
 const debtTrendOptions = ref({})
 const debtTrendSeries = ref([])
 const topItemsOptions = ref({})
@@ -93,6 +97,8 @@ const salesLabel = computed(() => {
 })
 
 const cashCollectedLabel = computed(() => buildTimeRangeLabel('Cash Collected'))
+const expensesLabel = computed(() => buildTimeRangeLabel('Expenses'))
+const profitLabel = computed(() => buildTimeRangeLabel('Net Profit'))
 const debtPaymentsLabel = computed(() => buildTimeRangeLabel('Debt Payments Collected'))
 const receivablesCreatedLabel = computed(() => buildTimeRangeLabel('Receivables Created'))
 const outstandingReceivablesLabel = computed(() => {
@@ -183,6 +189,8 @@ const tertiaryMetric = computed(() => {
 const metricCards = computed(() => {
   const cards = [
     { title: salesLabel.value, value: totalSales.value, type: 'currency' },
+    { title: expensesLabel.value, value: totalExpenses.value, type: 'currency' },
+    { title: profitLabel.value, value: totalProfit.value, type: 'currency' },
     { title: cashCollectedLabel.value, value: totalCashCollected.value, type: 'currency' },
     { title: receivablesCreatedLabel.value, value: receivablesCreated.value, type: 'currency' },
     { title: debtPaymentsLabel.value, value: debtPaymentsCollected.value, type: 'currency' },
@@ -266,14 +274,16 @@ const updateCharts = async () => {
   const startDate = getStartDate()
   const endDate = getEndDate()
   const db = await dbPromise
-  const [sales, saleItems, items, debtPayments] = await Promise.all([
+  const [sales, saleItems, items, debtPayments, expenses] = await Promise.all([
     db.getAll('sales'),
     db.getAll('sale_items'),
     db.getAll('items'),
     db.getAll('debt_payments'),
+    db.getAll('expenses'),
   ])
   const includedSaleIds = new Set()
   const grossSalesMap = new Map()
+  const expenseTotalsMap = new Map()
   const upfrontCollectedMap = new Map()
   const receivablesCreatedMap = new Map()
   const debtPaymentsMap = new Map()
@@ -309,6 +319,8 @@ const updateCharts = async () => {
   }
 
   totalSales.value = 0
+  totalExpenses.value = 0
+  totalProfit.value = 0
   upfrontCollected.value = 0
   receivablesCreated.value = 0
   outstandingReceivables.value = 0
@@ -365,7 +377,20 @@ const updateCharts = async () => {
     receivablesCreatedMap.set(dayKey, (receivablesCreatedMap.get(dayKey) || 0) + saleReceivablesCreated)
   }
 
+  for (const expense of expenses) {
+    const expenseDate = new Date(expense.expense_date || expense.created_at)
+    if (Number.isNaN(expenseDate.getTime())) continue
+    if (expenseDate < startDate || expenseDate > endDate) continue
+
+    const amount = Math.max(Number(expense.amount || 0), 0)
+    totalExpenses.value += amount
+
+    const dayKey = format(expenseDate, 'yyyy-MM-dd')
+    expenseTotalsMap.set(dayKey, (expenseTotalsMap.get(dayKey) || 0) + amount)
+  }
+
   totalCashCollected.value = upfrontCollected.value + debtPaymentsCollected.value
+  totalProfit.value = totalSales.value - totalExpenses.value
 
   const itemTotals = new Map()
   for (const item of saleItems) {
@@ -397,6 +422,8 @@ const updateCharts = async () => {
   // --------------------
   const dayCount = Math.ceil((endDate - startDate) / (1000*60*60*24)) + 1
   const grossTrendMap = {}
+  const expenseTrendMap = {}
+  const profitTrendMap = {}
   const cashCollectedTrendMap = {}
   const receivablesTrendMap = {}
   const debtSettlementTrendMap = {}
@@ -405,6 +432,8 @@ const updateCharts = async () => {
     d.setDate(startDate.getDate() + i)
     const label = format(d, 'MM/dd')
     grossTrendMap[label] = 0
+    expenseTrendMap[label] = 0
+    profitTrendMap[label] = 0
     cashCollectedTrendMap[label] = 0
     receivablesTrendMap[label] = 0
     debtSettlementTrendMap[label] = 0
@@ -423,9 +452,14 @@ const updateCharts = async () => {
   }
 
   mergeDailyMap(grossSalesMap, grossTrendMap)
+  mergeDailyMap(expenseTotalsMap, expenseTrendMap)
   mergeDailyMap(upfrontCollectedMap, cashCollectedTrendMap)
   mergeDailyMap(receivablesCreatedMap, receivablesTrendMap)
   mergeDailyMap(debtPaymentsMap, debtSettlementTrendMap)
+
+  Object.keys(profitTrendMap).forEach(label => {
+    profitTrendMap[label] = (grossTrendMap[label] || 0) - (expenseTrendMap[label] || 0)
+  })
 
   Object.keys(cashCollectedTrendMap).forEach((label) => {
     cashCollectedTrendMap[label] += debtSettlementTrendMap[label] || 0
@@ -449,6 +483,27 @@ const updateCharts = async () => {
     legend: { labels: { colors: analyticsCardText } },
     tooltip: { y: { formatter: val => `₱${val.toLocaleString()}` } },
     colors: ['#0ea5e9', '#10b981']
+  }
+
+  financeTrendSeries.value = [
+    { name: 'Revenue', data: Object.values(grossTrendMap) },
+    { name: 'Expenses', data: Object.values(expenseTrendMap) },
+    { name: 'Profit', data: Object.values(profitTrendMap) },
+  ]
+  financeTrendOptions.value = {
+    chart: { type: 'line', height: 350, foreColor: analyticsMutedText },
+    stroke: { curve: 'smooth', width: 3 },
+    xaxis: {
+      categories: Object.keys(grossTrendMap),
+      labels: { style: { colors: analyticsMutedText } },
+    },
+    yaxis: {
+      labels: { style: { colors: [analyticsMutedText] } },
+    },
+    grid: { borderColor: analyticsGridColor },
+    legend: { labels: { colors: analyticsCardText } },
+    tooltip: { y: { formatter: val => `₱${val.toLocaleString()}` } },
+    colors: ['#0ea5e9', '#ef4444', '#14b8a6']
   }
 
   debtTrendSeries.value = [
@@ -652,6 +707,11 @@ onMounted(updateCharts)
     <div class="chart-card">
       <h2>Sales Trend</h2>
       <VueApexCharts type="line" :options="salesTrendOptions" :series="salesTrendSeries" height="350"/>
+    </div>
+
+    <div class="chart-card">
+      <h2>Revenue, Expenses, and Profit</h2>
+      <VueApexCharts type="line" :options="financeTrendOptions" :series="financeTrendSeries" height="350"/>
     </div>
 
     <div class="chart-card">

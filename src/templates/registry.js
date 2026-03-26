@@ -44,6 +44,7 @@ const baseTemplate = {
     showHome: true,
     showItems: true,
     showSales: true,
+    showBudget: true,
     showDrafts: true,
     showCustomers: true,
     showAnalytics: true,

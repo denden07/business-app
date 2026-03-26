@@ -246,6 +246,71 @@ Phase 9 behavior
 - About no longer appears in page visibility or template-managed navigation
 - Settings is now the intended entry point for About
 
+## Phase 10: Debt Sales, Settlement, and Receivables Reporting
+
+Status: completed on 2026-03-26
+
+Completed
+
+- Extended [src/db/index.js](src/db/index.js) with debt-aware sale fields, payment-status indexing, outstanding-balance support, and a dedicated `debt_payments` store for later settlement history
+- Added shared debt helpers in [src/utils/saleStatus.js](src/utils/saleStatus.js) and [src/utils/debtSettlementPrompt.js](src/utils/debtSettlementPrompt.js) for payment-status normalization, receivable totals, and settlement prompts
+- Updated [src/views/Home.vue](src/views/Home.vue) so underpaid confirmations can be saved as debt sales with an extra warning and confirmation step before finalizing checkout
+- Updated [src/store/sales.js](src/store/sales.js) so sales persistence, filters, exports, detail loading, and settlement flows now understand unpaid, partial, and settled debt sales
+- Updated [src/store/transaction.js](src/store/transaction.js), [src/views/Sales.vue](src/views/Sales.vue), and [src/views/TransactionHistory.vue](src/views/TransactionHistory.vue) so sale history surfaces show payment status, receivable balances, settlement actions, debt-payment history, and clickable sale-number details
+- Updated [src/store/customer.js](src/store/customer.js) and [src/views/Customers.vue](src/views/Customers.vue) to aggregate outstanding debt per customer, expose debt-aware sorting and filtering, and highlight customers with unpaid balances
+- Updated [src/views/Analytics.vue](src/views/Analytics.vue) so reporting now separates gross sales, upfront cash, debt payments collected, receivables created, and outstanding receivables
+- Updated [src/store/sales.js](src/store/sales.js) and [src/views/Sales.vue](src/views/Sales.vue) so CSV export follows the currently active sales filters
+- Fixed the IndexedDB modal-read bug in [src/views/TransactionHistory.vue](src/views/TransactionHistory.vue) by keeping sale-detail reads inside a live transaction boundary
+
+Phase 10 behavior
+
+- Checkout can now save underpaid transactions as debt sales instead of forcing a full-cash completion
+- Debt sales can be partially or fully settled later while preserving payment history
+- Sales, customer history, and customer lists now expose outstanding balances and debt status consistently
+- Analytics now distinguishes cash collected from receivables still owed
+- Sales exports now match the filtered view shown on screen
+
+## Phase 11: Setup and Settings UX Refinement
+
+Status: completed on 2026-03-26 to 2026-03-27
+
+Completed
+
+- Expanded template-profile controls in [src/views/Settings.vue](src/views/Settings.vue) so loyalty, customer requirement, stock tracking, expiry behavior, analytics chart visibility, and template terminology can all be edited directly from Settings
+- Updated [src/views/Setup.vue](src/views/Setup.vue) and [src/views/Settings.vue](src/views/Settings.vue) so product and service analytics charts can be shown or hidden independently per template
+- Improved setup readability in [src/views/Setup.vue](src/views/Setup.vue) with clearer section grouping and a back-navigation path inside the footer actions
+- Fixed template-profile persistence and hydration across [src/views/Settings.vue](src/views/Settings.vue), [src/views/Setup.vue](src/views/Setup.vue), [src/utils/templatePreferences.js](src/utils/templatePreferences.js), and [src/store/template.js](src/store/template.js) so reopening setup or editing template settings reflects the latest saved values reliably
+- Reworked [src/views/Settings.vue](src/views/Settings.vue) into tabbed categories to reduce scrolling and keep General, Template, Data, Security, and About settings separated
+- Reorganized the Template tab in [src/views/Settings.vue](src/views/Settings.vue) into clearer setting groups for workflow, inventory tracking, analytics display, screen labels, and payment wording
+- Updated [src/views/Analytics.vue](src/views/Analytics.vue) so mixed-business templates now show separate top-product and top-service charts, while service-focused templates that can still sell products also surface product-unit metrics
+
+Phase 11 behavior
+
+- Template customization now persists more reliably between setup, settings, and later revisits
+- Settings is easier to navigate because categories are tabbed instead of stacked in one long page
+- Template profile editing is easier to scan because related controls are grouped by purpose
+- Analytics visibility and emphasis can now be tuned with more precision for mixed, product-first, and service-first business profiles
+
+## Phase 12: Budgeting and Expense Tracking
+
+Status: completed on 2026-03-27
+
+Completed
+
+- Added new `expenses` and `expense_budgets` stores in [src/db/index.js](src/db/index.js) for expense entries and recurring monthly budget buckets
+- Added a new Vuex budgeting module in [src/store/budget.js](src/store/budget.js) and registered it in [src/store/index.js](src/store/index.js)
+- Added a dedicated Budget page in [src/views/Budget.vue](src/views/Budget.vue) with monthly spending summary cards, budget-bucket management, expense CRUD, category filtering, search, and pagination
+- Added a new `/budget` route in [src/router/index.js](src/router/index.js)
+- Added Budget to template-driven page visibility and navigation in [src/templates/pages.js](src/templates/pages.js) and [src/templates/registry.js](src/templates/registry.js)
+- Updated [src/views/Analytics.vue](src/views/Analytics.vue) so analytics now includes expenses, net profit, and a revenue-versus-expenses-versus-profit trend chart alongside existing sales and receivables reporting
+
+Phase 12 behavior
+
+- Businesses can now record expenses by date, category, amount, and note
+- Businesses can define recurring monthly spending buckets per category
+- The Budget page now shows how much has been spent, how much budget remains, and which categories are over budget for the selected month
+- Analytics now distinguishes revenue, expenses, and profit more clearly instead of showing sales totals alone
+
 ## Remaining Backlog
 
 - Multi-business support

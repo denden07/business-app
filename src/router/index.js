@@ -9,6 +9,7 @@ import Home from '../views/Home.vue'
 import Items from '../views/Items.vue'
 import ItemDetails from '../views/ItemDetails.vue'
 import Sales from '../views/Sales.vue'
+import Budget from '../views/Budget.vue'
 import Customers from '../views/Customers.vue'
 import Analytics from '../views/Analytics.vue'
 import About from '../views/About.vue'
@@ -26,6 +27,7 @@ let allRoutes = [
   { path: '/medicines', redirect: '/items' },
   { path: '/medicines/:id', redirect: to => ({ path: `/items/${to.params.id}`, query: to.query }) },
   { path: '/sales', name: 'Sales', component: Sales },
+  { path: '/budget', name: 'Budget', component: Budget },
   { path: '/customers', name: 'Customers', component: Customers },
   { path: '/analytics', name: 'Analytics', component: Analytics, meta: { requiresPin: true } },
   { path: '/about', name: 'About', component: About },

@@ -6,28 +6,14 @@ Completed work such as template foundation, first-run setup, initial template cu
 
 ## Priority Order
 
-1. Budgeting feature
-	- moderate effort because expenses and profit reporting need new storage, UI, and analytics integration
-2. Multi-Business Support
+1. Multi-Business Support
 	- large change because it introduces business registry and switching
-3. Separate Database Per Business
+2. Separate Database Per Business
 	- large change because it requires migration and business-scoped data isolation
-4. Cross-Business Analytics
+3. Cross-Business Analytics
 	- heaviest change because it depends on multi-business isolation and cross-database aggregation
 
-## 1. Budgeting Feature
-
-Add an expense and budgeting layer so the app can track money going out, not only sales coming in.
-
-Remaining goals:
-
-- track expenses by date, category, and amount
-- define budget entries or spending buckets where useful
-- integrate expenses into analytics views and summaries
-- compute profit using sales minus expenses
-- distinguish revenue, expenses, and profit clearly in reports and dashboards
-
-## 2. Multi-Business Support
+## 1. Multi-Business Support
 
 ### Summary
 
@@ -46,7 +32,7 @@ Support multiple businesses owned by the same user, where each business has its 
 - which settings stay global versus business-specific?
 - how should backup and restore work for one business versus the full owner profile?
 
-## 3. Separate Database Per Business
+## 2. Separate Database Per Business
 
 ### Summary
 
@@ -65,7 +51,7 @@ Move from the current single-business runtime model to one operational database 
 - more migration and switching complexity
 - combined analytics becomes a cross-database aggregation problem
 
-## 4. Cross-Business Analytics
+## 3. Cross-Business Analytics
 
 ### Summary
 

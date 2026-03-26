@@ -1,7 +1,7 @@
 import { openDB } from 'idb';
 
 export const DB_NAME = 'pharmacy_pos_db';
-export const DB_VERSION = 24;
+export const DB_VERSION = 25;
 
 export const dbPromise = openDB(DB_NAME, DB_VERSION, {
   upgrade(db, oldVersion, newVersion, transaction) {
@@ -220,6 +220,42 @@ export const dbPromise = openDB(DB_NAME, DB_VERSION, {
       if (!store.indexNames.contains('customer_id')) store.createIndex('customer_id', 'customer_id');
       if (!store.indexNames.contains('customer_date')) store.createIndex('customer_date', ['customer_id', 'paid_at']);
       if (!store.indexNames.contains('paid_at')) store.createIndex('paid_at', 'paid_at');
+    }
+
+    /* =========================
+       EXPENSES
+    ========================== */
+    if (!db.objectStoreNames.contains('expenses')) {
+      const store = db.createObjectStore('expenses', { keyPath: 'id', autoIncrement: true });
+      store.createIndex('expense_date', 'expense_date');
+      store.createIndex('category', 'category');
+      store.createIndex('category_expense_date', ['category', 'expense_date']);
+      store.createIndex('created_at', 'created_at');
+      store.createIndex('updated_at', 'updated_at');
+    } else if (oldVersion < 25) {
+      const store = transaction.objectStore('expenses');
+      if (!store.indexNames.contains('expense_date')) store.createIndex('expense_date', 'expense_date');
+      if (!store.indexNames.contains('category')) store.createIndex('category', 'category');
+      if (!store.indexNames.contains('category_expense_date')) store.createIndex('category_expense_date', ['category', 'expense_date']);
+      if (!store.indexNames.contains('created_at')) store.createIndex('created_at', 'created_at');
+      if (!store.indexNames.contains('updated_at')) store.createIndex('updated_at', 'updated_at');
+    }
+
+    /* =========================
+       EXPENSE BUDGETS
+    ========================== */
+    if (!db.objectStoreNames.contains('expense_budgets')) {
+      const store = db.createObjectStore('expense_budgets', { keyPath: 'id', autoIncrement: true });
+      store.createIndex('category', 'category');
+      store.createIndex('is_active', 'is_active');
+      store.createIndex('created_at', 'created_at');
+      store.createIndex('updated_at', 'updated_at');
+    } else if (oldVersion < 25) {
+      const store = transaction.objectStore('expense_budgets');
+      if (!store.indexNames.contains('category')) store.createIndex('category', 'category');
+      if (!store.indexNames.contains('is_active')) store.createIndex('is_active', 'is_active');
+      if (!store.indexNames.contains('created_at')) store.createIndex('created_at', 'created_at');
+      if (!store.indexNames.contains('updated_at')) store.createIndex('updated_at', 'updated_at');
     }
 
     /* =========================
