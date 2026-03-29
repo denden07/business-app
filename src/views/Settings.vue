@@ -7,6 +7,7 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
 import { Device } from '@capacitor/device'
 import { FilePicker } from '@capawesome/capacitor-file-picker'
+import InventoryTrackingOptions from '../components/InventoryTrackingOptions.vue'
 import PageVisibilitySettings from '../components/PageVisibilitySettings.vue'
 import { collectFromSource } from '../db/query'
 import Swal from 'sweetalert2'
@@ -66,6 +67,24 @@ const customerSectionLabel = ref('Sold to')
 const customerActionLabel = ref('Select Customer')
 const paymentCashLabel = ref('Cash')
 const paymentGcashLabel = ref('Online Bank')
+const stockOptionDisabled = computed(() => !canSellProducts.value)
+const batchOptionDisabled = computed(() => !canSellProducts.value || !trackStock.value)
+const expiryOptionDisabled = computed(() => !canSellProducts.value || !trackBatches.value)
+const stockDisabledReason = computed(() => {
+  if (!canSellProducts.value) return 'Enable product sales in this template before turning on stock tracking.'
+  return ''
+})
+const batchDisabledReason = computed(() => {
+  if (!canSellProducts.value) return 'Batch tracking is only available when product sales are enabled.'
+  if (!trackStock.value) return 'Turn on stock tracking first to enable batches.'
+  return ''
+})
+const expiryDisabledReason = computed(() => {
+  if (!canSellProducts.value) return 'Expiry tracking is only available when product sales are enabled.'
+  if (!trackStock.value) return 'Turn on stock tracking first to enable expiry tracking.'
+  if (!trackBatches.value) return 'Turn on batch tracking first to attach expiry dates.'
+  return ''
+})
 
 const settingsTabs = [
   { id: 'general', label: 'General' },
@@ -822,23 +841,21 @@ onMounted(async () => {
             </div>
 
             <div class="template-settings-grid">
-              <label class="template-setting-field template-toggle-field">
-                <span>Track stock</span>
-                <input v-model="trackStock" type="checkbox" :disabled="!canSellProducts" />
-                <small>Enable quantity-based product inventory tracking.</small>
-              </label>
-
-              <label class="template-setting-field template-toggle-field">
-                <span>Track batches</span>
-                <input v-model="trackBatches" type="checkbox" :disabled="!canSellProducts || !trackStock" />
-                <small>Track grouped inventory batches for stocked products.</small>
-              </label>
-
-              <label class="template-setting-field template-toggle-field">
-                <span>Track expiry</span>
-                <input v-model="trackExpiry" type="checkbox" :disabled="!canSellProducts || !trackBatches" />
-                <small>Flag products by expiry date in inventory and analytics.</small>
-              </label>
+              <div class="template-setting-field inventory-settings-field inventory-settings-field-wide">
+                <span>Tracking flow</span>
+                <small>These options build on each other: stock enables batches, and batches enable expiry dates.</small>
+                <InventoryTrackingOptions
+                  v-model:track-stock="trackStock"
+                  v-model:track-batches="trackBatches"
+                  v-model:track-expiry="trackExpiry"
+                  :stock-disabled="stockOptionDisabled"
+                  :batches-disabled="batchOptionDisabled"
+                  :expiry-disabled="expiryOptionDisabled"
+                  :stock-disabled-reason="stockDisabledReason"
+                  :batches-disabled-reason="batchDisabledReason"
+                  :expiry-disabled-reason="expiryDisabledReason"
+                />
+              </div>
 
               <label class="template-setting-field">
                 <span>Near-expiry warning window</span>
@@ -1241,17 +1258,25 @@ body.dark-mode .settings-tab.active {
   background: rgba(148, 163, 184, 0.08);
   border: 1px solid rgba(148, 163, 184, 0.16);
 }
-.template-setting-field span {
+.template-setting-field > span {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: #475569;
 }
-.template-setting-field small {
+.template-setting-field > small {
   color: #6b7280;
   font-size: 13px;
   line-height: 1.45;
+}
+
+.inventory-settings-field {
+  gap: 10px;
+}
+
+.inventory-settings-field-wide {
+  grid-column: 1 / -1;
 }
 
 .template-toggle-field {

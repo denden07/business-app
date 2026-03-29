@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useStore } from 'vuex'
 import Swal from 'sweetalert2'
+import InventoryTrackingOptions from '../components/InventoryTrackingOptions.vue'
 import { configurablePageDefinitions, templatePageSettingByRouteName } from '../templates/pages'
 import { loadResolvedActiveTemplate } from '../utils/templatePreferences'
 import { setOnboardingComplete } from '../utils/onboardingPreferences'
@@ -45,6 +46,24 @@ const selectedTemplate = computed(() => {
 })
 const selectedTemplateLabels = computed(() => selectedTemplate.value?.labels || {})
 const isServiceOnlyMode = computed(() => catalogMode.value === 'services')
+const stockOptionDisabled = computed(() => isServiceOnlyMode.value)
+const batchOptionDisabled = computed(() => isServiceOnlyMode.value || !trackStock.value)
+const expiryOptionDisabled = computed(() => isServiceOnlyMode.value || !trackBatches.value)
+const stockDisabledReason = computed(() => {
+  if (isServiceOnlyMode.value) return 'Switch catalog mode to Products or Both to enable stock tracking.'
+  return ''
+})
+const batchDisabledReason = computed(() => {
+  if (isServiceOnlyMode.value) return 'Batch tracking is only available when you sell products.'
+  if (!trackStock.value) return 'Turn on stock tracking first to enable batches.'
+  return ''
+})
+const expiryDisabledReason = computed(() => {
+  if (isServiceOnlyMode.value) return 'Expiry tracking is only available when you sell products.'
+  if (!trackStock.value) return 'Turn on stock tracking first to enable expiry tracking.'
+  if (!trackBatches.value) return 'Turn on batch tracking first to attach expiry dates.'
+  return ''
+})
 const progressPercent = computed(() => {
   if (steps.length <= 1) {
     return 100
@@ -406,31 +425,17 @@ onMounted(async () => {
 
         <div v-if="!isServiceOnlyMode" class="option-group option-card">
           <span class="group-label">Inventory behavior</span>
-          <div class="toggle-stack">
-          <label class="toggle-row">
-            <input v-model="trackStock" type="checkbox" />
-            <div>
-              <strong>Track stock</strong>
-              <span>Enable quantity-based inventory for products.</span>
-            </div>
-          </label>
-
-          <label class="toggle-row">
-            <input v-model="trackBatches" type="checkbox" :disabled="!trackStock" />
-            <div>
-              <strong>Track batches</strong>
-              <span>Useful for grouped inventory entries and expiry-sensitive products.</span>
-            </div>
-          </label>
-
-          <label class="toggle-row">
-            <input v-model="trackExpiry" type="checkbox" :disabled="!trackBatches" />
-            <div>
-              <strong>Track expiry</strong>
-              <span>Recommended for regulated or perishable inventory.</span>
-            </div>
-          </label>
-          </div>
+          <InventoryTrackingOptions
+            v-model:track-stock="trackStock"
+            v-model:track-batches="trackBatches"
+            v-model:track-expiry="trackExpiry"
+            :stock-disabled="stockOptionDisabled"
+            :batches-disabled="batchOptionDisabled"
+            :expiry-disabled="expiryOptionDisabled"
+            :stock-disabled-reason="stockDisabledReason"
+            :batches-disabled-reason="batchDisabledReason"
+            :expiry-disabled-reason="expiryDisabledReason"
+          />
         </div>
 
         <div v-else class="option-group option-card service-note">

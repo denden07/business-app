@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import { dbPromise } from '../db'
 import { reduceFromSource } from '../db/query'
+import InventoryTrackingOptions from './InventoryTrackingOptions.vue'
 import Swal from 'sweetalert2'
 
 const props = defineProps({
@@ -67,6 +68,27 @@ const canTrackExpiry = computed(() => canTrackBatches.value && trackBatches.valu
 const stockTrackingRequired = computed(() => templateCapabilities.value.stockTracking === 'required')
 const batchTrackingRequired = computed(() => templateCapabilities.value.batchTracking === 'required')
 const expiryTrackingRequired = computed(() => templateCapabilities.value.expiryTracking === 'required')
+const stockOptionDisabled = computed(() => !isProduct.value || stockTrackingRequired.value)
+const batchOptionDisabled = computed(() => !canTrackBatches.value || batchTrackingRequired.value)
+const expiryOptionDisabled = computed(() => !canTrackExpiry.value || expiryTrackingRequired.value)
+const stockDisabledReason = computed(() => {
+  if (!isProduct.value) return 'Stock tracking is available only for product items.'
+  if (stockTrackingRequired.value) return 'The active template requires stock tracking.'
+  return ''
+})
+const batchDisabledReason = computed(() => {
+  if (!isProduct.value) return 'Batch tracking is available only for product items.'
+  if (!trackStock.value) return 'Turn on stock tracking first to enable batches.'
+  if (batchTrackingRequired.value) return 'The active template requires batch tracking.'
+  return ''
+})
+const expiryDisabledReason = computed(() => {
+  if (!isProduct.value) return 'Expiry tracking is available only for product items.'
+  if (!trackStock.value) return 'Turn on stock tracking first to enable expiry tracking.'
+  if (!trackBatches.value) return 'Turn on batch tracking first to attach expiry dates.'
+  if (expiryTrackingRequired.value) return 'The active template requires expiry tracking.'
+  return ''
+})
 
 watch([allowProductItems, allowServiceItems], ([productsAllowed, servicesAllowed]) => {
   if (productsAllowed && servicesAllowed) {
@@ -283,20 +305,17 @@ const submitForm = async () => {
 
       <h3>Inventory Rules</h3>
 
-      <label class="toggle-row">
-        <input v-model="trackStock" type="checkbox" :disabled="!isProduct || stockTrackingRequired" />
-        <span>Track stock</span>
-      </label>
-
-      <label class="toggle-row">
-        <input v-model="trackBatches" type="checkbox" :disabled="!canTrackBatches || batchTrackingRequired" />
-        <span>Track batches</span>
-      </label>
-
-      <label class="toggle-row">
-        <input v-model="trackExpiry" type="checkbox" :disabled="!canTrackExpiry || expiryTrackingRequired" />
-        <span>Track expiry</span>
-      </label>
+      <InventoryTrackingOptions
+        v-model:track-stock="trackStock"
+        v-model:track-batches="trackBatches"
+        v-model:track-expiry="trackExpiry"
+        :stock-disabled="stockOptionDisabled"
+        :batches-disabled="batchOptionDisabled"
+        :expiry-disabled="expiryOptionDisabled"
+        :stock-disabled-reason="stockDisabledReason"
+        :batches-disabled-reason="batchDisabledReason"
+        :expiry-disabled-reason="expiryDisabledReason"
+      />
 
       <template v-if="trackStock">
         <p v-if="itemToEdit" class="stock-note">
@@ -353,17 +372,6 @@ textarea {
 p {
   color: color-mix(in srgb, var(--modal-surface-text) 76%, transparent);
   font-size: 14px;
-}
-
-.toggle-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.toggle-row input {
-  width: 18px;
-  height: 18px;
 }
 
 .stock-note {

@@ -22,11 +22,21 @@ const itemsPerPageOptions = [5, 10, 20, 50]
 const sortBy = ref('')
 const sortOrder = ref('asc')
 const colMenuOpen = ref(false)
+const columnVisibilityStorageKey = 'col-vis-items'
+const columnVisibilityVersionKey = 'col-vis-items-version'
+const columnVisibilityVersion = '2'
+
+const storedVisibleCols = JSON.parse(localStorage.getItem(columnVisibilityStorageKey) || '{}')
+const storedColumnVisibilityVersion = localStorage.getItem(columnVisibilityVersionKey)
+
+if (storedColumnVisibilityVersion !== columnVisibilityVersion) {
+  storedVisibleCols.inventory_mode = false
+}
 
 const defaultVisibleCols = {
   name: true,
   type: true,
-  inventory_mode: true,
+  inventory_mode: false,
   regular_price: true,
   discount_price: true,
   stock: true,
@@ -35,7 +45,7 @@ const defaultVisibleCols = {
 
 const visibleCols = ref({
   ...defaultVisibleCols,
-  ...JSON.parse(localStorage.getItem('col-vis-items') || '{}')
+  ...storedVisibleCols,
 })
 
 const allCols = [
@@ -104,7 +114,8 @@ watch(searchKeyword, () => {
   loadPage()
 })
 watch(visibleCols, value => {
-  localStorage.setItem('col-vis-items', JSON.stringify(value))
+  localStorage.setItem(columnVisibilityStorageKey, JSON.stringify(value))
+  localStorage.setItem(columnVisibilityVersionKey, columnVisibilityVersion)
 }, { deep: true })
 
 const addItem = () => {
