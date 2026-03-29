@@ -1,7 +1,7 @@
 import { openDB } from 'idb';
 
-export const DB_NAME = 'pharmacy_pos_db';
-export const DB_VERSION = 25;
+export const DB_NAME = 'business_pos_db';
+export const DB_VERSION = 26;
 
 export const dbPromise = openDB(DB_NAME, DB_VERSION, {
   upgrade(db, oldVersion, newVersion, transaction) {
