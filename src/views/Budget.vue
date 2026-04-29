@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import SearchInput from '../components/SearchInput.vue'
 import Pagination from '../components/Pagination.vue'
+import IconActionButton from '../components/IconActionButton.vue'
 import Swal from 'sweetalert2'
 import { COMMON_BUDGET_CATEGORIES } from '../store/budget'
 
@@ -516,8 +517,8 @@ function currentDateInput() {
               <td>{{ resolveBudgetName(expense) }}</td>
               <td class="note-cell">{{ expense.note || '—' }}</td>
               <td class="actions-cell">
-                <button class="warning btn" @click="openEditExpense(expense)">Edit</button>
-                <button class="danger btn" @click="removeExpense(expense)">Delete</button>
+                <IconActionButton icon="edit" label="Edit expense" variant="warning" @click="openEditExpense(expense)" />
+                <IconActionButton icon="delete" label="Delete expense" variant="danger" @click="removeExpense(expense)" />
               </td>
             </tr>
             <tr v-if="!expenses.length && !loading">
@@ -879,6 +880,10 @@ th {
 
 .actions-cell {
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .form-dialog {

@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
 import Swal from 'sweetalert2'
+import IconActionButton from '../components/IconActionButton.vue'
 import Pagination from '../components/Pagination.vue'
 import {
   getTemplateCatalogEntryLabel,
@@ -94,6 +95,7 @@ const allCols = computed(() => [
   { key: 'customer', label: customerSectionLabel.value },
   { key: 'created_at', label: 'Saved At' },
 ])
+const visibleColumnCount = computed(() => allCols.value.filter(col => visibleCols.value[col.key]).length + 1)
 const toggleCol = (key) => { visibleCols.value[key] = !visibleCols.value[key] }
 
 const deleteDraft = async (draft) => {
@@ -131,11 +133,7 @@ const goPage = (page) => {
       </div>
     </div>
 
-    <div v-if="!drafts.length" class="empty-state">
-      No saved drafts yet.
-    </div>
-
-    <div v-if="drafts.length" class="table-wrap" :class="{ 'table-wrap-menu-open': colMenuOpen }">
+    <div class="table-wrap" :class="{ 'table-wrap-menu-open': colMenuOpen }">
     <table>
       <thead>
         <tr>
@@ -167,10 +165,13 @@ const goPage = (page) => {
           <td v-if="visibleCols.customer">{{ draft.customer?.name ?? 'Walk-in' }}</td>
           <td v-if="visibleCols.created_at">{{ new Date(draft.created_at).toLocaleString() }}</td>
           <td class="col-actions actions-td">
-            <button class="secondary btn" @click="openDetailsModal(draft)">View</button>
-            <button class="primary btn" @click="resumeDraft(draft)">▶ Resume</button>
-            <button class="danger btn" @click="deleteDraft(draft)">Delete</button>
+            <IconActionButton icon="view" label="View draft" variant="secondary" @click="openDetailsModal(draft)" />
+            <IconActionButton icon="resume" label="Resume draft" variant="primary" @click="resumeDraft(draft)" />
+            <IconActionButton icon="delete" label="Delete draft" variant="danger" @click="deleteDraft(draft)" />
           </td>
+        </tr>
+        <tr v-if="!drafts.length">
+          <td :colspan="visibleColumnCount" class="empty-state-cell">No saved drafts yet.</td>
         </tr>
       </tbody>
     </table>
@@ -261,14 +262,7 @@ const goPage = (page) => {
 
 h1 { margin-bottom: 16px; }
 
-.empty-state {
-  margin-top: 40px;
-  text-align: center;
-  color: #888;
-  font-size: 16px;
-}
-
-.actions-td > button { margin: 3px; }
+.actions-td { gap: 8px; }
 
 .draft-details-modal {
   margin: 20px 0;

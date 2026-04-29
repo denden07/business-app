@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import SearchInput from '../components/SearchInput.vue'
 import Pagination from '../components/Pagination.vue'
 import ItemForm from '../components/ItemForm.vue'
+import IconActionButton from '../components/IconActionButton.vue'
 import Swal from 'sweetalert2'
 
 const store = useStore()
@@ -16,6 +17,7 @@ const editingItem = ref(null)
 const searchKeyword = ref('')
 const filterMode = ref('active')
 const expiryFilter = ref('all')
+const stockFilter = ref('all')
 const currentPage = ref(1)
 const itemsPerPage = ref(10)
 const itemsPerPageOptions = [5, 10, 20, 50]
@@ -80,12 +82,27 @@ const expiryCounts = computed(() => {
   }, { expired: 0, critical: 0, warning: 0 })
 })
 
+const lowStockCounts = computed(() => {
+  return items.value.reduce((counts, item) => {
+    if (!item.track_stock) {
+      return counts
+    }
+
+    const quantity = Number(stockMap.value[item.id] || 0)
+    if (quantity <= 0) counts.out += 1
+    else if (quantity < 10) counts.low += 1
+
+    return counts
+  }, { out: 0, low: 0 })
+})
+
 const loadPage = async () => {
   await store.dispatch('items/loadItemsPage', {
     page: currentPage.value,
     itemsPerPage: itemsPerPage.value,
     filter: filterMode.value,
     expiryFilter: expiryFilter.value,
+    stockFilter: stockFilter.value,
     keyword: searchKeyword.value,
     sortBy: sortBy.value,
     sortOrder: sortOrder.value
@@ -102,13 +119,14 @@ onMounted(() => {
   if (query.search !== undefined) searchKeyword.value = String(query.search)
   if (query.filter) filterMode.value = String(query.filter)
   if (query.expiry) expiryFilter.value = String(query.expiry)
+  if (query.stock) stockFilter.value = String(query.stock)
   if (query.sortBy) sortBy.value = String(query.sortBy)
   if (query.sortOrder) sortOrder.value = String(query.sortOrder)
 
   loadPage()
 })
 
-watch([currentPage, itemsPerPage, filterMode, expiryFilter, sortBy, sortOrder], loadPage)
+watch([currentPage, itemsPerPage, filterMode, expiryFilter, stockFilter, sortBy, sortOrder], loadPage)
 watch(searchKeyword, () => {
   currentPage.value = 1
   loadPage()
@@ -137,6 +155,7 @@ const viewItem = (item) => {
       search: searchKeyword.value || undefined,
       filter: filterMode.value,
       expiry: expiryFilter.value !== 'all' ? expiryFilter.value : undefined,
+      stock: stockFilter.value !== 'all' ? stockFilter.value : undefined,
       perPage: String(itemsPerPage.value),
       sortBy: sortBy.value || undefined,
       sortOrder: sortOrder.value,
@@ -295,6 +314,13 @@ const expiryClass = (item) => {
         <option value="not-tracked">Not Tracked</option>
       </select>
 
+      <select v-model="stockFilter" class="select-field items-stock-filter">
+        <option value="all">All Stock</option>
+        <option value="out">Out of Stock</option>
+        <option value="low">Low Stock</option>
+        <option value="in">In Stock</option>
+      </select>
+
       <button @click="addItem">Add Item</button>
 
       <div class="items-per-page">
@@ -312,6 +338,12 @@ const expiryClass = (item) => {
       <span v-if="expiryCounts.expired">{{ expiryCounts.expired }} expired</span>
       <span v-if="expiryCounts.critical">{{ expiryCounts.critical }} urgent</span>
       <span v-if="expiryCounts.warning">{{ expiryCounts.warning }} near expiry</span>
+    </div>
+
+    <div v-if="lowStockCounts.out || lowStockCounts.low" class="stock-summary-banner">
+      <strong>Stock alerts</strong>
+      <span v-if="lowStockCounts.out">{{ lowStockCounts.out }} out of stock</span>
+      <span v-if="lowStockCounts.low">{{ lowStockCounts.low }} low stock</span>
     </div>
 
     <div class="table-wrap" :class="{ 'table-wrap-menu-open': colMenuOpen }">
@@ -365,24 +397,22 @@ const expiryClass = (item) => {
             </td>
             <td v-if="visibleCols.expiry_alert"><span :class="expiryClass(item)">{{ expirySummaryLabel(item) }}</span></td>
             <td class="col-actions actions-td">
-              <button class="warning btn" @click="editItem(item)">Edit</button>
-              <button class="info btn" @click="viewItem(item)">View</button>
-
-              <button
+              <IconActionButton icon="edit" label="Edit item" variant="warning" @click="editItem(item)" />
+              <IconActionButton icon="view" label="View item details" variant="info" @click="viewItem(item)" />
+              <IconActionButton
                 v-if="!item.is_archived"
-                class="danger btn"
+                icon="archive"
+                label="Archive item"
+                variant="danger"
                 @click="archiveItem(item)"
-              >
-                Archive
-              </button>
-
-              <button
+              />
+              <IconActionButton
                 v-else
-                class="restore btn"
+                icon="restore"
+                label="Restore item"
+                variant="restore"
                 @click="restoreItem(item)"
-              >
-                Restore
-              </button>
+              />
             </td>
           </tr>
 
@@ -421,7 +451,8 @@ const expiryClass = (item) => {
   color: #0f766e;
 }
 
-.expiry-summary-banner {
+.expiry-summary-banner,
+.stock-summary-banner {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -490,9 +521,8 @@ const expiryClass = (item) => {
   text-transform: capitalize;
 }
 
-.actions-td button {
-  margin-right: 6px !important;
-  padding: 6px 10px !important;
+.actions-td :deep(.icon-action-btn) {
+  margin: 0 !important;
 }
 
 .items-page .table-wrap.table-wrap-menu-open {

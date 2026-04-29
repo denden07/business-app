@@ -87,6 +87,13 @@ body.dark-mode .draft-details-modal .sale-summary hr {
   border-top-color: #536272;
 }
 
+body.dark-mode .items-page .stock-summary-banner {
+  background: rgba(251, 191, 36, 0.18);
+  border-color: rgba(251, 191, 36, 0.34);
+  color: #fde68a;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
 body.dark-mode input[type="date"] {
   color: #eee;
 }
@@ -151,6 +158,16 @@ body.dark-mode input[type="file"]:focus {
 body.dark-mode select,
 body.dark-mode .select-field {
   color: var(--field-text);
+  background-image:
+    linear-gradient(45deg, transparent 50%, #d7e5f2 50%),
+    linear-gradient(135deg, #d7e5f2 50%, transparent 50%),
+    var(--field-bg);
+  background-position:
+    calc(100% - 18px) calc(50% - 2px),
+    calc(100% - 12px) calc(50% - 2px),
+    0 0;
+  background-size: 6px 6px, 6px 6px, 100% 100%;
+  background-repeat: no-repeat;
 }
 
 body.dark-mode select option {

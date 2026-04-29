@@ -3,7 +3,6 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import { dbPromise } from '../db'
 import { reduceFromSource } from '../db/query'
-import InventoryTrackingOptions from './InventoryTrackingOptions.vue'
 import Swal from 'sweetalert2'
 
 const props = defineProps({
@@ -18,8 +17,6 @@ const store = useStore()
 const activeTemplate = computed(() => store.getters['template/activeTemplate'] || {})
 const templateItemDefaults = computed(() => store.getters['template/itemDefaults'] || {
   itemType: 'product',
-  trackStock: true,
-  trackBatches: false,
   trackExpiry: false,
 })
 const templateWorkflow = computed(() => activeTemplate.value.workflow || {})
@@ -30,8 +27,6 @@ const description = ref('')
 const itemType = ref('product')
 const price1 = ref(0)
 const price2 = ref(0)
-const trackStock = ref(true)
-const trackBatches = ref(false)
 const trackExpiry = ref(false)
 const adjustmentQty = ref(0)
 const expiryDate = ref('')
@@ -63,29 +58,9 @@ const itemTypeOptions = computed(() => {
 
 const itemTypeLocked = computed(() => itemTypeOptions.value.length <= 1)
 const isProduct = computed(() => itemType.value === 'product')
-const canTrackBatches = computed(() => isProduct.value && trackStock.value)
-const canTrackExpiry = computed(() => canTrackBatches.value && trackBatches.value)
-const stockTrackingRequired = computed(() => templateCapabilities.value.stockTracking === 'required')
-const batchTrackingRequired = computed(() => templateCapabilities.value.batchTracking === 'required')
 const expiryTrackingRequired = computed(() => templateCapabilities.value.expiryTracking === 'required')
-const stockOptionDisabled = computed(() => !isProduct.value || stockTrackingRequired.value)
-const batchOptionDisabled = computed(() => !canTrackBatches.value || batchTrackingRequired.value)
-const expiryOptionDisabled = computed(() => !canTrackExpiry.value || expiryTrackingRequired.value)
-const stockDisabledReason = computed(() => {
-  if (!isProduct.value) return 'Stock tracking is available only for product items.'
-  if (stockTrackingRequired.value) return 'The active template requires stock tracking.'
-  return ''
-})
-const batchDisabledReason = computed(() => {
-  if (!isProduct.value) return 'Batch tracking is available only for product items.'
-  if (!trackStock.value) return 'Turn on stock tracking first to enable batches.'
-  if (batchTrackingRequired.value) return 'The active template requires batch tracking.'
-  return ''
-})
 const expiryDisabledReason = computed(() => {
   if (!isProduct.value) return 'Expiry tracking is available only for product items.'
-  if (!trackStock.value) return 'Turn on stock tracking first to enable expiry tracking.'
-  if (!trackBatches.value) return 'Turn on batch tracking first to attach expiry dates.'
   if (expiryTrackingRequired.value) return 'The active template requires expiry tracking.'
   return ''
 })
@@ -107,8 +82,6 @@ watch([allowProductItems, allowServiceItems], ([productsAllowed, servicesAllowed
 
 watch(isProduct, value => {
   if (!value) {
-    trackStock.value = false
-    trackBatches.value = false
     trackExpiry.value = false
     adjustmentQty.value = 0
     expiryDate.value = ''
@@ -117,48 +90,16 @@ watch(isProduct, value => {
   }
 
   if (!props.itemToEdit) {
-    trackStock.value = stockTrackingRequired.value ? true : !!templateItemDefaults.value.trackStock
+    trackExpiry.value = !!templateItemDefaults.value.trackExpiry
   }
 
-  if (stockTrackingRequired.value) {
-    trackStock.value = true
-  }
-})
-
-watch(trackStock, value => {
-  if (stockTrackingRequired.value && isProduct.value && !value) {
-    trackStock.value = true
-    return
-  }
-
-  if (!value) {
-    trackBatches.value = false
-    trackExpiry.value = false
-    adjustmentQty.value = 0
-    expiryDate.value = ''
+  if (expiryTrackingRequired.value) {
+    trackExpiry.value = true
   }
 })
 
-watch(trackBatches, value => {
-  if (batchTrackingRequired.value && canTrackBatches.value && !value) {
-    trackBatches.value = true
-    return
-  }
-
-  if (!value) {
-    trackExpiry.value = false
-    expiryDate.value = ''
-  }
-})
-
-watch([canTrackBatches, batchTrackingRequired], ([canUseBatches, batchesRequired]) => {
-  if (canUseBatches && batchesRequired) {
-    trackBatches.value = true
-  }
-}, { immediate: true })
-
-watch([canTrackExpiry, expiryTrackingRequired], ([canUseExpiry, expiryRequired]) => {
-  if (canUseExpiry && expiryRequired) {
+watch([isProduct, expiryTrackingRequired], ([productSelected, expiryRequired]) => {
+  if (productSelected && expiryRequired) {
     trackExpiry.value = true
   }
 }, { immediate: true })
@@ -190,27 +131,17 @@ const loadItemData = async (item) => {
   itemType.value = item?.item_type || defaults.itemType || itemTypeOptions.value[0]?.value || 'product'
   price1.value = Number(item?.price1 || 0)
   price2.value = Number(item?.price2 || 0)
-  trackStock.value = item ? !!item.track_stock : !!defaults.trackStock
-  trackBatches.value = item ? !!item.track_batches : !!defaults.trackBatches
   trackExpiry.value = item ? !!item.track_expiry : !!defaults.trackExpiry
   adjustmentQty.value = 0
   expiryDate.value = ''
 
-  if (item?.id && item.track_stock) {
+  if (item?.id && item.item_type === 'product') {
     await loadTotalStock(item.id)
   } else {
     totalStock.value = 0
   }
 
-  if (!item && itemType.value === 'product' && stockTrackingRequired.value) {
-    trackStock.value = true
-  }
-
-  if (!item && trackStock.value && batchTrackingRequired.value) {
-    trackBatches.value = true
-  }
-
-  if (!item && trackBatches.value && expiryTrackingRequired.value) {
+  if (!item && itemType.value === 'product' && expiryTrackingRequired.value) {
     trackExpiry.value = true
   }
 }
@@ -235,9 +166,9 @@ const submitForm = async () => {
       item_type: itemType.value,
       price1: Number(price1.value),
       price2: Number(price2.value),
-      track_stock: isProduct.value ? trackStock.value : false,
-      track_batches: canTrackBatches.value ? trackBatches.value : false,
-      track_expiry: canTrackExpiry.value ? trackExpiry.value : false,
+      track_stock: isProduct.value,
+      track_batches: isProduct.value,
+      track_expiry: isProduct.value ? trackExpiry.value : false,
     }
 
     let itemId
@@ -248,7 +179,7 @@ const submitForm = async () => {
       itemId = await store.dispatch('items/addItem', payload)
     }
 
-    if (payload.track_stock && Number(adjustmentQty.value) !== 0) {
+    if (isProduct.value && Number(adjustmentQty.value) !== 0) {
       const db = await dbPromise
       await db.add('item_batches', {
         item_id: itemId,
@@ -303,21 +234,22 @@ const submitForm = async () => {
 
       <hr />
 
-      <h3>Inventory Rules</h3>
+      <template v-if="isProduct">
+        <h3>Inventory</h3>
 
-      <InventoryTrackingOptions
-        v-model:track-stock="trackStock"
-        v-model:track-batches="trackBatches"
-        v-model:track-expiry="trackExpiry"
-        :stock-disabled="stockOptionDisabled"
-        :batches-disabled="batchOptionDisabled"
-        :expiry-disabled="expiryOptionDisabled"
-        :stock-disabled-reason="stockDisabledReason"
-        :batches-disabled-reason="batchDisabledReason"
-        :expiry-disabled-reason="expiryDisabledReason"
-      />
+        <label class="toggle-row">
+          <input v-model="trackExpiry" type="checkbox" :disabled="expiryTrackingRequired" />
+          <span>Track expiry dates for this item</span>
+        </label>
 
-      <template v-if="trackStock">
+        <p class="helper-text">
+          Stock and batch entries stay on automatically for product items. Turn expiry tracking on only when you want dated stock reminders.
+        </p>
+
+        <p v-if="expiryDisabledReason" class="helper-text">
+          {{ expiryDisabledReason }}
+        </p>
+
         <p v-if="itemToEdit" class="stock-note">
           Current Stock: <strong>{{ totalStock }}</strong>
         </p>
@@ -327,6 +259,10 @@ const submitForm = async () => {
 
         <label v-if="trackExpiry">Expiry Date (optional)</label>
         <input v-if="trackExpiry" v-model="expiryDate" type="date" />
+
+        <p v-if="trackExpiry" class="helper-text">
+          Use this for reminders only. If expired stock is removed physically, lower the stock total with a negative adjustment.
+        </p>
       </template>
 
       <div class="actions app-modal-actions">
@@ -356,6 +292,25 @@ label {
   font-weight: 600;
   color: color-mix(in srgb, var(--modal-surface-text) 82%, transparent);
   font-size: 16px;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.toggle-row input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.helper-text {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: color-mix(in srgb, var(--modal-surface-text) 72%, transparent);
 }
 
 input,

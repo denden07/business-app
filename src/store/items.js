@@ -45,7 +45,7 @@ export default {
   actions: {
     async loadItemsPage(
       { commit },
-      { page, itemsPerPage, filter, keyword, expiryFilter, sortBy, sortOrder }
+      { page, itemsPerPage, filter, keyword, expiryFilter, stockFilter, sortBy, sortOrder }
     ) {
       commit('SET_LOADING', true)
 
@@ -53,6 +53,7 @@ export default {
       const store = db.transaction('items').objectStore('items')
       const normalizedKeyword = (keyword || '').trim().toLowerCase()
       const normalizedExpiryFilter = String(expiryFilter || 'all')
+      const normalizedStockFilter = String(stockFilter || 'all')
       const all = []
 
       let cursor = await store.openCursor()
@@ -84,7 +85,8 @@ export default {
       const inventoryState = buildInventoryState(all, batchesByItemId, expiryAlertSettings)
 
       const filteredItems = all.filter(item =>
-        matchesExpiryFilter(item, inventoryState.expiryMap[item.id], normalizedExpiryFilter)
+        matchesExpiryFilter(item, inventoryState.expiryMap[item.id], normalizedExpiryFilter) &&
+        matchesStockFilter(item, inventoryState.stockMap[item.id], normalizedStockFilter)
       )
 
       if (sortBy === 'name') {
@@ -163,8 +165,7 @@ export default {
         expiryMap[item.id] = summary
 
         map[item.id] = batches.reduce((sum, batch) => {
-          const quantity = Number(batch?.quantity || 0)
-          return quantity > 0 ? sum + quantity : sum
+          return sum + Number(batch?.quantity || 0)
         }, 0)
       }
 
@@ -236,9 +237,9 @@ function matchesFilter(item, filter) {
 
 function normalizeItemPayload(item) {
   const itemType = item.item_type === 'service' ? 'service' : 'product'
-  const trackStock = itemType === 'product' ? !!item.track_stock : false
-  const trackBatches = trackStock ? !!item.track_batches : false
-  const trackExpiry = trackBatches ? !!item.track_expiry : false
+  const trackStock = itemType === 'product'
+  const trackBatches = itemType === 'product'
+  const trackExpiry = itemType === 'product' ? !!item.track_expiry : false
 
   const normalized = {
     name: String(item.name || '').trim(),
@@ -265,7 +266,7 @@ async function buildItemStockMap(db, expiryAlertSettings = {}) {
 
   for (const batch of allBatches) {
     const quantity = Number(batch.quantity || 0)
-    if (quantity <= 0) {
+    if (!quantity) {
       continue
     }
 
@@ -337,8 +338,7 @@ function buildInventoryState(items = [], batchesByItemId = new Map(), expiryAler
     })
 
     stockMap[item.id] = batches.reduce((sum, batch) => {
-      const quantity = Number(batch?.quantity || 0)
-      return quantity > 0 ? sum + quantity : sum
+      return sum + Number(batch?.quantity || 0)
     }, 0)
   }
 
@@ -355,6 +355,18 @@ function matchesExpiryFilter(item, summary, filter) {
   if (filter === 'critical') return status === 'critical'
   if (filter === 'warning') return status === 'warning'
   if (filter === 'fresh') return status === 'ok'
+
+  return true
+}
+
+function matchesStockFilter(item, quantity, filter) {
+  if (filter === 'all') return true
+  if (!item.track_stock) return false
+
+  const normalizedQuantity = Number(quantity || 0)
+  if (filter === 'out') return normalizedQuantity <= 0
+  if (filter === 'low') return normalizedQuantity > 0 && normalizedQuantity < 10
+  if (filter === 'in') return normalizedQuantity >= 10
 
   return true
 }

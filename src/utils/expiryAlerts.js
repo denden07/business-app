@@ -98,14 +98,15 @@ export function summarizeExpiryForBatches(batches = [], options = {}) {
     sellableQuantity: 0,
   }
 
+  summary.sellableQuantity = batches.reduce((sum, batch) => sum + Number(batch?.quantity || 0), 0)
+
   if (!trackExpiry) {
-    summary.sellableQuantity = getSellableQuantityFromBatches(batches, { trackExpiry: false, referenceDate })
     return summary
   }
 
   for (const batch of batches) {
     const quantity = Number(batch?.quantity || 0)
-    if (quantity <= 0 || !batch?.expiry_date) {
+    if (quantity <= 0 || !batch?.expiry_date || batch?.expired_removed) {
       continue
     }
 
@@ -123,8 +124,6 @@ export function summarizeExpiryForBatches(batches = [], options = {}) {
       summary.affectedBatchCount += 1
       continue
     }
-
-    summary.sellableQuantity += quantity
 
     if (status === 'critical') {
       summary.criticalQuantity += quantity

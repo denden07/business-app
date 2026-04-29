@@ -99,8 +99,13 @@
 
 /* ── Actions td layout ────────────────────────── */
 .table-wrap td.actions-td {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   text-align: center;
   white-space: normal;
+  flex-wrap: wrap;
 }
 
 .table-wrap td.actions-td > button,
@@ -109,7 +114,6 @@
   align-items: center;
   justify-content: center;
   vertical-align: middle;
-  margin: 3px;
   white-space: nowrap;
   flex-shrink: 0;
 }

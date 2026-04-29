@@ -6,6 +6,7 @@ import { useStore } from 'vuex'
 import Swal from 'sweetalert2'
 import { useRouter } from 'vue-router'
 import Pagination from '../components/Pagination.vue'
+import IconActionButton from '../components/IconActionButton.vue'
 import {
   isCustomerSelectionRequired,
   isLoyaltyEnabled,
@@ -409,9 +410,9 @@ function goToTransactionHistory(customerId) {
             <td v-if="visibleCols.outstanding_debt" :class="c.outstanding_debt > 0 ? 'debt-cell' : ''">{{ fmtMoney(c.outstanding_debt) }}</td>
             <td v-if="showPointsFeatures && visibleCols.points">{{ c.points }}</td>
             <td class="col-actions actions-td">
-              <button class="warning btn" @click.stop="openEdit(c)">Edit</button>
-              <button class="danger btn" @click.stop="remove(c)">Delete</button>
-              <button v-if="showPointsFeatures" class="secondary btn" @click.stop="openPointsModal(c)">Adjust Points</button>
+              <IconActionButton icon="edit" label="Edit customer" variant="warning" @click.stop="openEdit(c)" />
+              <IconActionButton icon="delete" label="Delete customer" variant="danger" @click.stop="remove(c)" />
+              <IconActionButton v-if="showPointsFeatures" icon="points" label="Adjust points" variant="secondary" @click.stop="openPointsModal(c)" />
             </td>
           </tr>
           <tr v-if="!paginated.length">

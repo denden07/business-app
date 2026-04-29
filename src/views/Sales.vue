@@ -6,6 +6,7 @@ import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
 import { downloadCSV } from '../utils/exportCsv'
 import Pagination from '../components/Pagination.vue'
+import IconActionButton from '../components/IconActionButton.vue'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 import { format } from 'date-fns'
@@ -244,11 +245,22 @@ const goToHome = () => {
 }
 
 const getDisplayStatus = (sale) => getSaleDisplayStatus(sale)
-const getStatusClass = (sale) => {
+const getStatusPillClass = (sale) => {
   const displayStatus = getDisplayStatus(sale)
-  if (displayStatus === 'voided') return 'status-voided'
-  if (displayStatus === 'debt') return 'status-debt'
-  return 'status-ok'
+  if (displayStatus === 'voided') return 'status-pill status-pill-voided'
+  if (displayStatus === 'debt') return 'status-pill status-pill-debt'
+  return 'status-pill status-pill-ok'
+}
+
+const getPaymentPillClass = (paymentMethod) => {
+  const normalizedMethod = normalizePaymentMethod(paymentMethod)
+
+  if (normalizedMethod === 'cash') return 'payment-pill payment-pill-cash'
+  if (normalizedMethod === 'gcash') return 'payment-pill payment-pill-gcash'
+  if (normalizedMethod === 'maya') return 'payment-pill payment-pill-maya'
+  if (normalizedMethod === 'card') return 'payment-pill payment-pill-card'
+  if (normalizedMethod === 'bank_transfer') return 'payment-pill payment-pill-bank'
+  return 'payment-pill payment-pill-default'
 }
 
 
@@ -450,11 +462,19 @@ const exportCSV = async () => {
           <td v-if="visibleCols.discount">₱{{ fmt(sale.discount) }}</td>
           <td v-if="visibleCols.professional_fee">₱{{ fmt(sale.professional_fee) }}</td>
           <td v-if="visibleCols.final_total"><strong>₱{{ fmt(sale.final_total) }}</strong></td>
-          <td v-if="visibleCols.payment_method">{{ formatPaymentMethod(sale.payment_method) }}</td>
-          <td v-if="visibleCols.status" :class="getStatusClass(sale)">{{ getDisplayStatus(sale) }}</td>
+          <td v-if="visibleCols.payment_method">
+            <span :class="[getPaymentPillClass(sale.payment_method), { 'payment-pill-dark': isDark }]">
+              {{ formatPaymentMethod(sale.payment_method) }}
+            </span>
+          </td>
+          <td v-if="visibleCols.status">
+            <span :class="[getStatusPillClass(sale), { 'status-pill-dark': isDark }]">
+              {{ getDisplayStatus(sale) }}
+            </span>
+          </td>
           <td class="col-actions actions-td">
-            <button class="info btn" @click="openSaleModal(sale)">View</button>
-            <button v-if="sale.status === 'completed'" class="danger btn" @click="voidSale(sale)">Void</button>
+            <IconActionButton icon="view" label="View sale" variant="info" @click="openSaleModal(sale)" />
+            <IconActionButton v-if="sale.status === 'completed'" icon="void" label="Void sale" variant="danger" @click="voidSale(sale)" />
           </td>
         </tr>
         <tr v-if="!sales.length">
@@ -579,11 +599,129 @@ const exportCSV = async () => {
   z-index: 2;
 }
 
-.actions-td button { padding: 6px 10px; }
+.actions-td :deep(.icon-action-btn) { padding: 0; }
 
-.status-ok { color: #1abc9c; font-weight: 600; }
-.status-debt { color: #b45309; font-weight: 700; }
-.status-voided { color: #e74c3c; font-weight: 700; }
+.status-pill,
+.payment-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 92px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.status-pill-ok {
+  background: rgba(26, 188, 156, 0.14);
+  color: #0f8a72;
+  border: 1px solid rgba(26, 188, 156, 0.24);
+}
+
+.status-pill-debt {
+  background: rgba(180, 83, 9, 0.14);
+  color: #b45309;
+  border: 1px solid rgba(180, 83, 9, 0.22);
+}
+
+.status-pill-voided {
+  background: rgba(231, 76, 60, 0.14);
+  color: #cf3d30;
+  border: 1px solid rgba(231, 76, 60, 0.24);
+}
+
+.payment-pill-cash {
+  background: rgba(14, 165, 233, 0.12);
+  color: #0369a1;
+  border: 1px solid rgba(14, 165, 233, 0.22);
+}
+
+.payment-pill-gcash {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+}
+
+.payment-pill-maya {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+  border: 1px solid rgba(16, 185, 129, 0.22);
+}
+
+.payment-pill-card {
+  background: rgba(139, 92, 246, 0.12);
+  color: #6d28d9;
+  border: 1px solid rgba(139, 92, 246, 0.22);
+}
+
+.payment-pill-bank {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.24);
+}
+
+.payment-pill-default {
+  background: rgba(100, 116, 139, 0.12);
+  color: #475569;
+  border: 1px solid rgba(100, 116, 139, 0.18);
+}
+
+.status-pill-dark.status-pill-ok {
+  background: rgba(26, 188, 156, 0.2);
+  color: #7ef7de;
+  border-color: rgba(126, 247, 222, 0.34);
+}
+
+.status-pill-dark.status-pill-debt {
+  background: rgba(180, 83, 9, 0.22);
+  color: #fcd34d;
+  border-color: rgba(252, 211, 77, 0.3);
+}
+
+.status-pill-dark.status-pill-voided {
+  background: rgba(231, 76, 60, 0.22);
+  color: #ff9d93;
+  border-color: rgba(255, 157, 147, 0.34);
+}
+
+.payment-pill-dark.payment-pill-cash {
+  background: rgba(14, 165, 233, 0.2);
+  color: #93c5fd;
+  border-color: rgba(147, 197, 253, 0.28);
+}
+
+.payment-pill-dark.payment-pill-gcash {
+  background: rgba(37, 99, 235, 0.22);
+  color: #bfdbfe;
+  border-color: rgba(191, 219, 254, 0.3);
+}
+
+.payment-pill-dark.payment-pill-maya {
+  background: rgba(16, 185, 129, 0.2);
+  color: #a7f3d0;
+  border-color: rgba(167, 243, 208, 0.28);
+}
+
+.payment-pill-dark.payment-pill-card {
+  background: rgba(139, 92, 246, 0.22);
+  color: #ddd6fe;
+  border-color: rgba(221, 214, 254, 0.3);
+}
+
+.payment-pill-dark.payment-pill-bank {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fde68a;
+  border-color: rgba(253, 230, 138, 0.28);
+}
+
+.payment-pill-dark.payment-pill-default {
+  background: rgba(148, 163, 184, 0.18);
+  color: #e2e8f0;
+  border-color: rgba(226, 232, 240, 0.24);
+}
 
 .settlement-history {
   margin-top: 16px;
