@@ -262,7 +262,9 @@ const goPage = (page) => {
 
 h1 { margin-bottom: 16px; }
 
-.actions-td { gap: 8px; }
+.actions-td :deep(.icon-action-btn) {
+  margin: 3px !important;
+}
 
 .draft-details-modal {
   margin: 20px 0;

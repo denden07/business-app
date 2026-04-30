@@ -99,13 +99,10 @@
 
 /* ── Actions td layout ────────────────────────── */
 .table-wrap td.actions-td {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   gap: 6px;
   text-align: center;
   white-space: normal;
-  flex-wrap: wrap;
+  vertical-align: middle;
 }
 
 .table-wrap td.actions-td > button,
@@ -115,7 +112,7 @@
   justify-content: center;
   vertical-align: middle;
   white-space: nowrap;
-  flex-shrink: 0;
+  margin: 3px;
 }
 
 /* ── th row: "Actions" text + gear icon ──────── */

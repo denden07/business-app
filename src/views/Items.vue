@@ -522,7 +522,7 @@ const expiryClass = (item) => {
 }
 
 .actions-td :deep(.icon-action-btn) {
-  margin: 0 !important;
+  margin: 3px !important;
 }
 
 .items-page .table-wrap.table-wrap-menu-open {
