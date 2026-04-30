@@ -108,6 +108,9 @@ const pointsConfirmed = ref(false)
 // ======================
 const showSpecialDiscountModal = ref(false)
 const specialDiscount = ref(0)
+const specialDiscountDraft = ref(0)
+const specialDiscountNote = ref('')
+const specialDiscountNoteDraft = ref('')
 
 // ======================
 // DRAFT SALES
@@ -143,6 +146,7 @@ const saveSaleAsDraft = async () => {
         redeemMultiplier: redeemMultiplier.value,
         customerPoints: customerPoints.value,
         specialDiscount: specialDiscount.value,
+        specialDiscountNote: specialDiscountNote.value,
         paymentMethod: paymentMethod.value
       }
     })
@@ -155,6 +159,7 @@ const saveSaleAsDraft = async () => {
     selectedCustomer.value = null
     resetRedeemState()
     specialDiscount.value = 0
+    specialDiscountNote.value = ''
     customerPoints.value = 0
     paymentMethod.value = 'cash'
     activeDraftId.value = null
@@ -180,6 +185,7 @@ const resumeDraft = (draft) => {
   redeemMultiplier.value = draft.redeemMultiplier || defaultPointsMultiplier.value
   customerPoints.value = draft.customerPoints || 0
   specialDiscount.value = draft.specialDiscount || 0
+  specialDiscountNote.value = draft.specialDiscountNote || ''
   paymentMethod.value = draft.paymentMethod || 'cash'
   activeDraftId.value = draft.id
 }
@@ -262,6 +268,14 @@ watch(showCustomerSection, visible => {
 }, { immediate: true })
 
 const buildCheckoutSummaryHtml = () => {
+  const escapeHtml = (value) => String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+  const formatHtmlMultiline = (value) => escapeHtml(value).replace(/\r?\n/g, '<br />')
+
   const customerBlock = showCustomerSection.value
     ? `
       <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #ddd;">
@@ -303,6 +317,12 @@ const buildCheckoutSummaryHtml = () => {
         <span>• Special:</span>
         <span>-₱${specialDiscount.value.toFixed(2)}</span>
       </div>
+      ${specialDiscountNote.value ? `
+        <div style="padding: 6px 0 2px 16px; font-size: 13px; color: #718096; text-align: left;">
+          <span style="display: block; margin-bottom: 4px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #64748b;">Discount Note:</span>
+          <span style="display: block; line-height: 1.5; color: #718096;">${formatHtmlMultiline(specialDiscountNote.value)}</span>
+        </div>
+      ` : ''}
     `
     : ''
 
@@ -632,6 +652,14 @@ const isCatalogItemAllowedByTemplate = (item) => {
   return allowProductSales.value
 }
 
+const isInventoryTracked = (item) => {
+  if (!item || item.item_type === 'service') {
+    return false
+  }
+
+  return item.track_stock !== false || item.track_expiry === true
+}
+
 watch(search, async (val) => {
   const requestId = ++catalogSearchRequestId
   const q = val.trim().toLowerCase()
@@ -661,7 +689,7 @@ watch(search, async (val) => {
     const matchesQuery = name.startsWith(q) || description.startsWith(q)
 
     if (matchesQuery) {
-      const totalStock = item.track_stock
+      const totalStock = isInventoryTracked(item)
         ? await collectFromSource(itemBatchIndex, { query: item.id })
         : null
       const expirySummary = Array.isArray(totalStock)
@@ -690,6 +718,7 @@ watch(search, async (val) => {
         stockIndicator: getStockIndicator({
           quantity: sellableStock,
           track_stock: item.track_stock,
+          track_expiry: item.track_expiry,
           item_type: item.item_type,
           expirySummary,
         })
@@ -882,15 +911,23 @@ const removePoints = () => {
 // SPECIAL DISCOUNT
 // ======================
 const openSpecialDiscountModal = () => {
+  specialDiscountDraft.value = Number(specialDiscount.value || 0)
+  specialDiscountNoteDraft.value = specialDiscountNote.value || ''
   showSpecialDiscountModal.value = true
 }
 
 const applySpecialDiscount = () => {
+  const amount = Number(specialDiscountDraft.value || 0)
+  specialDiscount.value = Math.max(Number.isFinite(amount) ? amount : 0, 0)
+  specialDiscountNote.value = specialDiscount.value > 0 ? String(specialDiscountNoteDraft.value || '').trim() : ''
   showSpecialDiscountModal.value = false
 }
 
 const removeSpecialDiscount = () => {
   specialDiscount.value = 0
+  specialDiscountDraft.value = 0
+  specialDiscountNote.value = ''
+  specialDiscountNoteDraft.value = ''
 }
 
 // ======================
@@ -1002,6 +1039,7 @@ const checkout = async () => {
       pointsUsed: pointsRedeemed.value,
       pointsMultiplier: redeemMultiplier.value,
       pointsDiscount: redeemedPointsDiscount.value,
+      special_discount_note: specialDiscountNote.value,
       payment_method: paymentMethod.value,
     })
 
@@ -1023,6 +1061,7 @@ const checkout = async () => {
     customerPoints.value = 0
     resetRedeemState()
     specialDiscount.value = 0
+    specialDiscountNote.value = ''
 
     // If this sale came from a draft, delete it now that it's complete
     if (activeDraftId.value !== null) {
@@ -1109,7 +1148,8 @@ watch(selectedCustomer, value => {
 
 watch(showSpecialDiscountModal, (open) => {
   if (!open) {
-    specialDiscount.value = 0
+    specialDiscountDraft.value = Number(specialDiscount.value || 0)
+    specialDiscountNoteDraft.value = specialDiscountNote.value || ''
   }
 })
 
@@ -1123,8 +1163,8 @@ onBeforeUnmount(() => {
 })
 
 const getStockIndicator = (item) => {
-  if (item.track_stock === false || item.item_type === 'service') {
-    return { icon: '', color: 'blue', text: item.item_type === 'service' ? 'Service' : 'No stock tracking', quantity: null }
+  if (!isInventoryTracked(item) || item.item_type === 'service') {
+    return { icon: '', color: 'blue', text: item.item_type === 'service' ? 'Service' : 'Product', quantity: null }
   }
   if (item.expirySummary?.status === 'expired') {
     return {
@@ -1175,7 +1215,7 @@ const getCatalogEntry = (item) => {
 
 const getAvailableStock = (item) => {
   const catalogEntry = getCatalogEntry(item)
-  if (!catalogEntry || catalogEntry.track_stock === false || catalogEntry.item_type === 'service') {
+  if (!catalogEntry || !isInventoryTracked(catalogEntry) || catalogEntry.item_type === 'service') {
     return null
   }
   return Number(catalogEntry.quantity || 0)
@@ -1297,18 +1337,19 @@ const getPriceOptionLabel = (item, optionKey) => {
               <div class="catalog-meta" v-if="catalogItem.generic_name || catalogItem.description">{{ catalogItem.generic_name || catalogItem.description }}</div>
             </div>
 
-            <div 
+            <div
+              v-if="isInventoryTracked(catalogItem) || catalogItem.item_type === 'service' || catalogItem.item_type === 'product'"
               class="stock-indicator" 
               :title="catalogItem.stockIndicator.text"
               :class="{
-                'out-of-stock': catalogItem.track_stock !== false && (catalogItem.stockIndicator.color === 'red' || catalogItem.quantity <= 0),
-                'low-stock': catalogItem.track_stock !== false && catalogItem.stockIndicator.color === 'orange',
-                'normal-stock': catalogItem.track_stock === false || catalogItem.quantity >= 10
+                'out-of-stock': isInventoryTracked(catalogItem) && (catalogItem.stockIndicator.color === 'red' || catalogItem.quantity <= 0),
+                'low-stock': isInventoryTracked(catalogItem) && catalogItem.stockIndicator.color === 'orange',
+                'normal-stock': !isInventoryTracked(catalogItem) || catalogItem.quantity >= 10
               }"
             >
-              <span v-if="catalogItem.track_stock !== false" class="stock-indicator-text">{{ catalogItem.stockIndicator.text }}</span>
+              <span v-if="isInventoryTracked(catalogItem)" class="stock-indicator-text">{{ catalogItem.stockIndicator.text }}</span>
               <small v-if="catalogItem.stockIndicator.detail" class="stock-indicator-detail">{{ catalogItem.stockIndicator.detail }}</small>
-              <span v-else class="stock-indicator-text">{{ catalogItem.item_type === 'service' ? 'Service' : 'No stock tracking' }}</span>
+              <span v-else class="stock-indicator-text">{{ catalogItem.item_type === 'service' ? 'Service' : 'Product' }}</span>
             </div>
           </div>
         </div>
@@ -1586,46 +1627,53 @@ const getPriceOptionLabel = (item, optionKey) => {
 
 <!-- SPECIAL DISCOUNT MODAL -->
 <div v-if="showSpecialDiscountModal" class="modal-backdrop app-modal-backdrop">
-  <div class="modal app-modal-panel modal-sm">
+  <div class="modal app-modal-panel modal-sm special-discount-modal">
     <h3>Special Discount</h3>
     
-    <div v-if="pointsUsed > 0" style="padding: 10px; background: #e6f7ff; border-radius: 6px; margin-bottom: 10px;">
+    <div v-if="pointsUsed > 0" class="special-discount-note special-discount-note-points">
       <small>Redeemed Points Discount: <strong>₱{{ redeemedPointsDiscount }}</strong></small>
     </div>
 
-    <label style="font-weight: 600; margin-bottom: 8px;">Additional Discount Amount:</label>
+    <label class="special-discount-label">Additional Discount Amount:</label>
     <input 
       type="number" 
-      v-model.number="specialDiscount" 
+      v-model.number="specialDiscountDraft" 
       placeholder="Enter discount amount"
       min="0"
       step="0.01"
-      style="margin-bottom: 12px;"
+      class="special-discount-input"
     />
 
-    <div v-if="specialDiscount > 0" style="padding: 10px; background: #fff3cd; border-radius: 6px; margin-bottom: 10px;">
-      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+    <label class="special-discount-label">Discount Note:</label>
+    <textarea
+      v-model="specialDiscountNoteDraft"
+      rows="3"
+      placeholder="Optional note for this special discount"
+      class="special-discount-input special-discount-textarea"
+    />
+
+    <div v-if="specialDiscountDraft > 0" class="special-discount-note special-discount-note-summary">
+      <div class="special-discount-row">
         <span>Points Discount:</span>
         <strong>₱{{ redeemedPointsDiscount }}</strong>
       </div>
-      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+      <div class="special-discount-row">
         <span>Special Discount:</span>
-        <strong>₱{{ specialDiscount }}</strong>
+        <strong>₱{{ specialDiscountDraft }}</strong>
       </div>
-      <hr style="margin: 8px 0; border: none; border-top: 1px solid #ddd;" />
-      <div style="display: flex; justify-content: space-between; font-size: 18px;">
+      <hr class="special-discount-divider" />
+      <div class="special-discount-row special-discount-total-row">
         <span><strong>Total Discount:</strong></span>
-        <strong style="color: #e74c3c;">₱{{ redeemedPointsDiscount + specialDiscount }}</strong>
+        <strong class="special-discount-total-value">₱{{ redeemedPointsDiscount + specialDiscountDraft }}</strong>
       </div>
     </div>
 
-    <div class="modal-actions">
+    <div class="modal-actions special-discount-actions">
       <button class="btn checkout" @click="applySpecialDiscount">Apply</button>
       <button 
-        v-if="specialDiscount > 0" 
+        v-if="specialDiscount > 0 || specialDiscountDraft > 0" 
         class="btn danger" 
         @click="removeSpecialDiscount(); showSpecialDiscountModal = false"
-        style="flex: 0.8;"
       >Remove</button>
       <button class="btn secondary" @click="showSpecialDiscountModal=false">Cancel</button>
     </div>
@@ -2173,6 +2221,100 @@ tbody tr:last-child td { border-bottom: none; }
 .modal-actions .btn.checkout,
 .modal-actions .btn.danger {
   width: 100%;
+}
+
+.special-discount-actions {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.special-discount-actions .btn {
+  width: 100%;
+  min-width: 0;
+}
+
+.special-discount-modal {
+  color: #0f172a;
+  text-align: left;
+}
+
+.special-discount-modal h3 {
+  text-align: center;
+  color: #0f172a;
+}
+
+.special-discount-label {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #334155;
+}
+
+.special-discount-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  color: #0f172a;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 8px 16px rgba(15, 23, 42, 0.05);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.special-discount-input::placeholder {
+  color: #94a3b8;
+}
+
+.special-discount-input:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18), 0 10px 20px rgba(37, 99, 235, 0.08);
+}
+
+.special-discount-textarea {
+  min-height: 90px;
+  resize: vertical;
+  line-height: 1.5;
+  padding: 12px 14px;
+}
+
+.special-discount-note {
+  padding: 10px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+
+.special-discount-note-points {
+  background: #eef7ff;
+  color: #1e3a5f;
+  border: 1px solid #c8def4;
+}
+
+.special-discount-note-summary {
+  background: #fff8df;
+  color: #5f4b12;
+  border: 1px solid #f0ddb0;
+}
+
+.special-discount-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.special-discount-divider {
+  margin: 8px 0;
+  border: none;
+  border-top: 1px solid #ddd;
+}
+
+.special-discount-total-row {
+  margin-bottom: 0;
+  font-size: 18px;
+}
+
+.special-discount-total-value {
+  color: #e74c3c;
 }
 
 /* Customer rows cleaner */

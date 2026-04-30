@@ -257,10 +257,17 @@ async function savePointsAdjustment() {
     })
     return
   }
+
+  const payload = {
+    customer_id: pointsForm.customer_id,
+    points: Number(pointsForm.points),
+    note: pointsForm.note
+  }
+
   closePointsModal()
   const confirm = await Swal.fire({
     title: 'Confirm points adjustment?',
-    text: `Apply ${pointsForm.points > 0 ? 'add' : 'deduct'} points?`,
+    text: `Apply ${payload.points > 0 ? 'add' : 'deduct'} points?`,
     icon: 'warning',
     showCancelButton: true,
     confirmButtonText: 'Yes, continue'
@@ -269,11 +276,7 @@ async function savePointsAdjustment() {
   if (!confirm.isConfirmed) return
 
   try {
-    await store.dispatch('customers/addManualPoints', {
-      customer_id: pointsForm.customer_id,
-      points: pointsForm.points,
-      note: pointsForm.note
-    })
+    await store.dispatch('customers/addManualPoints', payload)
 
     await load()
     await Swal.fire({

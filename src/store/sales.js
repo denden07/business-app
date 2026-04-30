@@ -19,6 +19,26 @@ import {
 } from '../utils/saleStatus'
 import { getSaleOptionUnitQuantity } from '../utils/itemSaleOptions'
 
+const buildDiscountNote = ({
+  pointsRedeemed = 0,
+  pointsMultiplier = 1,
+  pointsDiscount = 0,
+  specialDiscountNote = ''
+}) => {
+  const noteParts = []
+
+  if (pointsRedeemed > 0 && pointsDiscount > 0) {
+    noteParts.push(`Redeemed points discount: ${pointsRedeemed} point${pointsRedeemed === 1 ? '' : 's'} x ${pointsMultiplier} = P${Number(pointsDiscount).toFixed(2)}`)
+  }
+
+  const trimmedSpecialNote = String(specialDiscountNote || '').trim()
+  if (trimmedSpecialNote) {
+    noteParts.push(trimmedSpecialNote)
+  }
+
+  return noteParts.join('\n')
+}
+
 export default {
   namespaced: true,
   state: () => ({
@@ -108,6 +128,7 @@ async saveSale({ commit }, payload) {
     moneyGiven,
     change,
     purchased_date,
+    special_discount_note = '',
 
     // Points
     pointsUsed = 0,
@@ -134,8 +155,20 @@ async saveSale({ commit }, payload) {
   const itemCatalogStore = tx.objectStore('items')
 
   const now = new Date().toISOString()
+  const normalizedSubTotal = Math.max(Number(subTotal || 0), 0)
+  const normalizedProfessionalFee = Math.max(Number(professionalFee || 0), 0)
   const normalizedFinalTotal = Math.max(Number(finalTotal || 0), 0)
   const normalizedMoneyGiven = Math.max(Number(moneyGiven || 0), 0)
+  const normalizedPointsRedeemed = Math.max(Number(pointsUsed || 0), 0)
+  const normalizedPointsMultiplier = Math.max(Number(pointsMultiplier || 1), 1)
+  const normalizedPointsDiscount = Math.max(Number(pointsDiscount || 0), 0)
+  const pointsEarnBase = normalizedSubTotal + normalizedProfessionalFee
+  const discountNote = buildDiscountNote({
+    pointsRedeemed: normalizedPointsRedeemed,
+    pointsMultiplier: normalizedPointsMultiplier,
+    pointsDiscount: normalizedPointsDiscount,
+    specialDiscountNote: special_discount_note,
+  })
   const amountPaid = Math.min(normalizedMoneyGiven, normalizedFinalTotal)
   const outstandingBalance = Math.max(normalizedFinalTotal - amountPaid, 0)
   const paymentStatus = outstandingBalance <= 0
@@ -149,8 +182,8 @@ async saveSale({ commit }, payload) {
     purchased_date: purchased_date ? new Date(purchased_date).toISOString() : now,
     created_at: now,
     customer_id: customer_id || null,
-    total_amount: subTotal,
-    professional_fee: professionalFee,
+    total_amount: normalizedSubTotal,
+    professional_fee: normalizedProfessionalFee,
     discount,
     final_total: normalizedFinalTotal,
     money_given: normalizedMoneyGiven,
@@ -159,9 +192,10 @@ async saveSale({ commit }, payload) {
     payment_status: paymentStatus,
     outstanding_balance: outstandingBalance,
     status: 'completed',
-    points_used: pointsUsed,
-    points_multiplier: pointsMultiplier,
-    points_discount: pointsDiscount,
+    special_discount_note: discountNote,
+    points_used: normalizedPointsRedeemed,
+    points_multiplier: normalizedPointsMultiplier,
+    points_discount: normalizedPointsDiscount,
     payment_method
   })
 
@@ -225,8 +259,8 @@ async saveSale({ commit }, payload) {
     if (!yearly) yearly = { customer_id, year, points: 0 }
 
     // Redeem points
-    if (pointsUsed > 0) {
-      const pointsToDeduct = Math.min(yearly.points, Number(pointsUsed || 0))
+    if (normalizedPointsRedeemed > 0) {
+      const pointsToDeduct = Math.min(yearly.points, normalizedPointsRedeemed)
       yearly.points -= pointsToDeduct
 
       await pointsStore.add({
@@ -235,12 +269,12 @@ async saveSale({ commit }, payload) {
         type: 'redeem',
         related_sale_id: saleId,
         points: -pointsToDeduct,
-        description: `Redeemed ${pointsToDeduct} points × ${pointsMultiplier} = ${Number(pointsDiscount || 0).toFixed(2)}`
+        description: `Redeemed ${pointsToDeduct} points × ${normalizedPointsMultiplier} = ${normalizedPointsDiscount.toFixed(2)}`
       })
     }
 
     // Earn points
-    const pointsEarned = normalizedFinalTotal / 200
+    const pointsEarned = pointsEarnBase / 200
     yearly.points += pointsEarned
 
     await pointsStore.add({

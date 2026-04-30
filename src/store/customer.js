@@ -209,7 +209,10 @@ async loadCustomersPage(
 
 
 async addManualPoints(_, { customer_id, points, note = '' }) {
-  if (!customer_id || !Number.isFinite(points) || points === 0) return
+  const normalizedCustomerId = Number(customer_id)
+  const normalizedPoints = Number(points)
+
+  if (!normalizedCustomerId || !Number.isFinite(normalizedPoints) || normalizedPoints === 0) return
 
   const db = await dbPromise
   const tx = db.transaction(['points_history', 'yearly_points'], 'readwrite')
@@ -219,26 +222,37 @@ async addManualPoints(_, { customer_id, points, note = '' }) {
   const now = new Date().toISOString()
   const get_now = new Date()
   const year = get_now.getFullYear()
-  const yearlyKey = [customer_id, year]
+  const yearlyKey = [normalizedCustomerId, year]
+
+  let yearly = await yearlyStore.get(yearlyKey)
+  if (!yearly) yearly = { customer_id: normalizedCustomerId, year, points: 0 }
+
+  const appliedPoints = normalizedPoints < 0
+    ? -Math.min(yearly.points, Math.abs(normalizedPoints))
+    : normalizedPoints
+
+  if (appliedPoints === 0) {
+    await tx.done
+    return 0
+  }
 
   // 1️⃣ Add to points_history
   await pointsStore.add({
-    customer_id,
-    points,
+    customer_id: normalizedCustomerId,
+    points: appliedPoints,
     type: 'manual',
-    description: note || (points > 0 ? 'Manual add' : 'Manual deduction'),
+    description: note || (appliedPoints > 0 ? 'Manual add' : 'Manual deduction'),
     related_sale_id: null,
     date: now
   })
 
   // 2️⃣ Update yearly_points
-  let yearly = await yearlyStore.get(yearlyKey)
-  if (!yearly) yearly = { customer_id, year, points: 0 }
-  yearly.points += points
+  yearly.points += appliedPoints
   if (yearly.points < 0) yearly.points = 0
   await yearlyStore.put(yearly)
 
   await tx.done
+  return yearly.points
 },
 
 

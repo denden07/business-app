@@ -557,6 +557,13 @@ const exportCSV = async () => {
           <div>Amount Paid: ₱{{ selectedSaleAmountPaid.toFixed(2) }}</div>
           <div v-if="selectedSaleOutstandingBalance > 0">Balance Due: ₱{{ selectedSaleOutstandingBalance.toFixed(2) }}</div>
           <div>Change: ₱{{ (selectedSale.change || 0).toFixed(2) }}</div>
+          <template v-if="selectedSale.special_discount_note">
+            <hr />
+            <div class="sale-note-block">
+              <div class="sale-note-label">Discount Note:</div>
+              <div class="sale-note-text">{{ selectedSale.special_discount_note }}</div>
+            </div>
+          </template>
         </div>
 
         <div v-if="debtPayments.length" class="settlement-history">
@@ -607,6 +614,28 @@ const exportCSV = async () => {
 
 .sales-table-shell.table-wrap-menu-open tbody .col-actions {
   z-index: 2;
+}
+
+.sale-note-block {
+  margin-top: 10px;
+}
+
+.sale-note-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #475569;
+  margin-bottom: 6px;
+}
+
+.sale-note-text {
+  white-space: pre-line;
+  line-height: 1.5;
+}
+
+body.dark-mode .sale-note-label {
+  color: #e2e8f0;
 }
 
 .actions-td :deep(.icon-action-btn) { padding: 0; }
