@@ -19,8 +19,8 @@ const sortOrder = ref('desc')
 const expenseCategoryMode = ref('preset')
 const budgetCategoryMode = ref('preset')
 
-const expenseDialog = ref(null)
-const budgetDialog = ref(null)
+const showExpenseModal = ref(false)
+const showBudgetModal = ref(false)
 
 const expenses = computed(() => store.state.budget.expenses || [])
 const budgets = computed(() => store.state.budget.budgets || [])
@@ -33,6 +33,7 @@ const selectableCategoryOptions = computed(() => {
 const summary = computed(() => store.state.budget.summary || {})
 const loading = computed(() => !!store.state.budget.loading)
 const totalPages = computed(() => store.getters['budget/totalPages'])
+const monthFilterActive = computed(() => selectedMonth.value !== currentMonthKey())
 
 const selectedMonthLabel = computed(() => {
   const [yearRaw, monthRaw] = String(summary.value.monthKey || selectedMonth.value).split('-')
@@ -40,13 +41,6 @@ const selectedMonthLabel = computed(() => {
   const monthIndex = Number(monthRaw) - 1
   const date = new Date(year, monthIndex, 1)
   return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
-})
-
-const budgetMap = computed(() => {
-  return budgets.value.reduce((map, budget) => {
-    map[budget.id] = budget
-    return map
-  }, {})
 })
 
 const expenseForm = ref(createEmptyExpense())
@@ -79,7 +73,7 @@ function openAddExpense() {
     expense_date: `${selectedMonth.value}-01`,
   })
   expenseCategoryMode.value = resolveCategoryMode(expenseForm.value.category)
-  expenseDialog.value?.showModal()
+  showExpenseModal.value = true
 }
 
 function openEditExpense(expense) {
@@ -90,14 +84,13 @@ function openEditExpense(expense) {
     amount: expense.amount,
     expense_date: formatDateInput(expense.expense_date),
     note: expense.note,
-    budget_id: expense.budget_id || '',
   }
   expenseCategoryMode.value = resolveCategoryMode(expense.category)
-  expenseDialog.value?.showModal()
+  showExpenseModal.value = true
 }
 
 function closeExpenseDialog() {
-  expenseDialog.value?.close()
+  showExpenseModal.value = false
   expenseForm.value = createEmptyExpense()
   expenseCategoryMode.value = 'preset'
 }
@@ -174,7 +167,7 @@ function openAddBudget() {
     category: categoryFilter.value !== 'all' ? categoryFilter.value : 'General',
   })
   budgetCategoryMode.value = resolveCategoryMode(budgetForm.value.category)
-  budgetDialog.value?.showModal()
+  showBudgetModal.value = true
 }
 
 function openEditBudget(budget) {
@@ -186,22 +179,17 @@ function openEditBudget(budget) {
     is_active: budget.is_active,
   }
   budgetCategoryMode.value = resolveCategoryMode(budget.category)
-  budgetDialog.value?.showModal()
+  showBudgetModal.value = true
 }
 
 function closeBudgetDialog() {
-  budgetDialog.value?.close()
+  showBudgetModal.value = false
   budgetForm.value = createEmptyBudget()
   budgetCategoryMode.value = 'preset'
 }
 
 async function saveBudget() {
   const amountLimit = Number(budgetForm.value.amount_limit)
-
-  if (!budgetForm.value.name.trim()) {
-    await Swal.fire({ icon: 'warning', title: 'Budget name required' })
-    return
-  }
 
   if (!budgetForm.value.category.trim()) {
     await Swal.fire({ icon: 'warning', title: 'Category required' })
@@ -245,8 +233,8 @@ async function saveBudget() {
 
 async function removeBudget(budget) {
   const result = await Swal.fire({
-    title: 'Delete budget bucket?',
-    text: 'Existing expenses will remain, but the bucket will be removed.',
+    title: 'Delete budget category?',
+    text: 'Existing expenses will remain, but the category budget will be removed.',
     icon: 'warning',
     showCancelButton: true,
     confirmButtonText: 'Delete',
@@ -301,15 +289,6 @@ function formatDateInput(value) {
   return `${year}-${month}-${day}`
 }
 
-function resolveBudgetName(expense) {
-  if (expense.budget_id && budgetMap.value[expense.budget_id]) {
-    return budgetMap.value[expense.budget_id].name
-  }
-
-  const matchingBudget = budgets.value.find(budget => budget.category === expense.category && budget.is_active)
-  return matchingBudget?.name || 'Unassigned'
-}
-
 function budgetProgressWidth(budget) {
   const percent = Math.max(budget.progressRatio || 0, 0) * 100
   return `${Math.min(percent, 100)}%`
@@ -353,7 +332,6 @@ function createEmptyExpense(overrides = {}) {
     amount: '',
     expense_date: currentDateInput(),
     note: '',
-    budget_id: '',
     ...overrides,
   }
 }
@@ -361,12 +339,15 @@ function createEmptyExpense(overrides = {}) {
 function createEmptyBudget(overrides = {}) {
   return {
     id: null,
-    name: '',
     category: 'General',
     amount_limit: '',
     is_active: true,
     ...overrides,
   }
+}
+
+function resetSelectedMonth() {
+  selectedMonth.value = currentMonthKey()
 }
 
 function currentMonthKey() {
@@ -388,7 +369,7 @@ function currentDateInput() {
     <div class="page-header">
       <div>
         <h1>Budget</h1>
-        <p class="muted">Track expenses, define monthly spending buckets, and compare spending against budget targets.</p>
+        <p class="muted">Track expenses, define monthly category budgets, and compare spending against budget targets.</p>
       </div>
       <button class="primary" @click="openAddExpense">Add Expense</button>
     </div>
@@ -415,18 +396,18 @@ function currentDateInput() {
     <section class="section-card">
       <div class="section-header">
         <div>
-          <h2>Monthly Budget Buckets</h2>
+          <h2>Monthly Budget Categories</h2>
           <p class="muted">Create category-based monthly limits so spending stays visible and measurable.</p>
         </div>
-        <button class="secondary" @click="openAddBudget">Add Budget Bucket</button>
+        <button class="secondary" @click="openAddBudget">Add Budget Category</button>
       </div>
 
       <div v-if="budgetUsage.length" class="budget-grid">
         <article v-for="budget in budgetUsage" :key="budget.id" class="budget-card" :class="{ over: budget.isOverBudget, inactive: !budget.is_active }">
           <div class="budget-card-top">
             <div>
-              <h3>{{ budget.name }}</h3>
-              <p>{{ budget.category }}</p>
+              <h3>{{ budget.category }}</h3>
+              <p>Monthly category budget</p>
             </div>
             <span class="budget-status" :class="budget.isOverBudget ? 'over' : 'ok'">
               {{ budget.isOverBudget ? 'Over Budget' : 'On Track' }}
@@ -460,7 +441,7 @@ function currentDateInput() {
       </div>
 
       <div v-else class="empty-block">
-        No budget buckets yet. Add your first monthly budget to start comparing expenses against targets.
+        No budget categories yet. Add your first monthly budget to start comparing expenses against targets.
       </div>
     </section>
 
@@ -482,7 +463,24 @@ function currentDateInput() {
           </option>
         </select>
 
-        <input v-model="selectedMonth" class="month-field" type="month" />
+        <label class="month-picker-btn date-icon-btn" :class="{ active: monthFilterActive }" :title="monthFilterActive ? `Month filter: ${selectedMonthLabel}` : 'Filter by month'">
+          <input v-model="selectedMonth" class="month-field" type="month" aria-label="Filter by month" />
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.5" fill="none" />
+            <path d="M3 10h18" stroke="currentColor" stroke-width="1.5" />
+            <path d="M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+          <button
+            v-if="monthFilterActive"
+            type="button"
+            class="date-clear"
+            title="Reset to current month"
+            aria-label="Reset to current month"
+            @click.stop="resetSelectedMonth"
+          >
+            ×
+          </button>
+        </label>
 
         <div class="items-per-page">
           <label>Rows:</label>
@@ -503,7 +501,6 @@ function currentDateInput() {
               <th @click="toggleSort('title')">Expense<span v-if="sortBy === 'title'">{{ sortOrder === 'asc' ? ' ↑' : ' ↓' }}</span></th>
               <th @click="toggleSort('category')">Category<span v-if="sortBy === 'category'">{{ sortOrder === 'asc' ? ' ↑' : ' ↓' }}</span></th>
               <th @click="toggleSort('amount')">Amount<span v-if="sortBy === 'amount'">{{ sortOrder === 'asc' ? ' ↑' : ' ↓' }}</span></th>
-              <th>Budget Bucket</th>
               <th>Note</th>
               <th>Actions</th>
             </tr>
@@ -514,7 +511,6 @@ function currentDateInput() {
               <td>{{ expense.title }}</td>
               <td>{{ expense.category }}</td>
               <td class="amount-cell">{{ formatCurrency(expense.amount) }}</td>
-              <td>{{ resolveBudgetName(expense) }}</td>
               <td class="note-cell">{{ expense.note || '—' }}</td>
               <td class="actions-cell">
                 <IconActionButton icon="edit" label="Edit expense" variant="warning" @click="openEditExpense(expense)" />
@@ -522,10 +518,10 @@ function currentDateInput() {
               </td>
             </tr>
             <tr v-if="!expenses.length && !loading">
-              <td colspan="7" class="empty-cell">No expenses found for this month.</td>
+              <td colspan="6" class="empty-cell">No expenses found for this month.</td>
             </tr>
             <tr v-if="loading">
-              <td colspan="7" class="empty-cell">Loading expenses...</td>
+              <td colspan="6" class="empty-cell">Loading expenses...</td>
             </tr>
           </tbody>
         </table>
@@ -534,8 +530,8 @@ function currentDateInput() {
       <Pagination v-model:page="page" :total-pages="totalPages" :max-pages="5" />
     </section>
 
-    <dialog ref="expenseDialog" class="form-dialog">
-      <form method="dialog" class="dialog-form" @submit.prevent="saveExpense">
+    <div v-if="showExpenseModal" class="modal-backdrop" @click.self="closeExpenseDialog">
+      <form class="modal-content dialog-form" @submit.prevent="saveExpense">
         <div class="dialog-header">
           <h3>{{ expenseForm.id ? 'Edit Expense' : 'Add Expense' }}</h3>
           <button type="button" class="icon-close" @click="closeExpenseDialog">✕</button>
@@ -577,14 +573,6 @@ function currentDateInput() {
         </label>
 
         <label>
-          <span>Budget bucket</span>
-          <select v-model="expenseForm.budget_id" class="input">
-            <option value="">No bucket</option>
-            <option v-for="budget in budgets" :key="budget.id" :value="budget.id">{{ budget.name }} ({{ budget.category }})</option>
-          </select>
-        </label>
-
-        <label>
           <span>Note</span>
           <textarea v-model="expenseForm.note" class="input textarea" rows="3" placeholder="Optional note"></textarea>
         </label>
@@ -594,19 +582,14 @@ function currentDateInput() {
           <button type="submit" class="primary">Save Expense</button>
         </div>
       </form>
-    </dialog>
+    </div>
 
-    <dialog ref="budgetDialog" class="form-dialog">
-      <form method="dialog" class="dialog-form" @submit.prevent="saveBudget">
+    <div v-if="showBudgetModal" class="modal-backdrop" @click.self="closeBudgetDialog">
+      <form class="modal-content dialog-form" @submit.prevent="saveBudget">
         <div class="dialog-header">
-          <h3>{{ budgetForm.id ? 'Edit Budget Bucket' : 'Add Budget Bucket' }}</h3>
+          <h3>{{ budgetForm.id ? 'Edit Budget Category' : 'Add Budget Category' }}</h3>
           <button type="button" class="icon-close" @click="closeBudgetDialog">✕</button>
         </div>
-
-        <label>
-          <span>Bucket name</span>
-          <input v-model="budgetForm.name" class="input" type="text" maxlength="80" placeholder="Utilities Budget" />
-        </label>
 
         <label>
           <span>Category Type</span>
@@ -643,7 +626,7 @@ function currentDateInput() {
           <button type="submit" class="primary">Save Budget</button>
         </div>
       </form>
-    </dialog>
+    </div>
 
     <datalist id="budget-categories">
       <option v-for="category in selectableCategoryOptions" :key="category" :value="category"></option>
@@ -837,9 +820,31 @@ function currentDateInput() {
   flex-wrap: wrap;
 }
 
-.month-field,
 .select-field.compact {
   min-height: 42px;
+}
+
+.month-picker-btn {
+  position: relative;
+  overflow: visible;
+  cursor: pointer;
+}
+
+.month-field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.month-field::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
 }
 
 .items-per-page {
@@ -886,25 +891,30 @@ th {
   gap: 6px;
 }
 
-.form-dialog {
-  width: min(100%, 520px);
-  border: none;
-  border-radius: 18px;
-  padding: 0;
-  overflow: hidden;
-  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.22);
-}
-
-.form-dialog::backdrop {
-  background: rgba(15, 23, 42, 0.5);
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1200;
 }
 
 .dialog-form {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 20px;
+}
+
+.modal-content {
+  width: min(100%, 520px);
+  padding: 22px;
+  border-radius: 18px;
   background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.2);
 }
 
 .dialog-form label {
@@ -965,7 +975,8 @@ body.dark-mode .icon-close {
 body.dark-mode .summary-card,
 body.dark-mode .section-card,
 body.dark-mode .budget-card,
-body.dark-mode .dialog-form {
+body.dark-mode .dialog-form,
+body.dark-mode .modal-content {
   background: linear-gradient(180deg, #36404a 0%, #313b45 100%);
   border-color: #536170;
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);

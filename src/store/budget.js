@@ -195,9 +195,11 @@ export default {
 
     async addBudget(_, budget) {
       const db = await dbPromise
+      const normalizedBudget = normalizeBudgetPayload(budget)
+      await assertUniqueBudgetCategory(db, normalizedBudget.category)
       const now = new Date().toISOString()
       return db.add('expense_budgets', {
-        ...normalizeBudgetPayload(budget),
+        ...normalizedBudget,
         created_at: now,
         updated_at: now,
       })
@@ -207,12 +209,15 @@ export default {
       const db = await dbPromise
       const current = await db.get('expense_budgets', budget.id)
       if (!current) {
-        throw new Error('Budget bucket not found.')
+        throw new Error('Budget category not found.')
       }
+
+      const normalizedBudget = normalizeBudgetPayload(budget)
+      await assertUniqueBudgetCategory(db, normalizedBudget.category, budget.id)
 
       await db.put('expense_budgets', {
         ...current,
-        ...normalizeBudgetPayload(budget),
+        ...normalizedBudget,
         updated_at: new Date().toISOString(),
       })
     },
@@ -225,22 +230,22 @@ export default {
 }
 
 function normalizeExpensePayload(expense = {}) {
-  const budgetId = Number(expense.budget_id)
-
   return {
     title: String(expense.title || '').trim(),
     category: normalizeCategoryValue(expense.category),
     amount: normalizePositiveNumber(expense.amount),
     expense_date: normalizeExpenseDate(expense.expense_date),
     note: String(expense.note || '').trim(),
-    budget_id: Number.isFinite(budgetId) && budgetId > 0 ? budgetId : null,
+    budget_id: null,
   }
 }
 
 function normalizeBudgetPayload(budget = {}) {
+  const category = normalizeCategoryValue(budget.category)
+
   return {
-    name: String(budget.name || '').trim(),
-    category: normalizeCategoryValue(budget.category),
+    name: category,
+    category,
     amount_limit: normalizePositiveNumber(budget.amount_limit),
     period: 'monthly',
     is_active: budget.is_active !== false,
@@ -262,10 +267,12 @@ function normalizeExpenseRecord(expense = {}) {
 }
 
 function normalizeBudgetRecord(budget = {}) {
+  const category = normalizeCategoryValue(budget.category)
+
   return {
     id: Number(budget.id),
-    name: String(budget.name || '').trim() || normalizeCategoryValue(budget.category),
-    category: normalizeCategoryValue(budget.category),
+    name: category,
+    category,
     amount_limit: normalizePositiveNumber(budget.amount_limit),
     period: budget.period || 'monthly',
     is_active: budget.is_active !== false,
@@ -277,10 +284,7 @@ function normalizeBudgetRecord(budget = {}) {
 function buildBudgetUsage(budgets = [], monthExpenses = []) {
   return budgets.map(budget => {
     const spent = monthExpenses.reduce((sum, expense) => {
-      const matchesAssignedBudget = Number(expense.budget_id) === Number(budget.id)
-      const matchesCategoryFallback = !expense.budget_id && expense.category === budget.category
-
-      return matchesAssignedBudget || matchesCategoryFallback
+      return expense.category === budget.category
         ? sum + expense.amount
         : sum
     }, 0)
@@ -387,6 +391,18 @@ function getMonthRange(monthKey) {
 function normalizeMonthKey(value) {
   const normalized = String(value || '').trim()
   return /^\d{4}-\d{2}$/.test(normalized) ? normalized : currentMonthKey()
+}
+
+async function assertUniqueBudgetCategory(db, category, currentBudgetId = null) {
+  const budgets = await db.getAll('expense_budgets')
+  const normalizedCurrentBudgetId = Number(currentBudgetId)
+  const duplicate = budgets
+    .map(normalizeBudgetRecord)
+    .find(budget => budget.category === category && budget.id !== normalizedCurrentBudgetId)
+
+  if (duplicate) {
+    throw new Error('A budget already exists for this category.')
+  }
 }
 
 function currentMonthKey() {
