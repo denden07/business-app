@@ -1181,6 +1181,26 @@ const getAvailableStock = (item) => {
   return Number(catalogEntry.quantity || 0)
 }
 
+const getCartBaseUnitsForCatalogItem = (item) => {
+  const cartKey = item?.cartKey || buildCatalogKey(item)
+  return cart.value.reduce((sum, cartItem) => {
+    if (cartItem.cartKey !== cartKey) {
+      return sum
+    }
+
+    return sum + getCartLineBaseUnits(cartItem)
+  }, 0)
+}
+
+const shouldShowQtyStockAlert = (item) => {
+  const availableStock = getAvailableStock(item)
+  if (availableStock === null) {
+    return false
+  }
+
+  return getCartBaseUnitsForCatalogItem(item) >= availableStock
+}
+
 const normalizeDraftCatalogMap = (draft) => {
   const normalizedMap = {}
 
@@ -1356,7 +1376,16 @@ const getPriceOptionLabel = (item, optionKey) => {
                   :style="getQtyInputStyle(item.qty)"
                   :class="{ 'active-input': focusedField==='qty' && focusedItem===item }"
                 />
-                <button class="qty-step-btn" @click="incrementQty(item)">+</button>
+                <div class="qty-add-wrap">
+                  <button class="qty-step-btn" @click="incrementQty(item)">+</button>
+                  <span
+                    v-if="shouldShowQtyStockAlert(item)"
+                    class="qty-stock-alert"
+                    title="No stock left"
+                  >
+                    !
+                  </span>
+                </div>
               </div>
               <div v-if="shouldShowCartLineMeta(item)" class="catalog-meta">{{ getCartLineQuantityLabel(item) }}</div>
             </td>
@@ -2194,6 +2223,30 @@ tbody tr:last-child td { border-bottom: none; }
 .qty-step-btn-decrement:focus-visible {
   background: #b91c1c;
   border-color: #b91c1c;
+}
+
+.qty-add-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.qty-stock-alert {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  min-width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #e74c3c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 6px 12px rgba(231, 76, 60, 0.28);
 }
 
 .payment-toggle {
