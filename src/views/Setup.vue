@@ -3,7 +3,6 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useStore } from 'vuex'
 import Swal from 'sweetalert2'
-import InventoryTrackingOptions from '../components/InventoryTrackingOptions.vue'
 import { configurablePageDefinitions, templatePageSettingByRouteName } from '../templates/pages'
 import { loadResolvedActiveTemplate } from '../utils/templatePreferences'
 import { setOnboardingComplete } from '../utils/onboardingPreferences'
@@ -26,15 +25,13 @@ const appName = ref('')
 const selectedTemplateId = ref('generic')
 const persistedActiveTemplate = ref(null)
 const catalogMode = ref('mixed')
-const trackStock = ref(false)
-const trackBatches = ref(false)
-const trackExpiry = ref(false)
 const loyaltyEnabled = ref(true)
 const requireCustomer = ref(false)
 const pointsMultiplier = ref(1)
 const dailySalesQuota = ref(40000)
 const expiryWarningDays = ref(30)
 const expiryCriticalDays = ref(7)
+const allowExpiredSales = ref(false)
 const showProductChart = ref(true)
 const showServiceChart = ref(true)
 const paymentMethods = ref({ cash: true, gcash: true })
@@ -45,25 +42,6 @@ const selectedTemplate = computed(() => {
   return availableTemplates.value.find(template => template.id === selectedTemplateId.value) || availableTemplates.value[0]
 })
 const selectedTemplateLabels = computed(() => selectedTemplate.value?.labels || {})
-const isServiceOnlyMode = computed(() => catalogMode.value === 'services')
-const stockOptionDisabled = computed(() => isServiceOnlyMode.value)
-const batchOptionDisabled = computed(() => isServiceOnlyMode.value || !trackStock.value)
-const expiryOptionDisabled = computed(() => isServiceOnlyMode.value || !trackBatches.value)
-const stockDisabledReason = computed(() => {
-  if (isServiceOnlyMode.value) return 'Switch catalog mode to Products or Both to enable stock tracking.'
-  return ''
-})
-const batchDisabledReason = computed(() => {
-  if (isServiceOnlyMode.value) return 'Batch tracking is only available when you sell products.'
-  if (!trackStock.value) return 'Turn on stock tracking first to enable batches.'
-  return ''
-})
-const expiryDisabledReason = computed(() => {
-  if (isServiceOnlyMode.value) return 'Expiry tracking is only available when you sell products.'
-  if (!trackStock.value) return 'Turn on stock tracking first to enable expiry tracking.'
-  if (!trackBatches.value) return 'Turn on batch tracking first to attach expiry dates.'
-  return ''
-})
 const progressPercent = computed(() => {
   if (steps.length <= 1) {
     return 100
@@ -74,15 +52,13 @@ const progressPercent = computed(() => {
 
 const customizationSummary = computed(() => ({
   catalogMode: catalogMode.value,
-  trackStock: trackStock.value,
-  trackBatches: trackBatches.value,
-  trackExpiry: trackExpiry.value,
   loyaltyEnabled: loyaltyEnabled.value,
   requireCustomer: requireCustomer.value,
   pointsMultiplier: pointsMultiplier.value,
   dailySalesQuota: dailySalesQuota.value,
   expiryWarningDays: expiryWarningDays.value,
   expiryCriticalDays: expiryCriticalDays.value,
+  allowExpiredSales: allowExpiredSales.value,
   showProductChart: showProductChart.value,
   showServiceChart: showServiceChart.value,
   paymentMethods: Object.entries(paymentMethods.value)
@@ -124,9 +100,6 @@ function applyTemplatePreset(template) {
     catalogMode.value = 'products'
   }
 
-  trackStock.value = !!template.itemDefaults?.trackStock
-  trackBatches.value = !!template.itemDefaults?.trackBatches
-  trackExpiry.value = !!template.itemDefaults?.trackExpiry
   loyaltyEnabled.value = template.customer?.enableLoyalty !== false
   requireCustomer.value = template.workflow?.requireCustomer === true || template.customer?.requireCustomerDetails === true
   pointsMultiplier.value = getTemplatePointsMultiplier(template)
@@ -134,6 +107,7 @@ function applyTemplatePreset(template) {
   const expirySettings = getTemplateExpiryAlertSettings(template)
   expiryWarningDays.value = expirySettings.warningDays
   expiryCriticalDays.value = expirySettings.criticalDays
+  allowExpiredSales.value = expirySettings.allowExpiredSales === true
   showProductChart.value = template.reporting?.showProductChart !== false
   showServiceChart.value = template.reporting?.showServiceChart !== false
   paymentMethods.value = {
@@ -190,9 +164,6 @@ function buildTemplateOverrides() {
   const productsEnabled = catalogMode.value !== 'services'
   const servicesEnabled = catalogMode.value !== 'products'
   const allowMixedItems = catalogMode.value === 'mixed'
-  const canTrackStock = productsEnabled && trackStock.value
-  const canTrackBatches = canTrackStock && trackBatches.value
-  const canTrackExpiry = canTrackBatches && trackExpiry.value
   const methods = Object.entries(paymentMethods.value)
     .filter(([, enabled]) => enabled)
     .map(([method]) => method)
@@ -207,22 +178,22 @@ function buildTemplateOverrides() {
     capabilities: {
       products: productsEnabled,
       services: servicesEnabled,
-      stockTracking: canTrackStock ? 'required' : false,
-      batchTracking: canTrackBatches ? 'required' : false,
-      expiryTracking: canTrackExpiry ? 'required' : false,
+      stockTracking: false,
+      batchTracking: false,
+      expiryTracking: false,
     },
     workflow: {
       allowProductSales: productsEnabled,
       allowServiceSales: servicesEnabled,
       allowMixedItems,
-      requireBatchSelection: canTrackBatches,
+      requireBatchSelection: false,
       requireCustomer: requireCustomer.value,
     },
     itemDefaults: {
       itemType: catalogMode.value === 'services' ? 'service' : 'product',
-      trackStock: canTrackStock,
-      trackBatches: canTrackBatches,
-      trackExpiry: canTrackExpiry,
+      trackStock: false,
+      trackBatches: false,
+      trackExpiry: false,
     },
     customer: {
       enableLoyalty: loyaltyEnabled.value,
@@ -238,6 +209,7 @@ function buildTemplateOverrides() {
       dailySalesQuota: Number(dailySalesQuota.value),
       expiryWarningDays: Number(expiryWarningDays.value),
       expiryCriticalDays: Number(expiryCriticalDays.value),
+      allowExpiredSales: productsEnabled && allowExpiredSales.value,
       showProductChart: productsEnabled ? showProductChart.value : false,
       showServiceChart: servicesEnabled ? showServiceChart.value : false,
     },
@@ -310,26 +282,7 @@ watch(selectedTemplateId, templateId => {
   }
 })
 
-watch(trackStock, value => {
-  if (!value) {
-    trackBatches.value = false
-    trackExpiry.value = false
-  }
-})
-
-watch(trackBatches, value => {
-  if (!value) {
-    trackExpiry.value = false
-  }
-})
-
 watch(catalogMode, value => {
-  if (value === 'services') {
-    trackStock.value = false
-    trackBatches.value = false
-    trackExpiry.value = false
-  }
-
   if (value === 'products') {
     showServiceChart.value = false
     showProductChart.value = true
@@ -423,26 +376,6 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div v-if="!isServiceOnlyMode" class="option-group option-card">
-          <span class="group-label">Inventory behavior</span>
-          <InventoryTrackingOptions
-            v-model:track-stock="trackStock"
-            v-model:track-batches="trackBatches"
-            v-model:track-expiry="trackExpiry"
-            :stock-disabled="stockOptionDisabled"
-            :batches-disabled="batchOptionDisabled"
-            :expiry-disabled="expiryOptionDisabled"
-            :stock-disabled-reason="stockDisabledReason"
-            :batches-disabled-reason="batchDisabledReason"
-            :expiry-disabled-reason="expiryDisabledReason"
-          />
-        </div>
-
-        <div v-else class="option-group option-card service-note">
-          <strong>Service-only mode selected.</strong>
-          <span>Inventory tracking options are hidden because services do not use stock, batches, or expiry tracking.</span>
-        </div>
-
         <div class="option-group option-card">
           <span class="group-label">Default visible pages</span>
           <div class="page-chip-grid">
@@ -463,19 +396,25 @@ onMounted(async () => {
           <span class="group-label">Customer and loyalty</span>
           <div class="toggle-stack compact-stack">
             <label class="toggle-row">
-              <input v-model="loyaltyEnabled" type="checkbox" />
-              <div>
+              <div class="toggle-copy">
                 <strong>Enable loyalty</strong>
                 <span>Show customer points and redeem controls during checkout.</span>
               </div>
+              <span class="toggle-switch">
+                <input v-model="loyaltyEnabled" type="checkbox" />
+                <span class="toggle-slider"></span>
+              </span>
             </label>
 
             <label class="toggle-row">
-              <input v-model="requireCustomer" type="checkbox" />
-              <div>
+              <div class="toggle-copy">
                 <strong>Require customer selection</strong>
                 <span>Keep the customer section visible and require a customer before checkout.</span>
               </div>
+              <span class="toggle-switch">
+                <input v-model="requireCustomer" type="checkbox" />
+                <span class="toggle-slider"></span>
+              </span>
             </label>
           </div>
 
@@ -492,19 +431,12 @@ onMounted(async () => {
               />
               <small>Set how much discount each redeemed point is worth.</small>
             </label>
+          </div>
+        </div>
 
-            <label class="numeric-setting-card">
-              <span>Daily sales quota</span>
-              <input
-                v-model.number="dailySalesQuota"
-                class="input"
-                type="number"
-                min="1"
-                step="1"
-              />
-              <small>Used by Analytics to mark when a day hits the target.</small>
-            </label>
-
+        <div v-if="catalogMode !== 'services'" class="option-group option-card">
+          <span class="group-label">Expiry settings</span>
+          <div class="numeric-settings-grid">
             <label class="numeric-setting-card">
               <span>Near-expiry warning window</span>
               <input
@@ -513,7 +445,6 @@ onMounted(async () => {
                 type="number"
                 min="1"
                 step="1"
-                :disabled="!trackExpiry"
               />
               <small>Items with tracked expiry inside this many days are flagged in inventory and analytics.</small>
             </label>
@@ -527,30 +458,62 @@ onMounted(async () => {
                 min="1"
                 step="1"
                 :max="expiryWarningDays || undefined"
-                :disabled="!trackExpiry"
               />
               <small>Use a smaller window for items that need stronger red alerts before expiry.</small>
+            </label>
+          </div>
+
+          <div class="toggle-stack compact-stack">
+            <label class="toggle-row">
+              <div class="toggle-copy">
+                <strong>Allow selling expired quantity</strong>
+                <span>Let expired stock stay sellable during checkout while still showing expiry alerts.</span>
+              </div>
+              <span class="toggle-switch">
+                <input v-model="allowExpiredSales" type="checkbox" :disabled="catalogMode === 'services'" />
+                <span class="toggle-slider"></span>
+              </span>
             </label>
           </div>
         </div>
 
         <div class="option-group option-card">
           <span class="group-label">Analytics charts</span>
+          <div class="numeric-settings-grid">
+            <label class="numeric-setting-card">
+              <span>Daily sales quota</span>
+              <input
+                v-model.number="dailySalesQuota"
+                class="input"
+                type="number"
+                min="1"
+                step="1"
+              />
+              <small>Used by Analytics to mark when a day hits the target.</small>
+            </label>
+          </div>
+
           <div class="toggle-stack compact-stack">
             <label class="toggle-row">
-              <input v-model="showProductChart" type="checkbox" :disabled="catalogMode === 'services'" />
-              <div>
+              <div class="toggle-copy">
                 <strong>Show product chart</strong>
                 <span>Display the top products chart in Analytics when product sales are enabled.</span>
               </div>
+              <span class="toggle-switch">
+                <input v-model="showProductChart" type="checkbox" :disabled="catalogMode === 'services'" />
+                <span class="toggle-slider"></span>
+              </span>
             </label>
 
             <label class="toggle-row">
-              <input v-model="showServiceChart" type="checkbox" :disabled="catalogMode === 'products'" />
-              <div>
+              <div class="toggle-copy">
                 <strong>Show service chart</strong>
                 <span>Display the top services chart in Analytics when service sales are enabled.</span>
               </div>
+              <span class="toggle-switch">
+                <input v-model="showServiceChart" type="checkbox" :disabled="catalogMode === 'products'" />
+                <span class="toggle-slider"></span>
+              </span>
             </label>
           </div>
         </div>
@@ -600,12 +563,10 @@ onMounted(async () => {
             <strong class="review-value">{{ customizationSummary.catalogMode }}</strong>
           </article>
 
-          <article>
+          <article v-if="customizationSummary.catalogMode !== 'services'">
             <span>Inventory</span>
             <strong class="review-value review-value-break">
-              {{ customizationSummary.trackStock ? 'Stock on' : 'Stock off' }},
-              {{ customizationSummary.trackBatches ? 'batches on' : 'batches off' }},
-              {{ customizationSummary.trackExpiry ? 'expiry on' : 'expiry off' }}
+              Configure stock, batches, and expiry per item from the Items page.
             </strong>
           </article>
 
@@ -632,12 +593,11 @@ onMounted(async () => {
             <strong class="review-value">₱{{ Number(customizationSummary.dailySalesQuota || 0).toLocaleString() }}</strong>
           </article>
 
-          <article>
+          <article v-if="customizationSummary.catalogMode !== 'services'">
             <span>Expiry alerts</span>
             <strong class="review-value review-value-break">
-              {{ customizationSummary.trackExpiry
-                ? `${Number(customizationSummary.expiryCriticalDays || 0)} day urgent / ${Number(customizationSummary.expiryWarningDays || 0)} day warning`
-                : 'Disabled' }}
+              {{ `${Number(customizationSummary.expiryCriticalDays || 0)} day urgent / ${Number(customizationSummary.expiryWarningDays || 0)} day warning` }}
+              {{ customizationSummary.allowExpiredSales ? ' • expired sales allowed' : ' • expired sales blocked' }}
             </strong>
           </article>
 
@@ -998,20 +958,20 @@ onMounted(async () => {
 }
 
 .toggle-row {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 14px;
-  align-items: start;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
   padding: 16px 18px;
   border-radius: 18px;
   border: 1px solid #dbe4ea;
   background: #f8fbfd;
 }
 
-.toggle-row input {
-  margin-top: 3px;
-  width: 18px;
-  height: 18px;
+.toggle-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
 }
 
 .toggle-row strong {
@@ -1021,9 +981,67 @@ onMounted(async () => {
 
 .toggle-row span {
   display: block;
-  margin-top: 4px;
   color: #475569;
   font-size: 14px;
+}
+
+.toggle-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 52px;
+  height: 30px;
+  margin-top: 2px;
+}
+
+.toggle-switch input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.38);
+  transition: background-color 0.2s ease;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.16);
+  transition: transform 0.2s ease;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: linear-gradient(90deg, #1abc9c, #20b486);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(22px);
+}
+
+.toggle-switch input:focus-visible + .toggle-slider {
+  outline: 2px solid rgba(26, 188, 156, 0.38);
+  outline-offset: 2px;
+}
+
+.toggle-switch input:disabled {
+  cursor: not-allowed;
+}
+
+.toggle-switch input:disabled + .toggle-slider {
+  opacity: 0.55;
 }
 
 .service-note {

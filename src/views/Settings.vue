@@ -755,15 +755,29 @@ onMounted(async () => {
 
             <div class="template-settings-grid">
               <label class="template-setting-field template-toggle-field">
-                <span>Enable loyalty</span>
-                <input v-model="loyaltyEnabled" type="checkbox" />
-                <small>Keep customer points and redemption available in the sales flow.</small>
+                <div class="template-toggle-row">
+                  <div class="template-toggle-copy">
+                    <span>Enable loyalty</span>
+                    <small>Keep customer points and redemption available in the sales flow.</small>
+                  </div>
+                  <span class="toggle-switch">
+                    <input v-model="loyaltyEnabled" type="checkbox" />
+                    <span class="toggle-slider"></span>
+                  </span>
+                </div>
               </label>
 
               <label class="template-setting-field template-toggle-field">
-                <span>Require customer selection</span>
-                <input v-model="requireCustomer" type="checkbox" />
-                <small>Require choosing a customer before completing checkout.</small>
+                <div class="template-toggle-row">
+                  <div class="template-toggle-copy">
+                    <span>Require customer selection</span>
+                    <small>Require choosing a customer before completing checkout.</small>
+                  </div>
+                  <span class="toggle-switch">
+                    <input v-model="requireCustomer" type="checkbox" />
+                    <span class="toggle-slider"></span>
+                  </span>
+                </div>
               </label>
 
               <label class="template-setting-field">
@@ -802,9 +816,16 @@ onMounted(async () => {
               </label>
 
               <label class="template-setting-field template-toggle-field">
-                <span>Allow selling expired quantity</span>
-                <input v-model="allowExpiredSales" type="checkbox" :disabled="!canSellProducts" />
-                <small>When enabled, expired stock remains blocked in alerts but can still be counted as sellable and deducted during checkout.</small>
+                <div class="template-toggle-row">
+                  <div class="template-toggle-copy">
+                    <span>Allow selling expired quantity</span>
+                    <small>When enabled, expired stock remains blocked in alerts but can still be counted as sellable and deducted during checkout.</small>
+                  </div>
+                  <span class="toggle-switch">
+                    <input v-model="allowExpiredSales" type="checkbox" :disabled="!canSellProducts" />
+                    <span class="toggle-slider"></span>
+                  </span>
+                </div>
               </label>
             </div>
           </section>
@@ -819,15 +840,29 @@ onMounted(async () => {
 
             <div class="template-settings-grid template-settings-grid-compact">
               <label class="template-setting-field template-toggle-field">
-                <span>Show product analytics chart</span>
-                <input v-model="showProductChart" type="checkbox" :disabled="!canSellProducts" />
-                <small>Controls whether the top products chart is shown in Analytics.</small>
+                <div class="template-toggle-row">
+                  <div class="template-toggle-copy">
+                    <span>Show product analytics chart</span>
+                    <small>Controls whether the top products chart is shown in Analytics.</small>
+                  </div>
+                  <span class="toggle-switch">
+                    <input v-model="showProductChart" type="checkbox" :disabled="!canSellProducts" />
+                    <span class="toggle-slider"></span>
+                  </span>
+                </div>
               </label>
 
               <label class="template-setting-field template-toggle-field">
-                <span>Show service analytics chart</span>
-                <input v-model="showServiceChart" type="checkbox" :disabled="!canSellServices" />
-                <small>Controls whether the top services chart is shown in Analytics.</small>
+                <div class="template-toggle-row">
+                  <div class="template-toggle-copy">
+                    <span>Show service analytics chart</span>
+                    <small>Controls whether the top services chart is shown in Analytics.</small>
+                  </div>
+                  <span class="toggle-switch">
+                    <input v-model="showServiceChart" type="checkbox" :disabled="!canSellServices" />
+                    <span class="toggle-slider"></span>
+                  </span>
+                </div>
               </label>
             </div>
           </section>
@@ -1040,9 +1075,16 @@ body.dark-mode .card {
 }
 
 .section-heading {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  justify-items: center;
+  text-align: center;
   gap: 14px;
+}
+
+.section-heading > div {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
 }
 
 .section-heading h1,
@@ -1098,7 +1140,7 @@ body.dark-mode .settings-tab:hover {
 body.dark-mode .settings-tab.active {
   background: #1abc9c;
   border-color: #1abc9c;
-  color: #07261f;
+  color: #f8fafc;
   box-shadow: 0 12px 24px rgba(26, 188, 156, 0.24);
 }
 
@@ -1161,10 +1203,15 @@ body.dark-mode .settings-tab.active {
 }
 
 .template-section-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  justify-items: center;
+  text-align: center;
   gap: 12px;
+}
+
+.template-section-header > div {
+  display: grid;
+  justify-items: center;
 }
 
 .template-section-header h3 {
@@ -1221,10 +1268,80 @@ body.dark-mode .settings-tab.active {
   align-content: start;
 }
 
-.template-toggle-field input[type="checkbox"] {
-  width: 20px;
-  height: 20px;
-  margin: 2px 0 0;
+.template-toggle-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.template-toggle-copy {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.template-toggle-copy > small {
+  margin: 0;
+}
+
+.toggle-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 52px;
+  height: 30px;
+  margin-top: 2px;
+}
+
+.toggle-switch input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.38);
+  transition: background-color 0.2s ease;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.16);
+  transition: transform 0.2s ease;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: linear-gradient(90deg, #1abc9c, #20b486);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(22px);
+}
+
+.toggle-switch input:focus-visible + .toggle-slider {
+  outline: 2px solid rgba(26, 188, 156, 0.38);
+  outline-offset: 2px;
+}
+
+.toggle-switch input:disabled {
+  cursor: not-allowed;
+}
+
+.toggle-switch input:disabled + .toggle-slider {
+  opacity: 0.55;
 }
 .theme-copy { display: flex; flex-direction: column; gap: 4px; }
 .setting-copy {
@@ -1313,6 +1430,18 @@ body.dark-mode .template-settings-section {
 body.dark-mode .template-section-header h3 { color: #f8fafc; }
 body.dark-mode .template-setting-field span { color: #cbd5e1; }
 body.dark-mode .template-setting-field small { color: #94a3b8; }
+body.dark-mode .toggle-slider {
+  background: rgba(100, 116, 139, 0.5);
+}
+
+body.dark-mode .toggle-slider::before {
+  background: #f8fafc;
+  box-shadow: 0 2px 8px rgba(2, 6, 23, 0.3);
+}
+
+body.dark-mode .toggle-switch input:checked + .toggle-slider {
+  background: linear-gradient(90deg, #1abc9c, #34d399);
+}
 body.dark-mode .text-limiter { color: #94a3b8; }
 body.dark-mode .text-limiter.warning { color: #fbbf24; }
 body.dark-mode .note {
@@ -1371,6 +1500,10 @@ body.dark-mode .pin-inactive { background: #2a2a2a; color: #888; }
 
   .template-settings-grid-compact {
     grid-template-columns: 1fr;
+  }
+
+  .template-toggle-row {
+    align-items: center;
   }
 }
 </style>
