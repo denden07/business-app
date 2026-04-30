@@ -12,6 +12,11 @@ import { format } from 'date-fns'
 import { isWithinLocalDateRange } from '../utils/dateRange'
 import { collectFromSource } from '../db/query'
 import { summarizeExpiryForBatches, classifyExpiryDate, getDaysUntilExpiry } from '../utils/expiryAlerts'
+import {
+  formatSaleOptionQuantity,
+  getCustomSaleOptionKey,
+  normalizeSaleOptionRecord,
+} from '../utils/itemSaleOptions'
 import { getTemplateExpiryAlertSettings } from '../utils/templatePresentation'
 import { loadResolvedActiveTemplate } from '../utils/templatePreferences'
 
@@ -21,6 +26,7 @@ const router = useRouter()
 const itemId = computed(() => Number(route.params.id))
 
 const item = ref(null)
+const batchEntries = ref([])
 const stockEntries = ref([])
 const priceEntries = ref([])
 const showForm = ref(false)
@@ -28,7 +34,9 @@ const editingItem = ref(null)
 const expirySummary = ref(null)
 const expiryAlertSettings = ref({ warningDays: 30, criticalDays: 7 })
 
-const activeTab = ref(route.query.tab === 'prices' ? 'prices' : 'stock')
+const validTabs = new Set(['stock', 'prices', 'selling-options'])
+
+const activeTab = ref(validTabs.has(route.query.tab) ? route.query.tab : 'stock')
 const startDate = ref('')
 const endDate = ref('')
 const dateRange = ref(null)
@@ -43,6 +51,10 @@ const itemsPerPageOptions = [5, 10, 20, 50]
 const colMenuOpen = ref(false)
 const showAdjustStockModal = ref(false)
 const stockAdjustmentForm = ref(createStockAdjustmentForm())
+const saleOptions = ref([])
+const showSaleOptionModal = ref(false)
+const editingSaleOption = ref(null)
+const saleOptionForm = ref(createSaleOptionForm())
 
 const _detailDefaultCols = {
   stock_date: true,
@@ -120,6 +132,7 @@ const toMoney = (value) => `₱${Number(value || 0).toFixed(2)}`
 const getPrice1 = (entry) => Number(entry.price1 ?? entry.new_price1 ?? entry.old_price1 ?? 0)
 const getPrice2 = (entry) => Number(entry.price2 ?? entry.new_price2 ?? entry.old_price2 ?? 0)
 const getStockEntryTimestamp = (entry) => entry?.created_at || entry?.added_date || null
+const getStockHistoryQuantity = (entry) => Number(entry?.display_quantity ?? entry?.quantity ?? 0)
 
 const loadItemData = async () => {
   const db = await dbPromise
@@ -129,6 +142,7 @@ const loadItemData = async () => {
 
   if (!currentItem) {
     item.value = null
+    batchEntries.value = []
     stockEntries.value = []
     priceEntries.value = []
     expirySummary.value = null
@@ -142,18 +156,76 @@ const loadItemData = async () => {
   const allPrices = await collectFromSource(priceIndex, { query: IDBKeyRange.only(itemId.value) })
   priceEntries.value = allPrices.sort((left, right) => new Date(right.changed_at) - new Date(left.changed_at))
 
+  const saleOptionIndex = db.transaction('item_sale_options').objectStore('item_sale_options').index('item_id')
+  const allSaleOptions = await collectFromSource(saleOptionIndex, { query: IDBKeyRange.only(itemId.value) })
+  saleOptions.value = allSaleOptions
+    .map(normalizeSaleOptionRecord)
+    .sort((left, right) => new Date(right.updated_at || right.created_at || 0) - new Date(left.updated_at || left.created_at || 0))
+
   if (!currentItem.track_stock) {
+    batchEntries.value = []
     stockEntries.value = []
     return
   }
 
   const stockIndex = db.transaction('item_batches').objectStore('item_batches').index('item_id')
   const allStock = await collectItemBatches(stockIndex, itemId.value)
+  batchEntries.value = allStock
   expirySummary.value = summarizeExpiryForBatches(allStock, {
     trackExpiry: !!currentItem.track_expiry,
     ...expiryAlertSettings.value,
   })
-  stockEntries.value = allStock.sort((left, right) => {
+
+  const saleItemsIndex = db.transaction('sale_items').objectStore('sale_items').index('item_id')
+  const relatedSaleItems = await collectFromSource(saleItemsIndex, { query: itemId.value })
+  const salesStore = db.transaction('sales').objectStore('sales')
+
+  const saleHistoryEntries = (await Promise.all(relatedSaleItems.map(async (saleItem) => {
+    const saleRecord = await salesStore.get(saleItem.sale_id)
+    if (!saleRecord || saleRecord.status === 'voided') {
+      return null
+    }
+
+    const sourceBatch = allStock.find(entry => Number(entry?.id || 0) === Number(saleItem.batch_id || 0)) || null
+    const quantityInBaseUnits = Number(saleItem.quantity_in_base_units ?? saleItem.quantity ?? 0)
+    if (quantityInBaseUnits <= 0) {
+      return null
+    }
+
+    return {
+      id: `sale-history-${saleItem.id}`,
+      quantity: -Math.abs(quantityInBaseUnits),
+      created_at: saleRecord.purchased_date || saleRecord.created_at || null,
+      added_date: saleRecord.created_at || null,
+      reason: 'SALE',
+      sale_id: saleItem.sale_id,
+      expiry_date: sourceBatch?.expiry_date || '',
+      batch_number: sourceBatch?.batch_number || '',
+      sale_option_label: saleItem.sale_option_label || '',
+      batch_id: saleItem.batch_id || null,
+      history_source: 'sale_item',
+    }
+  }))).filter(Boolean)
+
+  const deductedQuantityByBatchId = saleHistoryEntries.reduce((map, entry) => {
+    const batchId = Number(entry?.batch_id || 0)
+    if (!batchId) {
+      return map
+    }
+
+    map.set(batchId, (map.get(batchId) || 0) + Math.abs(Number(entry.quantity || 0)))
+    return map
+  }, new Map())
+
+  const stockHistoryBatchEntries = allStock.map(entry => {
+    const deductedQuantity = deductedQuantityByBatchId.get(Number(entry?.id || 0)) || 0
+    return {
+      ...entry,
+      display_quantity: Number(entry?.quantity || 0) + deductedQuantity,
+    }
+  })
+
+  stockEntries.value = [...stockHistoryBatchEntries, ...saleHistoryEntries].sort((left, right) => {
     const leftDate = new Date(getStockEntryTimestamp(left) || 0)
     const rightDate = new Date(getStockEntryTimestamp(right) || 0)
     return rightDate - leftDate
@@ -167,9 +239,23 @@ watch(() => route.params.id, () => {
 })
 
 watch(activeTab, (tab) => {
+  if (tab === 'selling-options' && item.value?.item_type === 'service') {
+    activeTab.value = 'stock'
+    return
+  }
   currentPage.value = 1
   colMenuOpen.value = false
   router.replace({ query: { ...route.query, tab } })
+})
+
+watch(() => route.query.tab, (tab) => {
+  const normalizedTab = validTabs.has(tab) ? tab : 'stock'
+  const nextTab = normalizedTab === 'selling-options' && item.value?.item_type === 'service'
+    ? 'stock'
+    : normalizedTab
+  if (activeTab.value !== nextTab) {
+    activeTab.value = nextTab
+  }
 })
 
 watch([searchKeyword, startDate, endDate, sortOrder, itemsPerPage, expiryStatusFilter, movementTypeFilter], () => {
@@ -177,7 +263,7 @@ watch([searchKeyword, startDate, endDate, sortOrder, itemsPerPage, expiryStatusF
 })
 
 const totalStock = computed(() =>
-  stockEntries.value.reduce((sum, entry) => sum + Number(entry?.quantity || 0), 0)
+  batchEntries.value.reduce((sum, entry) => sum + Number(entry?.quantity || 0), 0)
 )
 
 const expiredStock = computed(() => Number(expirySummary.value?.expiredQuantity || 0))
@@ -214,6 +300,8 @@ const expiryPanelClass = computed(() => {
   if (status === 'warning') return 'expiry-panel warning'
   return 'expiry-panel ok'
 })
+
+const canManageSellingOptions = computed(() => item.value?.item_type !== 'service')
 
 const itemStateLabel = computed(() => item.value?.is_archived ? 'Archived' : 'Active')
 
@@ -345,7 +433,8 @@ const filteredStockEntries = computed(() => {
           entry.batch_number,
           entry.reason,
           entry.sale_id,
-          String(entry.quantity ?? ''),
+          entry.sale_option_label,
+          String(getStockHistoryQuantity(entry)),
         ].join(' ').toLowerCase()
 
         return haystack.includes(keyword)
@@ -428,6 +517,8 @@ const paginatedData = computed(() => {
 })
 const visibleEntryCount = computed(() => paginatedData.value.length)
 const latestPriceEntry = computed(() => effectivePriceEntries.value[0] || null)
+const activeSaleOptions = computed(() => saleOptions.value.filter(option => option.is_active !== false))
+const archivedSaleOptions = computed(() => saleOptions.value.filter(option => option.is_active === false))
 
 const totalPagesForActiveTab = computed(() => Math.max(1, Math.ceil(activeList.value.length / itemsPerPage.value)))
 
@@ -468,10 +559,146 @@ function createStockAdjustmentForm() {
   }
 }
 
+function createSaleOptionForm() {
+  return {
+    option_type: 'bundle',
+    label: '',
+    price: 0,
+    unit_quantity: 10,
+  }
+}
+
+const saleOptionModalTitle = computed(() => editingSaleOption.value ? 'Edit Selling Option' : 'Add Selling Option')
+
+const saleOptionTypeOptions = [
+  { value: 'bundle', label: 'Bundle' },
+  { value: 'wholesale', label: 'Wholesale' },
+]
+
+watch(() => saleOptionForm.value.option_type, value => {
+  if (editingSaleOption.value) return
+  if (!saleOptionForm.value.label.trim()) {
+    saleOptionForm.value.label = value === 'wholesale' ? 'Wholesale' : 'Bundle'
+  }
+  if (value === 'wholesale' && Number(saleOptionForm.value.unit_quantity || 0) < 20) {
+    saleOptionForm.value.unit_quantity = 24
+  }
+  if (value === 'bundle' && Number(saleOptionForm.value.unit_quantity || 0) < 2) {
+    saleOptionForm.value.unit_quantity = 10
+  }
+})
+
+const openSaleOptionModal = (option = null) => {
+  editingSaleOption.value = option
+  saleOptionForm.value = option
+    ? {
+        option_type: option.option_type,
+        label: option.label,
+        price: Number(option.price || 0),
+        unit_quantity: Number(option.unit_quantity || 1),
+      }
+    : createSaleOptionForm()
+
+  if (!option) {
+    saleOptionForm.value.label = saleOptionForm.value.option_type === 'wholesale' ? 'Wholesale' : 'Bundle'
+  }
+
+  showSaleOptionModal.value = true
+}
+
+const closeSaleOptionModal = () => {
+  showSaleOptionModal.value = false
+  editingSaleOption.value = null
+  saleOptionForm.value = createSaleOptionForm()
+}
+
+const saveSaleOption = async () => {
+  if (!item.value) return
+
+  const normalized = normalizeSaleOptionRecord(saleOptionForm.value)
+  if (normalized.price <= 0) {
+    await Swal.fire({
+      icon: 'warning',
+      title: 'Invalid price',
+      text: 'Enter a selling price greater than 0.'
+    })
+    return
+  }
+
+  if (normalized.unit_quantity <= 1) {
+    await Swal.fire({
+      icon: 'warning',
+      title: 'Invalid quantity',
+      text: 'Bundle or wholesale options must contain more than 1 piece.'
+    })
+    return
+  }
+
+  const db = await dbPromise
+  const now = new Date().toISOString()
+  const payload = {
+    item_id: item.value.id,
+    option_type: normalized.option_type,
+    label: normalized.label,
+    price: normalized.price,
+    unit_quantity: normalized.unit_quantity,
+    is_active: true,
+    created_at: editingSaleOption.value?.created_at || now,
+    updated_at: now,
+  }
+
+  if (editingSaleOption.value?.id) {
+    await db.put('item_sale_options', {
+      ...editingSaleOption.value,
+      ...payload,
+      id: editingSaleOption.value.id,
+    })
+  } else {
+    await db.add('item_sale_options', payload)
+  }
+
+  closeSaleOptionModal()
+  await loadItemData()
+}
+
+const archiveSaleOption = async (option) => {
+  const result = await Swal.fire({
+    icon: 'warning',
+    title: 'Archive this selling option?',
+    text: `${option.label} will stop appearing in checkout until you restore it.`,
+    showCancelButton: true,
+    confirmButtonText: 'Archive',
+  })
+
+  if (!result.isConfirmed) return
+
+  const db = await dbPromise
+  await db.put('item_sale_options', {
+    ...option,
+    is_active: false,
+    updated_at: new Date().toISOString(),
+  })
+  await loadItemData()
+}
+
+const restoreSaleOption = async (option) => {
+  const db = await dbPromise
+  await db.put('item_sale_options', {
+    ...option,
+    is_active: true,
+    updated_at: new Date().toISOString(),
+  })
+  await loadItemData()
+}
+
+const saleOptionSubtitle = (option) => {
+  return `${option.option_type === 'wholesale' ? 'Wholesale' : 'Bundle'} • ${formatSaleOptionQuantity(option)}`
+}
+
 const removableExpiredEntries = computed(() => {
   if (!item.value?.track_expiry) return []
 
-  return stockEntries.value
+  return batchEntries.value
     .filter(entry => {
       const quantity = Number(entry?.quantity || 0)
       if (quantity <= 0) return false
@@ -666,13 +893,13 @@ const closeAdjustStockModal = () => {
       </div>
 
       <div class="customer-summary item-summary primary-summary">
-        <div class="customer-summary-card emphasis-card">
+        <div v-if="item.item_type !== 'service'" class="customer-summary-card emphasis-card">
           <span class="summary-label">Current Stock</span>
           <strong class="summary-value">{{ item.track_stock ? totalStock : 'N/A' }}</strong>
           <span class="summary-meta">{{ stockStatus }}</span>
         </div>
 
-        <div class="customer-summary-card">
+        <div v-if="item.item_type !== 'service'" class="customer-summary-card">
           <span class="summary-label">Expired Stock</span>
           <strong class="summary-value">{{ item.track_expiry ? expiredStock : 'N/A' }}</strong>
           <span class="summary-meta">Units currently flagged as expired</span>
@@ -692,13 +919,13 @@ const closeAdjustStockModal = () => {
       </div>
 
       <div class="customer-summary item-summary secondary-summary">
-        <div class="customer-summary-card">
+        <div v-if="item.item_type !== 'service'" class="customer-summary-card">
           <span class="summary-label">Inventory Tracking</span>
           <strong class="summary-value">{{ item.track_stock ? 'Enabled' : 'Disabled' }}</strong>
           <span class="summary-meta">{{ inventoryModeLabel }}</span>
         </div>
 
-        <div class="customer-summary-card">
+        <div v-if="item.item_type !== 'service'" class="customer-summary-card">
           <span class="summary-label">Availability</span>
           <strong class="summary-value">{{ stockStatus }}</strong>
           <span class="summary-meta">Current stock health for this item</span>
@@ -735,6 +962,10 @@ const closeAdjustStockModal = () => {
 
         <button class="tab-button" :class="{ active: activeTab === 'prices' }" @click="activeTab = 'prices'">
           Price History
+        </button>
+
+        <button v-if="canManageSellingOptions" class="tab-button" :class="{ active: activeTab === 'selling-options' }" @click="activeTab = 'selling-options'">
+          Selling Options
         </button>
       </div>
 
@@ -826,8 +1057,8 @@ const closeAdjustStockModal = () => {
                   <small :class="getMovementTypeClass(entry)">{{ getMovementTypeLabel(entry) }}</small>
                 </td>
                 <td v-if="visibleCols.stock_qty">
-                  <div class="stock-qty-cell" :class="Number(entry.quantity || 0) > 0 ? 'points-plus' : 'points-minus'">
-                    <strong>{{ entry.quantity > 0 ? `+${entry.quantity}` : entry.quantity }}</strong>
+                  <div class="stock-qty-cell" :class="getStockHistoryQuantity(entry) > 0 ? 'points-plus' : 'points-minus'">
+                    <strong>{{ getStockHistoryQuantity(entry) > 0 ? `+${getStockHistoryQuantity(entry)}` : getStockHistoryQuantity(entry) }}</strong>
                   </div>
                 </td>
                 <td v-if="visibleCols.stock_expiry">
@@ -847,7 +1078,86 @@ const closeAdjustStockModal = () => {
         <Pagination v-model:page="currentPage" :total-pages="totalPagesForActiveTab" :max-pages="5" :item-count="hasDateRangeFilter ? visibleEntryCount : null" :total-items="hasDateRangeFilter ? activeList.length : null" />
       </template>
 
+      <template v-else-if="activeTab === 'selling-options' && canManageSellingOptions">
+        <div class="selling-options-panel">
+          <div class="selling-options-header">
+            <div>
+              <h3>Selling Options</h3>
+              <p>Create bundle or wholesale selling choices here without adding separate stock items. All options still deduct from this item's expiry-aware stock.</p>
+            </div>
+            <button class="primary" @click="openSaleOptionModal()">Add Selling Option</button>
+          </div>
+
+          <div v-if="activeSaleOptions.length" class="table-wrap selling-options-table-wrap">
+            <table class="selling-options-table">
+              <thead>
+                <tr>
+                  <th>Label</th>
+                  <th>Type</th>
+                  <th>Units</th>
+                  <th>Price</th>
+                  <th class="col-actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="option in activeSaleOptions" :key="getCustomSaleOptionKey(option)">
+                  <td>
+                    <div class="selling-option-primary">{{ option.label }}</div>
+                    <div class="selling-option-secondary">{{ saleOptionSubtitle(option) }}</div>
+                  </td>
+                  <td class="caps">{{ option.option_type }}</td>
+                  <td>{{ formatSaleOptionQuantity(option) }}</td>
+                  <td>{{ toMoney(option.price) }}</td>
+                  <td class="selling-option-actions-cell">
+                    <div class="selling-option-actions">
+                      <button class="warning btn btn-sm" @click="openSaleOptionModal(option)">Edit</button>
+                      <button class="secondary btn btn-sm" @click="archiveSaleOption(option)">Archive</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="selling-options-empty">No bundle or wholesale options yet.</div>
+
+          <div v-if="archivedSaleOptions.length" class="selling-options-archived">
+            <h4>Archived Options</h4>
+            <div class="table-wrap selling-options-table-wrap archived-table-wrap">
+              <table class="selling-options-table archived-table">
+                <thead>
+                  <tr>
+                    <th>Label</th>
+                    <th>Type</th>
+                    <th>Units</th>
+                    <th>Price</th>
+                    <th class="col-actions">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="option in archivedSaleOptions" :key="`archived-${option.id}`" class="selling-option-row-archived">
+                    <td>
+                      <div class="selling-option-primary">{{ option.label }}</div>
+                      <div class="selling-option-secondary">{{ saleOptionSubtitle(option) }}</div>
+                    </td>
+                    <td class="caps">{{ option.option_type }}</td>
+                    <td>{{ formatSaleOptionQuantity(option) }}</td>
+                    <td>{{ toMoney(option.price) }}</td>
+                    <td class="selling-option-actions-cell">
+                      <div class="selling-option-actions">
+                        <button class="info btn btn-sm" @click="restoreSaleOption(option)">Restore</button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </template>
+
       <template v-else-if="activeTab === 'prices'">
+
         <div class="top-bar">
           <SearchInput v-model="searchKeyword" placeholder="Search price history..." />
 
@@ -1020,6 +1330,42 @@ const closeAdjustStockModal = () => {
         </div>
       </div>
     </div>
+
+    <div v-if="showSaleOptionModal" class="modal-backdrop" @click.self="closeSaleOptionModal">
+      <div class="modal-content">
+        <h3>{{ saleOptionModalTitle }}</h3>
+
+        <div class="form-group">
+          <label>Type</label>
+          <select v-model="saleOptionForm.option_type" class="select-field">
+            <option v-for="option in saleOptionTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Label</label>
+          <input v-model="saleOptionForm.label" type="text" class="input" />
+        </div>
+
+        <div class="form-group">
+          <label>Price</label>
+          <input v-model.number="saleOptionForm.price" type="number" min="0" step="0.01" class="input" />
+        </div>
+
+        <div class="form-group">
+          <label>Pieces per Sale Unit</label>
+          <input v-model.number="saleOptionForm.unit_quantity" type="number" min="2" step="1" class="input" />
+          <small class="modal-helper-text">
+            The POS will deduct this many pieces from stock each time this option is sold, while still honoring the current expiry logic.
+          </small>
+        </div>
+
+        <div class="modal-actions">
+          <button @click="closeSaleOptionModal" class="secondary">Cancel</button>
+          <button @click="saveSaleOption" class="primary">Save</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1057,15 +1403,16 @@ body.dark-mode .page-subtitle {
 }
 
 .item-summary {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: stretch;
 }
 
 .primary-summary {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .secondary-summary {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .item-overview-card {
@@ -1190,6 +1537,102 @@ body.dark-mode .overview-badge.is-untracked {
   background: rgba(34, 197, 94, 0.08);
   border-color: rgba(34, 197, 94, 0.16);
   color: #166534;
+}
+
+.selling-options-panel {
+  margin-bottom: 16px;
+  padding: 18px;
+  border: 1px solid #dbe6e2;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fffc 100%);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+body.dark-mode .selling-options-panel {
+  background: linear-gradient(180deg, #162520 0%, #121b18 100%);
+  border-color: #244034;
+}
+
+.selling-options-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.selling-options-header h3,
+.selling-options-archived h4 {
+  margin: 0 0 6px;
+}
+
+.selling-options-header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+body.dark-mode .selling-options-header p {
+  color: #9fb0c2;
+}
+
+.selling-options-archived {
+  display: grid;
+  gap: 10px;
+}
+
+.selling-options-table-wrap {
+  margin-bottom: 10px;
+}
+
+.selling-options-table {
+  width: 100%;
+}
+
+.selling-options-table tbody td {
+  vertical-align: top;
+}
+
+.selling-option-primary {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+body.dark-mode .selling-option-primary {
+  color: #f8fafc;
+}
+
+.selling-option-secondary {
+  display: grid;
+  margin-top: 3px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.selling-options-empty {
+  color: #64748b;
+}
+
+body.dark-mode .selling-option-secondary,
+body.dark-mode .selling-options-empty {
+  color: #9fb0c2;
+}
+
+.selling-option-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.selling-option-actions-cell {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.selling-option-row-archived {
+  opacity: 0.72;
 }
 
 .expiry-panel.warning {
@@ -1572,15 +2015,28 @@ body.dark-mode .modal-helper-text {
   }
 
   .item-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 
   .secondary-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 }
 
 @media (max-width: 768px) {
+  .selling-options-header,
+  .selling-option-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .selling-options-table th:nth-child(2),
+  .selling-options-table td:nth-child(2),
+  .selling-options-table th:nth-child(3),
+  .selling-options-table td:nth-child(3) {
+    display: none;
+  }
+
   .item-details-page .top-bar > :deep(.dp__main),
   .item-details-page .top-bar > :deep(.date-icon-btn),
   .stock-history-filter {

@@ -23,6 +23,7 @@ The app is best treated as an internal inventory and sales monitoring tool for d
 - Medicine listing and medicine detail views
 - Inventory tracking and stock-related workflows
 - Sales entry and saved drafts
+- Item detail selling options for bundle and wholesale sales without creating separate stock items
 - Customer records and transaction history
 - Analytics dashboard for sales trends and top medicines
 - Page visibility settings
@@ -106,6 +107,14 @@ Then open the Android project in Android Studio if you need a native build.
 - The app stores operational data locally in IndexedDB.
 - Database setup is initialized on app startup from `src/main.js` through the `src/db` module.
 - Because data is stored locally, backup and restore workflows are important for preserving records.
+
+## Selling Options Flow
+
+- The add item modal stays focused on the base item record.
+- Bundle and wholesale selling options are created from the item's detail page.
+- Each selling option stores its own selling price and the number of base pieces consumed for one sale unit.
+- During checkout, stock validation and deduction convert those sale units back into base pieces before touching inventory.
+- Because the deduction still uses the base item batches, existing expiry-aware sellable stock logic also applies to bundle and wholesale sales.
 
 ## Important Disclaimer
 

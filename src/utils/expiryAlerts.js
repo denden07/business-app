@@ -15,6 +15,7 @@ function toLocalStartOfDay(value) {
 export function normalizeExpiryAlertSettings(source = {}) {
   const parsedWarningDays = Number(source?.expiryWarningDays)
   const parsedCriticalDays = Number(source?.expiryCriticalDays)
+  const allowExpiredSales = source?.allowExpiredSales === true
   const warningDays = Number.isFinite(parsedWarningDays) && parsedWarningDays > 0
     ? Math.round(parsedWarningDays)
     : DEFAULT_EXPIRY_WARNING_DAYS
@@ -25,6 +26,7 @@ export function normalizeExpiryAlertSettings(source = {}) {
   return {
     warningDays,
     criticalDays: Math.min(warningDays, criticalDays),
+    allowExpiredSales,
   }
 }
 
@@ -63,7 +65,7 @@ export function classifyExpiryDate(expiryDate, settings = {}, referenceDate = ne
 }
 
 export function getSellableQuantityFromBatches(batches = [], options = {}) {
-  const { trackExpiry = false, referenceDate = new Date() } = options
+  const { trackExpiry = false, referenceDate = new Date(), allowExpiredSales = false } = options
 
   return batches.reduce((sum, batch) => {
     const quantity = Number(batch?.quantity || 0)
@@ -76,7 +78,7 @@ export function getSellableQuantityFromBatches(batches = [], options = {}) {
     }
 
     const { status } = classifyExpiryDate(batch?.expiry_date, options, referenceDate)
-    return status === 'expired' ? sum : sum + quantity
+    return status === 'expired' && !allowExpiredSales ? sum : sum + quantity
   }, 0)
 }
 

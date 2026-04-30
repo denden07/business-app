@@ -72,6 +72,20 @@ The new "items" system should:
 
 ----------------------------------------
 
+SELLING OPTIONS FLOW
+
+- Base items remain the source of truth for inventory and expiry-aware stock.
+- Optional selling configurations such as bundle and wholesale are attached to the base item through `item_sale_options`.
+- These selling options are managed from the item detail page rather than the add-item modal.
+- A selling option defines:
+   - label / type
+   - selling price
+   - unit quantity in base pieces
+- POS and sale persistence always convert the chosen selling option back into base pieces before deducting `item_batches`.
+- This keeps bundle and wholesale selling compatible with the current expiry exclusion logic, because expired pieces are still filtered out at the batch level.
+
+----------------------------------------
+
 FUTURE DIRECTION
 
 After inventory refactor, the app will support:

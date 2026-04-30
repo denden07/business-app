@@ -1,7 +1,7 @@
 import { openDB } from 'idb';
 
 export const DB_NAME = 'business_pos_db';
-export const DB_VERSION = 26;
+export const DB_VERSION = 27;
 
 export const dbPromise = openDB(DB_NAME, DB_VERSION, {
   upgrade(db, oldVersion, newVersion, transaction) {
@@ -56,6 +56,17 @@ export const dbPromise = openDB(DB_NAME, DB_VERSION, {
       const store = db.createObjectStore('item_batches', { keyPath: 'id', autoIncrement: true });
       store.createIndex('item_id', 'item_id');
       store.createIndex('expiry_date', 'expiry_date');
+    }
+
+    /* =========================
+       ITEM SALE OPTIONS
+    ========================== */
+    if (!db.objectStoreNames.contains('item_sale_options')) {
+      const store = db.createObjectStore('item_sale_options', { keyPath: 'id', autoIncrement: true });
+      store.createIndex('item_id', 'item_id');
+      store.createIndex('option_type', 'option_type');
+      store.createIndex('is_active', 'is_active');
+      store.createIndex('updated_at', 'updated_at');
     }
 
     /* =========================

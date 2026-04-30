@@ -7,7 +7,6 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
 import { Device } from '@capacitor/device'
 import { FilePicker } from '@capawesome/capacitor-file-picker'
-import InventoryTrackingOptions from '../components/InventoryTrackingOptions.vue'
 import PageVisibilitySettings from '../components/PageVisibilitySettings.vue'
 import { collectFromSource } from '../db/query'
 import Swal from 'sweetalert2'
@@ -49,15 +48,13 @@ const canSellProducts = computed(() => activeTemplate.value?.workflow?.allowProd
 const canSellServices = computed(() => activeTemplate.value?.workflow?.allowServiceSales !== false && activeTemplate.value?.capabilities?.services !== false)
 const templateProfileStatus = ref('')
 const templateProfileSaving = ref(false)
-const trackStock = ref(false)
-const trackBatches = ref(false)
-const trackExpiry = ref(false)
 const loyaltyEnabled = ref(true)
 const requireCustomer = ref(false)
 const pointsMultiplier = ref(1)
 const dailySalesQuota = ref(40000)
 const expiryWarningDays = ref(30)
 const expiryCriticalDays = ref(7)
+const allowExpiredSales = ref(false)
 const showProductChart = ref(true)
 const showServiceChart = ref(true)
 const catalogLabel = ref('Items')
@@ -67,24 +64,6 @@ const customerSectionLabel = ref('Sold to')
 const customerActionLabel = ref('Select Customer')
 const paymentCashLabel = ref('Cash')
 const paymentGcashLabel = ref('Online Bank')
-const stockOptionDisabled = computed(() => !canSellProducts.value)
-const batchOptionDisabled = computed(() => !canSellProducts.value || !trackStock.value)
-const expiryOptionDisabled = computed(() => !canSellProducts.value || !trackBatches.value)
-const stockDisabledReason = computed(() => {
-  if (!canSellProducts.value) return 'Enable product sales in this template before turning on stock tracking.'
-  return ''
-})
-const batchDisabledReason = computed(() => {
-  if (!canSellProducts.value) return 'Batch tracking is only available when product sales are enabled.'
-  if (!trackStock.value) return 'Turn on stock tracking first to enable batches.'
-  return ''
-})
-const expiryDisabledReason = computed(() => {
-  if (!canSellProducts.value) return 'Expiry tracking is only available when product sales are enabled.'
-  if (!trackStock.value) return 'Turn on stock tracking first to enable expiry tracking.'
-  if (!trackBatches.value) return 'Turn on batch tracking first to attach expiry dates.'
-  return ''
-})
 
 const settingsTabs = [
   { id: 'general', label: 'General' },
@@ -96,9 +75,6 @@ const settingsTabs = [
 
 function applyTemplateProfileForm(template) {
   const labels = template?.labels || {}
-  trackStock.value = !!template?.itemDefaults?.trackStock
-  trackBatches.value = !!template?.itemDefaults?.trackBatches
-  trackExpiry.value = !!template?.itemDefaults?.trackExpiry
   loyaltyEnabled.value = template?.customer?.enableLoyalty !== false
   requireCustomer.value = template?.workflow?.requireCustomer === true || template?.customer?.requireCustomerDetails === true
   pointsMultiplier.value = getTemplatePointsMultiplier(template || {})
@@ -106,6 +82,7 @@ function applyTemplateProfileForm(template) {
   const expirySettings = getTemplateExpiryAlertSettings(template || {})
   expiryWarningDays.value = expirySettings.warningDays
   expiryCriticalDays.value = expirySettings.criticalDays
+  allowExpiredSales.value = expirySettings.allowExpiredSales === true
   showProductChart.value = template?.reporting?.showProductChart !== false
   showServiceChart.value = template?.reporting?.showServiceChart !== false
   catalogLabel.value = getTemplateCatalogLabel(labels)
@@ -121,24 +98,7 @@ watch(activeTemplate, template => {
   applyTemplateProfileForm(template)
 }, { immediate: true })
 
-watch(trackStock, value => {
-  if (!value) {
-    trackBatches.value = false
-    trackExpiry.value = false
-  }
-})
-
-watch(trackBatches, value => {
-  if (!value) {
-    trackExpiry.value = false
-  }
-})
-
 function buildTemplateProfileOverrides() {
-  const nextTrackStock = canSellProducts.value && trackStock.value
-  const nextTrackBatches = nextTrackStock && trackBatches.value
-  const nextTrackExpiry = nextTrackBatches && trackExpiry.value
-
   return {
     customer: {
       ...(activeTemplate.value?.customer || {}),
@@ -148,28 +108,16 @@ function buildTemplateProfileOverrides() {
     },
     payments: { ...(activeTemplate.value?.payments || {}) },
     pages: { ...(activeTemplate.value?.pages || {}) },
-    capabilities: {
-      ...(activeTemplate.value?.capabilities || {}),
-      stockTracking: nextTrackStock ? 'required' : false,
-      batchTracking: nextTrackBatches ? 'required' : false,
-      expiryTracking: nextTrackExpiry ? 'required' : false,
-    },
     workflow: {
       ...(activeTemplate.value?.workflow || {}),
-      requireBatchSelection: nextTrackBatches,
       requireCustomer: requireCustomer.value,
-    },
-    itemDefaults: {
-      ...(activeTemplate.value?.itemDefaults || {}),
-      trackStock: nextTrackStock,
-      trackBatches: nextTrackBatches,
-      trackExpiry: nextTrackExpiry,
     },
     reporting: {
       ...(activeTemplate.value?.reporting || {}),
       dailySalesQuota: Number(dailySalesQuota.value),
       expiryWarningDays: Number(expiryWarningDays.value),
       expiryCriticalDays: Number(expiryCriticalDays.value),
+      allowExpiredSales: canSellProducts.value && allowExpiredSales.value,
       showProductChart: canSellProducts.value ? showProductChart.value : false,
       showServiceChart: canSellServices.value ? showServiceChart.value : false,
     },
@@ -841,22 +789,6 @@ onMounted(async () => {
             </div>
 
             <div class="template-settings-grid">
-              <div class="template-setting-field inventory-settings-field inventory-settings-field-wide">
-                <span>Tracking flow</span>
-                <small>These options build on each other: stock enables batches, and batches enable expiry dates.</small>
-                <InventoryTrackingOptions
-                  v-model:track-stock="trackStock"
-                  v-model:track-batches="trackBatches"
-                  v-model:track-expiry="trackExpiry"
-                  :stock-disabled="stockOptionDisabled"
-                  :batches-disabled="batchOptionDisabled"
-                  :expiry-disabled="expiryOptionDisabled"
-                  :stock-disabled-reason="stockDisabledReason"
-                  :batches-disabled-reason="batchDisabledReason"
-                  :expiry-disabled-reason="expiryDisabledReason"
-                />
-              </div>
-
               <label class="template-setting-field">
                 <span>Near-expiry warning window</span>
                 <input v-model.number="expiryWarningDays" class="input" type="number" min="1" step="1" />
@@ -867,6 +799,12 @@ onMounted(async () => {
                 <span>Urgent expiry window</span>
                 <input v-model.number="expiryCriticalDays" class="input" type="number" min="1" step="1" :max="expiryWarningDays || undefined" />
                 <small>Items inside this shorter window get the stronger expiry alert treatment.</small>
+              </label>
+
+              <label class="template-setting-field template-toggle-field">
+                <span>Allow selling expired quantity</span>
+                <input v-model="allowExpiredSales" type="checkbox" :disabled="!canSellProducts" />
+                <small>When enabled, expired stock remains blocked in alerts but can still be counted as sellable and deducted during checkout.</small>
               </label>
             </div>
           </section>

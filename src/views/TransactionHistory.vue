@@ -26,6 +26,7 @@ import {
   getSaleOutstandingBalance,
 } from '../utils/saleStatus'
 import { openDebtSettlementPrompt } from '../utils/debtSettlementPrompt'
+import { getSaleOptionUnitQuantity } from '../utils/itemSaleOptions'
 
 const route = useRoute()
 const store = useStore()
@@ -110,6 +111,12 @@ const selectedSale = ref(null)
 const saleCustomer = ref(null)
 const currentCustomer = ref(null)
 const debtPayments = ref([])
+
+const formatSaleItemQuantity = (item) => {
+  const unitQuantity = getSaleOptionUnitQuantity({ unit_quantity: item.unit_quantity || 1 })
+  const totalPieces = Number(item.quantity_in_base_units || (Number(item.quantity || 0) * unitQuantity))
+  return unitQuantity > 1 ? `${Number(item.quantity || 0)} units (${totalPieces} pcs)` : `${Number(item.quantity || 0)} pcs`
+}
 
 /* ======================
    WATCHERS
@@ -694,8 +701,11 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
             </thead>
             <tbody>
               <tr v-for="item in selectedSaleItems" :key="item.id">
-                <td>{{ item.display_name || item.medicine_name }}</td>
-                <td>{{ item.quantity }}</td>
+                <td>
+                  {{ item.display_name || item.medicine_name }}
+                  <div class="sale-meta">{{ item.sale_option_label || item.price_type || 'Regular' }}</div>
+                </td>
+                <td>{{ formatSaleItemQuantity(item) }}</td>
                 <td>₱{{ item.price_at_sale.toFixed(2) }}</td>
                 <td>₱{{ (item.quantity * item.price_at_sale).toFixed(2) }}</td>
               </tr>

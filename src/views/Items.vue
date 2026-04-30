@@ -244,6 +244,10 @@ const restoreItem = async (item) => {
 }
 
 const stockLabel = (item) => {
+  if (item.item_type === 'service') {
+    return { primary: 'N/A', secondary: '' }
+  }
+
   if (!item.track_stock) {
     return { primary: 'N/A', secondary: '' }
   }
@@ -265,6 +269,7 @@ const stockLabel = (item) => {
 }
 
 const inventoryModeLabel = (item) => {
+  if (item.item_type === 'service') return 'N/A'
   if (!item.track_stock) return 'No stock'
   if (item.track_batches && item.track_expiry) return 'Batch + expiry'
   if (item.track_batches) return 'Batch'
@@ -272,6 +277,8 @@ const inventoryModeLabel = (item) => {
 }
 
 const expirySummaryLabel = (item) => {
+  if (item.item_type === 'service') return 'N/A'
+
   const summary = expiryAlertMap.value[item.id]
 
   if (!item.track_expiry) return 'Not tracked'
@@ -284,12 +291,19 @@ const expirySummaryLabel = (item) => {
 }
 
 const expiryClass = (item) => {
+  if (item.item_type === 'service') return 'expiry-pill ok'
   const status = expiryAlertMap.value[item.id]?.status
   if (status === 'expired') return 'expiry-pill expired'
   if (status === 'critical') return 'expiry-pill critical'
   if (status === 'warning') return 'expiry-pill warning'
   return 'expiry-pill ok'
 }
+
+const itemTypeLabel = (item) => String(item?.item_type || 'item')
+  .replace(/[_-]+/g, ' ')
+  .replace(/\b\w/g, letter => letter.toUpperCase())
+
+const itemTypeClass = (item) => item?.item_type === 'service' ? 'item-type-pill service' : 'item-type-pill product'
 </script>
 
 <template>
@@ -385,7 +399,9 @@ const expiryClass = (item) => {
               <div class="item-name">{{ item.name }}</div>
               <div v-if="item.description" class="item-description">{{ item.description }}</div>
             </td>
-            <td v-if="visibleCols.type" class="caps">{{ item.item_type }}</td>
+            <td v-if="visibleCols.type">
+              <span :class="itemTypeClass(item)">{{ itemTypeLabel(item) }}</span>
+            </td>
             <td v-if="visibleCols.inventory_mode">{{ inventoryModeLabel(item) }}</td>
             <td v-if="visibleCols.regular_price">PHP {{ item.price1 }}</td>
             <td v-if="visibleCols.discount_price">PHP {{ item.price2 || 0 }}</td>
@@ -492,6 +508,28 @@ const expiryClass = (item) => {
   color: #991b1b;
 }
 
+.item-type-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+.item-type-pill.product {
+  background: rgba(14, 165, 233, 0.12);
+  color: #075985;
+}
+
+.item-type-pill.service {
+  background: rgba(168, 85, 247, 0.12);
+  color: #6b21a8;
+}
+
 .item-name {
   font-weight: 700;
 }
@@ -519,6 +557,16 @@ const expiryClass = (item) => {
 
 .caps {
   text-transform: capitalize;
+}
+
+body.dark-mode .item-type-pill.product {
+  background: rgba(56, 189, 248, 0.18);
+  color: #bae6fd;
+}
+
+body.dark-mode .item-type-pill.service {
+  background: rgba(192, 132, 252, 0.18);
+  color: #e9d5ff;
 }
 
 .actions-td :deep(.icon-action-btn) {

@@ -12,6 +12,7 @@ import {
   getTemplatePaymentLabel,
   getTemplateProfessionalFeeLabel,
 } from '../utils/templatePresentation'
+import { getSaleOptionUnitQuantity } from '../utils/itemSaleOptions'
 
 const store = useStore()
 const router = useRouter()
@@ -79,6 +80,13 @@ const formatDraftItemCount = (count) => {
   const pluralLabel = catalogLabel.value
 
   return `${normalizedCount} ${normalizedCount === 1 ? singularLabel : pluralLabel}`
+}
+
+const formatDraftLineMeta = (item) => {
+  const unitQuantity = getSaleOptionUnitQuantity({ unit_quantity: item.saleOptionUnitQuantity || 1 })
+  const totalPieces = Number(item.qty || 0) * unitQuantity
+  const label = item.saleOptionLabel || item.priceType || 'Regular'
+  return unitQuantity > 1 ? `${label} • ${totalPieces} pcs total` : `${label} • per piece`
 }
 
 /* ======================
@@ -224,7 +232,7 @@ const goPage = (page) => {
                 <td>
                   <div class="item-name">{{ item.name }}</div>
                   <div v-if="item.generic_name" class="item-secondary">{{ item.generic_name }}</div>
-                  <div class="item-meta">{{ item.priceType || 'regular' }}</div>
+                  <div class="item-meta">{{ formatDraftLineMeta(item) }}</div>
                 </td>
                 <td>{{ item.qty }}</td>
                 <td>₱{{ Number(item.price || 0).toFixed(2) }}</td>

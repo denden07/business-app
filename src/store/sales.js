@@ -17,6 +17,7 @@ import {
   getSaleOutstandingBalance,
   normalizeSalePaymentStatus,
 } from '../utils/saleStatus'
+import { getSaleOptionUnitQuantity } from '../utils/itemSaleOptions'
 
 export default {
   namespaced: true,
@@ -170,6 +171,8 @@ async saveSale({ commit }, payload) {
 
     const catalogItem = await itemCatalogStore.get(sourceId)
     const tracksStock = item.track_stock ?? !!catalogItem?.track_stock
+    const unitQuantity = getSaleOptionUnitQuantity({ unit_quantity: item.saleOptionUnitQuantity || 1 })
+    const quantityInBaseUnits = Number(item.qty || 0) * unitQuantity
     let primaryBatchId = null
     let batchStoreName = null
 
@@ -179,7 +182,7 @@ async saveSale({ commit }, payload) {
         indexName: 'item_id',
         foreignKey: 'item_id',
         foreignId: sourceId,
-        quantity: Number(item.qty || 0),
+        quantity: quantityInBaseUnits,
         trackExpiry: !!catalogItem?.track_expiry,
         expiryAlertSettings,
         now,
@@ -193,11 +196,15 @@ async saveSale({ commit }, payload) {
       medicine_id: null,
       item_id: sourceId,
       quantity: item.qty,
+      quantity_in_base_units: quantityInBaseUnits,
+      unit_quantity: unitQuantity,
       price_at_sale: item.price,
       price_type: item.priceType,
+      sale_option_id: item.saleOptionId || null,
+      sale_option_label: item.saleOptionLabel || null,
       batch_id: primaryBatchId,
       batch_store: batchStoreName,
-      is_piece_or_box: 'piece'
+      is_piece_or_box: unitQuantity > 1 ? 'pack' : 'piece'
     })
 
     if (catalogItem) {
@@ -597,6 +604,7 @@ function saleMatchesFilters(sale, { keyword = '', statusFilter = 'all' } = {}) {
 async function deductStockWithNegativeFallback({ batchStore, indexName, foreignKey, foreignId, quantity, trackExpiry = false, expiryAlertSettings = {}, now, autoBatchPrefix }) {
   const allBatches = await collectFromSource(batchStore.index(indexName), { query: foreignId })
   const remainingQty = Number(quantity || 0)
+  const allowExpiredSales = expiryAlertSettings?.allowExpiredSales === true
   const eligibleBatches = sortBatchesForSale(allBatches, {
     trackExpiry,
     ...expiryAlertSettings,
@@ -609,7 +617,7 @@ async function deductStockWithNegativeFallback({ batchStore, indexName, foreignK
       return true
     }
 
-    return classifyExpiryDate(batch.expiry_date, expiryAlertSettings).status !== 'expired'
+    return allowExpiredSales || classifyExpiryDate(batch.expiry_date, expiryAlertSettings).status !== 'expired'
   })
 
   const sufficientBatch = eligibleBatches.find(batch => Number(batch.quantity || 0) >= remainingQty)

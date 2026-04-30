@@ -26,6 +26,7 @@ import {
   getSaleOutstandingBalance,
 } from '../utils/saleStatus'
 import { openDebtSettlementPrompt } from '../utils/debtSettlementPrompt'
+import { getSaleOptionUnitQuantity } from '../utils/itemSaleOptions'
 
 
 
@@ -117,6 +118,12 @@ const showView = ref(false)
 const fmt = (v) => {
   const n = Number(v)
   return isNaN(n) ? '0.00' : n.toFixed(2)
+}
+
+const formatSaleItemQuantity = (item) => {
+  const unitQuantity = getSaleOptionUnitQuantity({ unit_quantity: item.unit_quantity || 1 })
+  const totalPieces = Number(item.quantity_in_base_units || (Number(item.quantity || 0) * unitQuantity))
+  return unitQuantity > 1 ? `${Number(item.quantity || 0)} units (${totalPieces} pcs)` : `${Number(item.quantity || 0)} pcs`
 }
 /* ======================
    LOAD SALES & CUSTOMERS
@@ -524,8 +531,11 @@ const exportCSV = async () => {
           </thead>
           <tbody>
             <tr v-for="item in saleItems" :key="item.id">
-              <td>{{ item.display_name || item.medicine_name }}</td>
-              <td>{{ item.quantity }}</td>
+              <td>
+                {{ item.display_name || item.medicine_name }}
+                <div class="sale-meta">{{ item.sale_option_label || item.price_type || 'Regular' }}</div>
+              </td>
+              <td>{{ formatSaleItemQuantity(item) }}</td>
               <td>₱{{ item.price_at_sale.toFixed(2) }}</td>
               <td>₱{{ (item.quantity * item.price_at_sale).toFixed(2) }}</td>
             </tr>

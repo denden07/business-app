@@ -9,6 +9,12 @@ import { dbPromise } from '../db'
 import { collectFromSource } from '../db/query'
 import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { summarizeExpiryForBatches, getSellableQuantityFromBatches } from '../utils/expiryAlerts'
+import {
+  findSaleOption,
+  formatSaleOptionQuantity,
+  getAvailableSaleOptions,
+  getSaleOptionUnitQuantity,
+} from '../utils/itemSaleOptions'
 import { getTemplateExpiryAlertSettings, getTemplatePointsMultiplier } from '../utils/templatePresentation'
 import { normalizeSalePaymentStatus } from '../utils/saleStatus'
 import {
@@ -325,8 +331,8 @@ const buildCheckoutSummaryHtml = () => {
         </thead>
           ${cart.value.map(item => `
             <tr style="border-bottom: 1px solid #eee;">
-              <td style="padding: 8px;">${item.name}</td>
-              <td style="padding: 8px; text-align: center;">${item.qty}</td>
+              <td style="padding: 8px;">${item.name}<div style="margin-top: 2px; font-size: 12px; color: #64748b;">${getCartLineMeta(item)}</div></td>
+              <td style="padding: 8px; text-align: center;">${getCartLineQuantityLabel(item)}</td>
               <td style="padding: 8px; text-align: right;">₱${item.price.toFixed(2)}</td>
               <td style="padding: 8px; text-align: right;">₱${(item.price * item.qty).toFixed(2)}</td>
             </tr>
@@ -488,11 +494,47 @@ const triggerNumpadFeedback = (frequency, duration, hapticStyle = ImpactStyle.Li
   void playNumpadTone(frequency, duration)
 }
 
+const getSaleOptionList = (item) => {
+  const entry = getCatalogEntry(item) || item || {}
+  return getAvailableSaleOptions(entry, entry.saleOptions || [])
+}
+
+const getSelectedSaleOption = (item, optionKey = null) => {
+  const entry = getCatalogEntry(item) || item || {}
+  return findSaleOption(entry, entry.saleOptions || [], optionKey || item?.priceType || selectedPriceType.value)
+}
+
+const getCartLineBaseUnits = (item, qty = Number(item?.qty || 0)) => {
+  const option = getSelectedSaleOption(item)
+  return qty * getSaleOptionUnitQuantity(option || {})
+}
+
+const getCartLineMeta = (item) => {
+  const option = getSelectedSaleOption(item)
+  if (!option) return 'Regular'
+  return `${option.label} • ${formatSaleOptionQuantity(option)}`
+}
+
+const getCartLineQuantityLabel = (item) => {
+  const qty = Number(item.qty || 0)
+  const baseUnits = getCartLineBaseUnits(item, qty)
+  const option = getSelectedSaleOption(item)
+  if (!option) return `${qty}`
+  if (getSaleOptionUnitQuantity(option) === 1) return `${qty} pc${qty === 1 ? '' : 's'}`
+  return `${qty} unit${qty === 1 ? '' : 's'} (${baseUnits} pcs)`
+}
+
+const shouldShowCartLineMeta = (item) => {
+  const option = getSelectedSaleOption(item)
+  return getSaleOptionUnitQuantity(option || {}) > 1
+}
+
 const warnStockOverflow = async (item, requestedQty, availableQty) => {
+  const simulatedItem = { ...item, qty: requestedQty }
   await Swal.fire({
     icon: 'warning',
     title: 'Low Stock Warning',
-    html: `<b>${item.name}</b><br/>Available: ${availableQty}<br/>Cart Total: ${requestedQty}<br/><br/>You are exceeding available stock!`,
+    html: `<b>${item.name}</b><br/>Available: ${availableQty} pcs<br/>Requested: ${getCartLineQuantityLabel(simulatedItem)}<br/><br/>You are exceeding available stock!`,
     confirmButtonText: 'OK',
     timer: 2000,
     timerProgressBar: true,
@@ -505,7 +547,7 @@ const setCartItemQty = async (item, nextQty) => {
 
   item.qty = normalizedQty
 
-  if (availableQty !== null && normalizedQty > availableQty) {
+  if (availableQty !== null && getCartLineBaseUnits(item, normalizedQty) > availableQty) {
     await warnStockOverflow(item, normalizedQty, availableQty)
   }
 }
@@ -599,9 +641,10 @@ watch(search, async (val) => {
   }
 
   const db = await dbPromise
-  const tx = db.transaction(['items', 'item_batches'], 'readonly')
+  const tx = db.transaction(['items', 'item_batches', 'item_sale_options'], 'readonly')
   const itemsStore = tx.objectStore('items')
   const itemBatchIndex = tx.objectStore('item_batches').index('item_id')
+  const saleOptionIndex = tx.objectStore('item_sale_options').index('item_id')
   const matches = []
   const nextCatalogEntries = {}
 
@@ -633,6 +676,7 @@ watch(search, async (val) => {
             ...expiryAlertSettings.value,
           })
         : null
+      const saleOptions = await collectFromSource(saleOptionIndex, { query: IDBKeyRange.only(item.id) })
 
       const entry = {
         ...item,
@@ -641,6 +685,7 @@ watch(search, async (val) => {
         cartKey: `item:${item.id}`,
         quantity: sellableStock,
         generic_name: '',
+        saleOptions,
         expirySummary,
         stockIndicator: getStockIndicator({
           quantity: sellableStock,
@@ -740,16 +785,17 @@ const addToCart = async (catalogItem) => {
     return
   }
 
-  const price = selectedPriceType.value === 'regular'
-    ? catalogItem.price1
-    : catalogItem.price2 || catalogItem.price1
+  const saleOption = getSelectedSaleOption(catalogItem, selectedPriceType.value)
+  if (!saleOption) return
 
-  const existing = cart.value.find(i => i.cartKey === catalogItem.cartKey && i.priceType === selectedPriceType.value)
+  const price = Number(saleOption.price || 0)
+
+  const existing = cart.value.find(i => i.cartKey === catalogItem.cartKey && i.priceType === saleOption.key)
   const currentStock = getAvailableStock(catalogItem)
   const cartQty = existing ? existing.qty : 0
   const newQty = cartQty + 1
 
-  if (currentStock !== null && newQty > currentStock) {
+  if (currentStock !== null && (newQty * getSaleOptionUnitQuantity(saleOption)) > currentStock) {
     await warnStockOverflow(catalogItem, newQty, currentStock)
   }
 
@@ -766,7 +812,11 @@ const addToCart = async (catalogItem) => {
     description: catalogItem.description || '',
     item_type: catalogItem.item_type || 'product',
     track_stock: !!catalogItem.track_stock,
-    priceType: selectedPriceType.value,
+    saleOptions: catalogItem.saleOptions || [],
+    priceType: saleOption.key,
+    saleOptionId: saleOption.isBuiltIn ? null : saleOption.id,
+    saleOptionLabel: saleOption.label,
+    saleOptionUnitQuantity: getSaleOptionUnitQuantity(saleOption),
     price,
     qty: 1
   })
@@ -777,10 +827,13 @@ const addToCart = async (catalogItem) => {
 
 
 const setPriceType = (item, type) => {
-  const med = getCatalogEntry(item)
-  if (!med) return
-  item.priceType = type
-  item.price = type === 'regular' ? Number(med.price1 || 0) : Number(med.price2 || med.price1 || 0)
+  const option = getSelectedSaleOption(item, type)
+  if (!option) return
+  item.priceType = option.key
+  item.price = Number(option.price || 0)
+  item.saleOptionId = option.isBuiltIn ? null : option.id
+  item.saleOptionLabel = option.label
+  item.saleOptionUnitQuantity = getSaleOptionUnitQuantity(option)
 }
 
 
@@ -792,10 +845,8 @@ const removeItem = (cartItem) => {
 const getPrice = (itemId, type) => {
   const catalogEntry = filteredCatalog.value.find(item => item.sourceId === itemId) || cart.value.find(item => item.id === itemId)
   if (!catalogEntry) return '0.00'
-  const price = type === 'regular' 
-    ? Number(catalogEntry.price1 || 0) 
-    : Number(catalogEntry.price2 || catalogEntry.price1 || 0)
-  return price.toFixed(2)
+  const option = getSelectedSaleOption(catalogEntry, type)
+  return Number(option?.price || 0).toFixed(2)
 }
 
 
@@ -873,9 +924,10 @@ const checkout = async () => {
   const stockWarnings = []
   for (const item of cart.value) {
     const available = getAvailableStock(item)
-    if (available !== null && item.qty > available) {
-      const shortage = item.qty - available
-      stockWarnings.push(`<b>${item.name}</b>: Need ${item.qty}, Available ${available} (Short by ${shortage})`)
+    const baseUnits = getCartLineBaseUnits(item)
+    if (available !== null && baseUnits > available) {
+      const shortage = baseUnits - available
+      stockWarnings.push(`<b>${item.name}</b>: Need ${getCartLineQuantityLabel(item)}, Available ${available} pcs (Short by ${shortage})`)
     }
   }
   
@@ -1147,6 +1199,7 @@ const normalizeDraftCatalogMap = (draft) => {
       generic_name: '',
       item_type: entry.item_type || 'product',
       track_stock: entry.track_stock === false ? false : true,
+      saleOptions: entry.saleOptions || [],
     }
   }
 
@@ -1165,6 +1218,7 @@ const normalizeDraftCatalogMap = (draft) => {
       generic_name: '',
       item_type: 'product',
       track_stock: entry.track_stock === false ? false : true,
+      saleOptions: entry.saleOptions || [],
     }
   }
 
@@ -1186,23 +1240,22 @@ const normalizeDraftCartItem = (item) => {
     item_type: item.item_type || 'product',
     description: item.description || item.generic_name || '',
     generic_name: '',
-    track_stock: !!item.track_stock
+    track_stock: !!item.track_stock,
+    saleOptions: item.saleOptions || [],
+    saleOptionId: item.saleOptionId ?? null,
+    saleOptionLabel: item.saleOptionLabel || '',
+    saleOptionUnitQuantity: Number(item.saleOptionUnitQuantity || 1),
   }
 }
 
-const getRegularPriceLabel = (item) => {
-  const entry = getCatalogEntry(item)
-  return Number(entry?.price1 || 0).toFixed(2)
-}
+const getPriceOptions = (item) => getSaleOptionList(item)
+const usePriceOptionDropdown = (item) => getPriceOptions(item).length >= 3
 
-const hasDiscountPrice = (item) => {
-  const entry = getCatalogEntry(item)
-  return Number(entry?.price2 || 0) > 0
-}
-
-const getDiscountPriceLabel = (item) => {
-  const entry = getCatalogEntry(item)
-  return Number(entry?.price2 || 0).toFixed(2)
+const getPriceOptionLabel = (item, optionKey) => {
+  const option = getSelectedSaleOption(item, optionKey)
+  if (!option) return '—'
+  const quantityLabel = getSaleOptionUnitQuantity(option) === 1 ? '' : ` / ${formatSaleOptionQuantity(option)}`
+  return `${option.label} ₱${Number(option.price || 0).toFixed(2)}${quantityLabel}`
 }
 
 
@@ -1262,26 +1315,32 @@ const getDiscountPriceLabel = (item) => {
           <tr v-for="item in cart" :key="`${item.cartKey}:${item.priceType}`">
             <td>
               <div class="cart-item-name">{{ item.name }}</div>
-              <div class="catalog-meta" v-if="item.generic_name || item.description">{{ item.generic_name || item.description }}</div>
+            
             </td>
             <td>
 <div class="price-toggle">
-  <button
-    class="price-option-btn"
-    :class="{ active: item.priceType === 'regular', inactive: item.priceType !== 'regular' }"
-    @click="selectItemPriceType(item, 'regular')"
+  <select
+    v-if="usePriceOptionDropdown(item)"
+    class="select-field price-option-select"
+    :value="item.priceType"
+    @change="selectItemPriceType(item, $event.target.value)"
   >
-    Reg ₱{{ getRegularPriceLabel(item) }}
-  </button>
+    <option v-for="option in getPriceOptions(item)" :key="option.key" :value="option.key">
+      {{ getPriceOptionLabel(item, option.key) }}
+    </option>
+  </select>
 
-  <button
-    class="price-option-btn"
-    v-if="hasDiscountPrice(item)"
-    :class="{ active: item.priceType === 'discount', inactive: item.priceType !== 'discount' }"
-    @click="selectItemPriceType(item, 'discount')"
-  >
-    Dis ₱{{ getDiscountPriceLabel(item) }}
-  </button>
+  <template v-else>
+    <button
+      v-for="option in getPriceOptions(item)"
+      :key="option.key"
+      class="price-option-btn"
+      :class="{ active: item.priceType === option.key, inactive: item.priceType !== option.key }"
+      @click="selectItemPriceType(item, option.key)"
+    >
+      {{ getPriceOptionLabel(item, option.key) }}
+    </button>
+  </template>
 </div>
 
             </td>
@@ -1299,10 +1358,11 @@ const getDiscountPriceLabel = (item) => {
                 />
                 <button class="qty-step-btn" @click="incrementQty(item)">+</button>
               </div>
+              <div v-if="shouldShowCartLineMeta(item)" class="catalog-meta">{{ getCartLineQuantityLabel(item) }}</div>
             </td>
             <td>₱{{ (item.price * item.qty).toFixed(2) }}</td>
             <td>
-              <button class="mini danger remove-cart-item-btn" @click="removeItem(item.id)">✕</button>
+              <button class="mini danger remove-cart-item-btn" @click="removeItem(item)">✕</button>
             </td>
           </tr>
         </tbody>
@@ -2037,7 +2097,18 @@ tbody tr:last-child td { border-bottom: none; }
 ========================= */
 .catalog-name { font-size: 20px; text-align: left;}
 .cart-item-name { font-weight:700; }
-.catalog-meta { font-size:16px; color:#64748b; text-align: left; line-height: 1.35; }
+.catalog-meta {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  font-size: 16px;
+  color: #64748b;
+  text-align: left;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
 
 /* =========================
    CUSTOMER MODAL FIX
@@ -2094,7 +2165,14 @@ tbody tr:last-child td { border-bottom: none; }
 .price-toggle {
   display: flex;
   justify-content: center;
+  align-items: center;
   gap: 6px;
+  width: 100%;
+}
+
+.price-option-select {
+  width: 100%;
+  min-width: 0;
 }
 
 .num-btn,
@@ -2139,6 +2217,7 @@ tbody tr:last-child td { border-bottom: none; }
   .number-pad { gap: 8px; }
   .right-panel input { min-height: 2rem; max-height: 2.7rem; height: 2.2rem; font-size: 1rem; }
   .btn.checkout { min-height: 1.8rem; max-height: 2.4rem; height: 2rem; font-size: 0.95rem; }
+  .catalog-meta { font-size: 14px; }
 }
 
 @media (max-width: 480px) {
