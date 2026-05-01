@@ -8,6 +8,7 @@ import { Share } from '@capacitor/share'
 import { Device } from '@capacitor/device'
 import { FilePicker } from '@capawesome/capacitor-file-picker'
 import PageVisibilitySettings from '../components/PageVisibilitySettings.vue'
+import PinProtectedPagesSettings from '../components/PinProtectedPagesSettings.vue'
 import { collectFromSource } from '../db/query'
 import Swal from 'sweetalert2'
 import { configurablePageDefinitions } from '../templates/pages'
@@ -27,6 +28,10 @@ import {
   getTemplatePointsMultiplier,
   getTemplateProfessionalFeeLabel,
 } from '../utils/templatePresentation'
+import {
+  promptForSettingsPin,
+  setPendingAuthLoginRedirectContext,
+} from '../utils/auth'
 
 const router = useRouter()
 const store = useStore()
@@ -326,25 +331,15 @@ async function deletePin() {
 async function checkPinOnEntry() {
   const storedPin = await getPin()
   if (!storedPin) { pinUnlocked.value = true; return }
-  const result = await Swal.fire({
+  const isConfirmed = await promptForSettingsPin({
     title: '🔒 Settings Locked',
     text: 'Enter your PIN to access Settings',
-    input: 'password',
-    inputPlaceholder: 'Enter PIN',
-    inputAttributes: { maxlength: 8, autocomplete: 'off' },
-    showCancelButton: true,
     confirmButtonText: 'Unlock',
     cancelButtonText: 'Go Back',
-    confirmButtonColor: '#1abc9c',
-    cancelButtonColor: '#888',
-    allowOutsideClick: false,
-    allowEscapeKey: false,
   })
-  if (result.isConfirmed && result.value === storedPin) {
+
+  if (isConfirmed) {
     pinUnlocked.value = true
-  } else if (result.isConfirmed && result.value !== storedPin) {
-    await Swal.fire({ icon: 'error', title: 'Incorrect PIN', timer: 1400, showConfirmButton: false })
-    router.back()
   } else {
     router.back()
   }
@@ -354,6 +349,41 @@ async function checkPinOnEntry() {
    PIN MANAGEMENT
 ====================== */
 const pinIsSet = ref(false)
+const authSaving = ref(false)
+const authStatus = ref('')
+const authUsername = ref('')
+const authPassword = ref('')
+const authPasswordConfirm = ref('')
+const loginProtectionEnabled = computed(() => store.getters['auth/isEnabled'])
+const configuredAuthUsername = computed(() => store.state.auth.username || 'Not configured')
+
+function syncAuthForm() {
+  authUsername.value = store.state.auth.username || ''
+  authPassword.value = ''
+  authPasswordConfirm.value = ''
+}
+
+async function showCredentialBackupDisclaimer({ credentialLabel, credentialValue, title }) {
+  await Swal.fire({
+    icon: 'warning',
+    title,
+    html: `
+      <div style="text-align:left;line-height:1.6;">
+        <p style="margin:0 0 10px;"><strong>This app works offline on this device.</strong></p>
+        <p style="margin:0 0 10px;">If you forget your ${credentialLabel}, there is no recovery flow or reset email.</p>
+        <div style="margin:0 0 12px;padding:12px 14px;border-radius:12px;background:#f8fafc;border:1px solid #dbe4ea;">
+          <div style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#64748b;">Saved ${credentialLabel}</div>
+          <div style="font-family:Consolas, 'Courier New', monospace;font-size:18px;font-weight:700;color:#0f172a;word-break:break-all;">${credentialValue}</div>
+        </div>
+        <p style="margin:0;">Take a screenshot now or store your ${credentialLabel} somewhere safe before you continue.</p>
+      </div>
+    `,
+    confirmButtonText: 'I saved it',
+    confirmButtonColor: '#1abc9c',
+    allowOutsideClick: false,
+    allowEscapeKey: false,
+  })
+}
 
 async function setOrChangePin() {
   if (pinIsSet.value) {
@@ -397,7 +427,12 @@ async function setOrChangePin() {
   if (!confirmResult.isConfirmed) return
   await savePin(newPinResult.value)
   pinIsSet.value = true
-  Swal.fire({ icon: 'success', title: 'PIN saved!', timer: 1400, showConfirmButton: false })
+  await Swal.fire({ icon: 'success', title: 'PIN saved!', timer: 1200, showConfirmButton: false })
+  await showCredentialBackupDisclaimer({
+    credentialLabel: 'PIN',
+    credentialValue: newPinResult.value,
+    title: 'Store your PIN safely',
+  })
 }
 
 async function removePin() {
@@ -421,6 +456,116 @@ async function removePin() {
   await deletePin()
   pinIsSet.value = false
   Swal.fire({ icon: 'success', title: 'PIN removed', timer: 1400, showConfirmButton: false })
+}
+
+async function saveLoginProtection() {
+  const normalizedUsername = authUsername.value.trim()
+
+  if (!normalizedUsername) {
+    await Swal.fire({
+      icon: 'warning',
+      title: 'Username required',
+      text: 'Enter the username that will be used at login.',
+    })
+    return
+  }
+
+  if (authPassword.value.length < 6) {
+    await Swal.fire({
+      icon: 'warning',
+      title: 'Password too short',
+      text: 'Use a password with at least 6 characters.',
+    })
+    return
+  }
+
+  if (authPassword.value !== authPasswordConfirm.value) {
+    await Swal.fire({
+      icon: 'warning',
+      title: 'Passwords do not match',
+      text: 'Re-enter the same password in both password fields.',
+    })
+    return
+  }
+
+  const wasEnabled = loginProtectionEnabled.value
+  authSaving.value = true
+
+  try {
+    const savedPassword = authPassword.value
+
+    await store.dispatch('auth/configure', {
+      username: normalizedUsername,
+      password: savedPassword,
+    })
+    setPendingAuthLoginRedirectContext({ reason: 'setup', redirect: '/' })
+    authStatus.value = wasEnabled ? 'Login credentials updated.' : 'Login protection enabled.'
+    syncAuthForm()
+    await Swal.fire({
+      icon: 'success',
+      title: wasEnabled ? 'Credentials updated' : 'Login protection enabled',
+      text: 'Sign in with the username and password you just saved.',
+      timer: 1200,
+      showConfirmButton: false,
+    })
+    await showCredentialBackupDisclaimer({
+      credentialLabel: 'password',
+      credentialValue: savedPassword,
+      title: 'Store your password safely',
+    })
+    await router.replace({ name: 'Login', query: { reason: 'setup', redirect: '/' } })
+  } catch (error) {
+    console.error('Failed to save login protection', error)
+    authStatus.value = 'Failed to save login protection: ' + error.message
+    await Swal.fire({
+      icon: 'error',
+      title: 'Save failed',
+      text: error.message || 'Unable to save login protection.',
+    })
+  } finally {
+    authSaving.value = false
+  }
+}
+
+async function disableLoginProtection() {
+  const result = await Swal.fire({
+    icon: 'warning',
+    title: 'Disable login protection?',
+    text: 'This will remove the login requirement for the app on this device.',
+    showCancelButton: true,
+    confirmButtonText: 'Disable',
+    cancelButtonText: 'Cancel',
+    confirmButtonColor: '#e74c3c',
+    cancelButtonColor: '#888',
+  })
+
+  if (!result.isConfirmed) {
+    return
+  }
+
+  authSaving.value = true
+
+  try {
+    await store.dispatch('auth/disable')
+    authStatus.value = 'Login protection disabled.'
+    syncAuthForm()
+    await Swal.fire({
+      icon: 'success',
+      title: 'Login protection disabled',
+      timer: 1400,
+      showConfirmButton: false,
+    })
+  } catch (error) {
+    console.error('Failed to disable login protection', error)
+    authStatus.value = 'Failed to disable login protection: ' + error.message
+    await Swal.fire({
+      icon: 'error',
+      title: 'Update failed',
+      text: error.message || 'Unable to disable login protection.',
+    })
+  } finally {
+    authSaving.value = false
+  }
 }
 
 async function openTemplateSetup({ reset = false } = {}) {
@@ -561,6 +706,8 @@ onMounted(async () => {
   if (pinUnlocked.value) {
     applyTheme(isDarkMode.value)
     pinIsSet.value = !!(await getPin())
+    await store.dispatch('auth/initialize')
+    syncAuthForm()
     await loadAppName()
     await loadInteractionPreferences()
   }
@@ -965,6 +1112,60 @@ onMounted(async () => {
             <button v-if="pinIsSet" class="danger" @click="removePin">Remove PIN</button>
           </div>
         </div>
+
+        <div class="auth-divider"></div>
+
+        <PinProtectedPagesSettings />
+
+        <div class="auth-divider"></div>
+
+        <div class="auth-section">
+          <div class="pin-status-row">
+            <span class="pin-label">Login protection:</span>
+            <span :class="['pin-badge', loginProtectionEnabled ? 'pin-active' : 'pin-inactive']">
+              {{ loginProtectionEnabled ? 'Enabled' : 'Disabled' }}
+            </span>
+          </div>
+
+          <p class="muted auth-description">
+            Require a username and password before any page in the app can be opened.
+          </p>
+
+          <div class="auth-summary-row">
+            <span class="pin-label">Current username:</span>
+            <strong>{{ configuredAuthUsername }}</strong>
+          </div>
+
+          <div class="auth-form-grid">
+            <label>
+              <span>Username</span>
+              <input v-model="authUsername" class="input" type="text" autocomplete="username" placeholder="admin" />
+            </label>
+
+            <label>
+              <span>Password</span>
+              <input v-model="authPassword" class="input" type="password" autocomplete="new-password" placeholder="Minimum 6 characters" />
+            </label>
+
+            <label>
+              <span>Confirm password</span>
+              <input v-model="authPasswordConfirm" class="input" type="password" autocomplete="new-password" placeholder="Re-enter password" />
+            </label>
+          </div>
+
+          <div class="pin-btn-row">
+            <button class="primary" :disabled="authSaving" @click="saveLoginProtection">
+              {{ authSaving ? 'Saving...' : (loginProtectionEnabled ? 'Update Login Credentials' : 'Enable Login Protection') }}
+            </button>
+            <button v-if="loginProtectionEnabled" class="danger" :disabled="authSaving" @click="disableLoginProtection">
+              Disable Login Protection
+            </button>
+          </div>
+
+          <p v-if="authStatus" class="status" :class="{ error: authStatus.includes('Failed') }">
+            {{ authStatus }}
+          </p>
+        </div>
       </div>
       </template>
 
@@ -1072,6 +1273,40 @@ body.dark-mode .card {
 
 .card-emphasis {
   border-color: rgba(26, 188, 156, 0.18);
+}
+
+.auth-divider {
+  margin: 6px 0 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.auth-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-description {
+  margin: 0;
+}
+
+.auth-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.auth-form-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .section-heading {

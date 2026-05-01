@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { dbPromise } from '../db'
-import Swal from 'sweetalert2'
 import { configurablePageNames } from '../templates/pages'
 import { loadEffectivePageVisibility } from '../utils/templatePreferences'
 
@@ -17,10 +16,18 @@ import TransactionHistory from '../views/TransactionHistory.vue'
 import Settings from '../views/Settings.vue'
 import Drafts from '../views/Drafts.vue'
 import Setup from '../views/Setup.vue'
+import Login from '../views/Login.vue'
 import { isOnboardingComplete } from '../utils/onboardingPreferences'
+import store from '../store'
+import {
+  consumePendingAuthLoginRedirectContext,
+  isPagePinProtected,
+  promptForSettingsPin,
+} from '../utils/auth'
 
 let allRoutes = [
   { path: '/setup', name: 'Setup', component: Setup, meta: { hideSidebar: true, allowWithoutSetup: true } },
+  { path: '/login', name: 'Login', component: Login, meta: { hideSidebar: true, allowWithoutAuth: true } },
   { path: '/', name: 'Home', component: Home },
   { path: '/items', name: 'Items', component: Items },
   { path: '/items/:id', name: 'ItemDetails', component: ItemDetails },
@@ -29,7 +36,7 @@ let allRoutes = [
   { path: '/sales', name: 'Sales', component: Sales },
   { path: '/budget', name: 'Budget', component: Budget },
   { path: '/customers', name: 'Customers', component: Customers },
-  { path: '/analytics', name: 'Analytics', component: Analytics, meta: { requiresPin: true } },
+  { path: '/analytics', name: 'Analytics', component: Analytics },
   { path: '/about', name: 'About', component: About },
   { path: '/settings', name: 'Settings', component: Settings },
   { path: '/drafts', name: 'Drafts', component: Drafts },
@@ -68,45 +75,13 @@ const router = createRouter({
   routes
 })
 
-async function getSettingsPin() {
-  try {
-    const db = await dbPromise
-    const row = await db.get('app_settings', 'settings-pin')
-    return row ? row.value : null
-  } catch {
-    return null
-  }
-}
-
 async function verifyRoutePin(pageName) {
-  const storedPin = await getSettingsPin()
-  if (!storedPin) return true
-
-  const result = await Swal.fire({
+  return promptForSettingsPin({
     title: '🔒 Access Restricted',
     text: `Enter your PIN to access ${pageName}`,
-    input: 'password',
-    inputPlaceholder: 'Enter PIN',
-    inputAttributes: { maxlength: 8, autocomplete: 'off' },
-    showCancelButton: true,
     confirmButtonText: 'Unlock',
     cancelButtonText: 'Go Back',
-    confirmButtonColor: '#1abc9c',
-    cancelButtonColor: '#888',
-    allowOutsideClick: false,
-    allowEscapeKey: false,
   })
-
-  if (!result.isConfirmed) return false
-  if (result.value === storedPin) return true
-
-  await Swal.fire({
-    icon: 'error',
-    title: 'Incorrect PIN',
-    timer: 1400,
-    showConfirmButton: false,
-  })
-  return false
 }
 
 router.beforeEach(async (to, from) => {
@@ -119,7 +94,38 @@ router.beforeEach(async (to, from) => {
     }
   }
 
-  if (!to.meta?.requiresPin) return true
+  await store.dispatch('auth/initialize')
+
+  const authEnabled = store.getters['auth/isEnabled']
+  const authenticated = store.getters['auth/isAuthenticated']
+
+  if (to.name === 'Login') {
+    if (!authEnabled) {
+      return typeof to.query.redirect === 'string' && to.query.redirect ? to.query.redirect : '/'
+    }
+
+    if (authenticated) {
+      return typeof to.query.redirect === 'string' && to.query.redirect ? to.query.redirect : '/'
+    }
+
+    return true
+  }
+
+  if (authEnabled && !authenticated && !to.meta?.allowWithoutAuth && to.name !== 'Setup') {
+    const redirectContext = consumePendingAuthLoginRedirectContext()
+
+    return {
+      name: 'Login',
+      query: {
+        redirect: redirectContext?.redirect || to.fullPath,
+        reason: redirectContext?.reason || 'expired',
+      },
+    }
+  }
+
+  const requiresPin = await isPagePinProtected(to.name)
+
+  if (!requiresPin) return true
 
   const isAuthorized = await verifyRoutePin(to.name || 'this page')
   if (isAuthorized) return true

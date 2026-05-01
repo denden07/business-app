@@ -1,12 +1,14 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useStore } from 'vuex'
 import { dbPromise } from '../db'
 import { pageDefinitions } from '../templates/pages'
 import { loadEffectivePageVisibility } from '../utils/templatePreferences'
 
 const router = useRouter()
 const route = useRoute()
+const store = useStore()
 
 // Menu drawer state (closed by default)
 const isOpen = ref(false)
@@ -41,6 +43,8 @@ const isActive = (path) => {
 const pageVisibility = ref(null)
 const appName = ref('Business Companion')
 let refreshTimer = null
+const authEnabled = computed(() => store.getters['auth/isEnabled'])
+const authUsername = computed(() => store.state.auth.username || 'Admin')
 
 async function loadAppName() {
   try {
@@ -89,6 +93,12 @@ const visibleMenu = () => {
     return pageVisibility.value[item.name] !== false
   })
 }
+
+async function logout() {
+  await store.dispatch('auth/logout')
+  isOpen.value = false
+  await router.replace('/login')
+}
 </script>
 
 <template>
@@ -116,6 +126,14 @@ const visibleMenu = () => {
         </button>
       </li>
     </ul>
+
+    <div v-if="authEnabled" class="menu-footer">
+      <div class="menu-user">
+        <span class="menu-user-label">Signed in as</span>
+        <strong>{{ authUsername }}</strong>
+      </div>
+      <button class="logout-btn" @click="logout">Sign Out</button>
+    </div>
   </nav>
 </template>
 
@@ -224,6 +242,40 @@ const visibleMenu = () => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.menu-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid #3b4c60;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.menu-user {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menu-user-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9fb0c3;
+}
+
+.logout-btn {
+  width: 100%;
+  background: rgba(231, 76, 60, 0.16);
+  border: 1px solid rgba(231, 76, 60, 0.28);
+  color: #ffe3df;
+  box-shadow: none;
+}
+
+.logout-btn:hover {
+  background: rgba(231, 76, 60, 0.24);
 }
 
 .menu-list button {

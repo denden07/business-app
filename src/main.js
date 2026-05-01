@@ -9,7 +9,10 @@ import './db';
 import store from './store';
 import router from './router';
 
-await store.dispatch('template/initializeTemplate')
+await Promise.all([
+	store.dispatch('template/initializeTemplate'),
+	store.dispatch('auth/initialize'),
+])
 
 createApp(App).use(store).use(router)
 .mount('#app')

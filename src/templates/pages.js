@@ -19,6 +19,19 @@ export const configurablePageNames = new Set(
   configurablePageDefinitions.map(page => page.name)
 )
 
+const pinProtectionRouteAliases = {
+  ItemDetails: 'Items',
+  TransactionHistory: 'Customers',
+}
+
+export function getPinProtectionPageNameForRouteName(routeName) {
+  if (!routeName) {
+    return null
+  }
+
+  return pinProtectionRouteAliases[routeName] || routeName
+}
+
 export const templatePageSettingByRouteName = {
   Home: 'showHome',
   Items: 'showItems',

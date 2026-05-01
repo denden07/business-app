@@ -8,6 +8,7 @@ import {
   loadEffectivePageVisibility,
   loadResolvedActiveTemplate,
 } from '../utils/templatePreferences'
+import { promptForSettingsPin } from '../utils/auth'
 
 const props = defineProps({
   pages: {
@@ -22,28 +23,11 @@ const saving = ref(false)
 
 async function requirePin() {
   try {
-    const db = await dbPromise
-    const row = await db.get('app_settings', 'settings-pin')
-    const storedPin = row ? row.value : null
-    if (!storedPin) return true
-    const result = await Swal.fire({
+    return promptForSettingsPin({
       title: '🔒 Confirm PIN',
       text: 'Enter your PIN to save changes',
-      input: 'password',
-      inputPlaceholder: 'Enter PIN',
-      inputAttributes: { maxlength: 8, autocomplete: 'off' },
-      showCancelButton: true,
       confirmButtonText: 'Confirm',
-      confirmButtonColor: '#1abc9c',
-      cancelButtonColor: '#888',
-      allowOutsideClick: false,
     })
-    if (!result.isConfirmed) return false
-    if (result.value !== storedPin) {
-      Swal.fire({ icon: 'error', title: 'Incorrect PIN', timer: 1400, showConfirmButton: false })
-      return false
-    }
-    return true
   } catch { return true }
 }
 

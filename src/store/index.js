@@ -6,6 +6,7 @@ import transaction from './transaction'
 import drafts from './drafts'
 import template from './template'
 import budget from './budget'
+import auth from './auth'
 
 export default createStore({
   modules: {
@@ -15,6 +16,7 @@ export default createStore({
     sales,
     drafts,
     template,
-    budget
+    budget,
+    auth
   }
 })
