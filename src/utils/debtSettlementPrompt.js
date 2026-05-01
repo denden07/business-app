@@ -1,4 +1,5 @@
 import Swal from 'sweetalert2'
+import { formatCurrency } from './numberFormat'
 
 export async function openDebtSettlementPrompt({
   outstandingBalance,
@@ -21,7 +22,7 @@ export async function openDebtSettlementPrompt({
     title,
     html: `
       <div style="display:flex; flex-direction:column; gap:12px; text-align:left; margin-top:12px;">
-        <div style="font-size:14px; color:#475569;">Outstanding balance: <strong>₱${normalizedBalance.toFixed(2)}</strong></div>
+        <div style="font-size:14px; color:#475569;">Outstanding balance: <strong>${formatCurrency(normalizedBalance)}</strong></div>
         <label style="display:flex; flex-direction:column; gap:6px; font-size:14px;">
           <span>Payment amount</span>
           <input id="debt-settlement-amount" type="number" min="0.01" step="0.01" class="swal2-input" style="margin:0; width:100%;" placeholder="Enter amount" />
@@ -54,7 +55,7 @@ export async function openDebtSettlementPrompt({
       }
 
       if (amount > normalizedBalance) {
-        Swal.showValidationMessage(`Payment amount cannot exceed ₱${normalizedBalance.toFixed(2)}.`)
+        Swal.showValidationMessage(`Payment amount cannot exceed ${formatCurrency(normalizedBalance)}.`)
         return false
       }
 

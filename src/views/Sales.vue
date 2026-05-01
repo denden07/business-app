@@ -27,6 +27,7 @@ import {
 } from '../utils/saleStatus'
 import { openDebtSettlementPrompt } from '../utils/debtSettlementPrompt'
 import { getSaleOptionUnitQuantity } from '../utils/itemSaleOptions'
+import { formatCurrency } from '../utils/numberFormat'
 
 
 
@@ -116,8 +117,7 @@ const itemsPerPageOptions = [5, 10, 20, 50]
 const showView = ref(false)
 
 const fmt = (v) => {
-  const n = Number(v)
-  return isNaN(n) ? '0.00' : n.toFixed(2)
+  return formatCurrency(v)
 }
 
 const formatSaleItemQuantity = (item) => {
@@ -329,7 +329,7 @@ async function settleDebtSale() {
       icon: 'success',
       title: result.remainingBalance > 0 ? 'Partial payment recorded' : 'Debt fully settled',
       text: result.remainingBalance > 0
-        ? `Remaining balance: ₱${result.remainingBalance.toFixed(2)}`
+        ? `Remaining balance: ${formatCurrency(result.remainingBalance)}`
         : 'This sale is now fully paid.',
       timer: 1600,
       showConfirmButton: false,
@@ -465,10 +465,10 @@ const exportCSV = async () => {
         <tr v-for="sale in sales" :key="sale.id">
           <td v-if="visibleCols.id">#{{ sale.id }}</td>
           <td v-if="visibleCols.purchased_date">{{ new Date(sale.purchased_date).toLocaleString() }}</td>
-          <td v-if="visibleCols.total_amount">₱{{ fmt(sale.total_amount) }}</td>
-          <td v-if="visibleCols.discount">₱{{ fmt(sale.discount) }}</td>
-          <td v-if="visibleCols.professional_fee">₱{{ fmt(sale.professional_fee) }}</td>
-          <td v-if="visibleCols.final_total"><strong>₱{{ fmt(sale.final_total) }}</strong></td>
+          <td v-if="visibleCols.total_amount">{{ fmt(sale.total_amount) }}</td>
+          <td v-if="visibleCols.discount">{{ fmt(sale.discount) }}</td>
+          <td v-if="visibleCols.professional_fee">{{ fmt(sale.professional_fee) }}</td>
+          <td v-if="visibleCols.final_total"><strong>{{ fmt(sale.final_total) }}</strong></td>
           <td v-if="visibleCols.payment_method">
             <span :class="[getPaymentPillClass(sale.payment_method), { 'payment-pill-dark': isDark }]">
               {{ formatPaymentMethod(sale.payment_method) }}
@@ -536,8 +536,8 @@ const exportCSV = async () => {
                 <div class="sale-meta">{{ item.sale_option_label || item.price_type || 'Regular' }}</div>
               </td>
               <td>{{ formatSaleItemQuantity(item) }}</td>
-              <td>₱{{ item.price_at_sale.toFixed(2) }}</td>
-              <td>₱{{ (item.quantity * item.price_at_sale).toFixed(2) }}</td>
+              <td>{{ formatCurrency(item.price_at_sale) }}</td>
+              <td>{{ formatCurrency(item.quantity * item.price_at_sale) }}</td>
             </tr>
             <tr v-if="!saleItems.length">
               <td colspan="4" class="empty-state-cell">No {{ catalogLabel.toLowerCase() }} found for this sale.</td>
@@ -546,17 +546,17 @@ const exportCSV = async () => {
         </table>
         </div>
         <div class="sale-summary">
-          <div>Subtotal: ₱{{ selectedSale.total_amount.toFixed(2) }}</div>
-          <div v-if="Number(selectedSale.professional_fee || 0) > 0">{{ professionalFeeLabel }}: ₱{{ Number(selectedSale.professional_fee || 0).toFixed(2) }}</div>
-          <div>Discount: ₱{{ selectedSale.discount.toFixed(2) }}</div>
-          <div><strong>Total: ₱{{ selectedSale.final_total.toFixed(2) }}</strong></div>
+          <div>Subtotal: {{ formatCurrency(selectedSale.total_amount) }}</div>
+          <div v-if="Number(selectedSale.professional_fee || 0) > 0">{{ professionalFeeLabel }}: {{ formatCurrency(Number(selectedSale.professional_fee || 0)) }}</div>
+          <div>Discount: {{ formatCurrency(selectedSale.discount) }}</div>
+          <div><strong>Total: {{ formatCurrency(selectedSale.final_total) }}</strong></div>
 
           <hr />
 
-          <div>Money Given: ₱{{ (selectedSale.money_given || 0).toFixed(2) }}</div>
-          <div>Amount Paid: ₱{{ selectedSaleAmountPaid.toFixed(2) }}</div>
-          <div v-if="selectedSaleOutstandingBalance > 0">Balance Due: ₱{{ selectedSaleOutstandingBalance.toFixed(2) }}</div>
-          <div>Change: ₱{{ (selectedSale.change || 0).toFixed(2) }}</div>
+          <div>Money Given: {{ formatCurrency(selectedSale.money_given || 0) }}</div>
+          <div>Amount Paid: {{ formatCurrency(selectedSaleAmountPaid) }}</div>
+          <div v-if="selectedSaleOutstandingBalance > 0">Balance Due: {{ formatCurrency(selectedSaleOutstandingBalance) }}</div>
+          <div>Change: {{ formatCurrency(selectedSale.change || 0) }}</div>
           <template v-if="selectedSale.special_discount_note">
             <hr />
             <div class="sale-note-block">
@@ -570,11 +570,11 @@ const exportCSV = async () => {
           <h3>Settlement History</h3>
           <div v-for="payment in debtPayments" :key="payment.id" class="settlement-row">
             <div>
-              <strong>₱{{ fmt(payment.amount) }}</strong>
+              <strong>{{ fmt(payment.amount) }}</strong>
               <span class="settlement-meta">{{ formatPaymentMethod(payment.payment_method) }}</span>
             </div>
             <div class="settlement-meta">{{ new Date(payment.paid_at).toLocaleString() }}</div>
-            <div class="settlement-meta">Balance after: ₱{{ fmt(payment.balance_after) }}</div>
+            <div class="settlement-meta">Balance after: {{ fmt(payment.balance_after) }}</div>
             <div v-if="payment.note" class="settlement-note">{{ payment.note }}</div>
           </div>
         </div>

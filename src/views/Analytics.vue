@@ -8,6 +8,7 @@ import { format } from 'date-fns'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 import { getLocalDayEnd, getLocalDayStart } from '../utils/dateRange'
+import { formatCurrency, formatNumber } from '../utils/numberFormat'
 import { getSaleAmountPaid, getSaleOutstandingBalance } from '../utils/saleStatus'
 import {
   getTemplateCatalogLabel,
@@ -64,7 +65,7 @@ const templateLabels = computed(() => activeTemplate.value.labels || {})
 const catalogLabel = computed(() => getTemplateCatalogLabel(templateLabels.value))
 const catalogEntryLabel = computed(() => getTemplateCatalogEntryLabel(templateLabels.value))
 const dailySalesQuota = computed(() => getTemplateDailySalesQuota(activeTemplate.value))
-const quotaCalendarTitle = computed(() => `Sales Quota Calendar (₱${dailySalesQuota.value.toLocaleString()}/day)`)
+const quotaCalendarTitle = computed(() => `Sales Quota Calendar (${formatCurrency(dailySalesQuota.value)}/day)`)
 
 // --------------------
 // Date Range & Labels
@@ -271,6 +272,7 @@ const updateCharts = async () => {
   const analyticsCardText = isDark.value ? '#f8fafc' : '#0f172a'
   const analyticsMutedText = isDark.value ? '#cbd5e1' : '#64748b'
   const analyticsGridColor = isDark.value ? '#475569' : '#d9e2ec'
+  const analyticsTooltipTheme = isDark.value ? 'dark' : 'light'
   const startDate = getStartDate()
   const endDate = getEndDate()
   const db = await dbPromise
@@ -481,7 +483,10 @@ const updateCharts = async () => {
     },
     grid: { borderColor: analyticsGridColor },
     legend: { labels: { colors: analyticsCardText } },
-    tooltip: { y: { formatter: val => `₱${val.toLocaleString()}` } },
+    tooltip: {
+      theme: analyticsTooltipTheme,
+      y: { formatter: val => formatCurrency(val) }
+    },
     colors: ['#0ea5e9', '#10b981']
   }
 
@@ -502,7 +507,10 @@ const updateCharts = async () => {
     },
     grid: { borderColor: analyticsGridColor },
     legend: { labels: { colors: analyticsCardText } },
-    tooltip: { y: { formatter: val => `₱${val.toLocaleString()}` } },
+    tooltip: {
+      theme: analyticsTooltipTheme,
+      y: { formatter: val => formatCurrency(val) }
+    },
     colors: ['#0ea5e9', '#ef4444', '#14b8a6']
   }
 
@@ -522,7 +530,10 @@ const updateCharts = async () => {
     },
     grid: { borderColor: analyticsGridColor },
     legend: { labels: { colors: analyticsCardText } },
-    tooltip: { y: { formatter: val => `₱${val.toLocaleString()}` } },
+    tooltip: {
+      theme: analyticsTooltipTheme,
+      y: { formatter: val => formatCurrency(val) }
+    },
     colors: ['#f59e0b', '#8b5cf6']
   }
 
@@ -571,6 +582,7 @@ const updateCharts = async () => {
     grid: { borderColor: analyticsGridColor },
     legend: { labels: { colors: analyticsCardText } },
     tooltip: {
+      theme: analyticsTooltipTheme,
       y: {
         formatter,
       }
@@ -582,8 +594,8 @@ const updateCharts = async () => {
 
   topProductsSeries.value = topProducts.map(item => item.value)
   topServicesSeries.value = topServices.map(item => item.value)
-  topProductsOptions.value = buildBarOptions(topProducts, val => `${val} units`)
-  topServicesOptions.value = buildBarOptions(topServices, val => `${val} services`)
+  topProductsOptions.value = buildBarOptions(topProducts, val => `${formatNumber(val)} units`)
+  topServicesOptions.value = buildBarOptions(topServices, val => `${formatNumber(val)} services`)
 
   // --------------------
   // Calendar Heatmap Dynamic
@@ -646,7 +658,7 @@ const updateCharts = async () => {
     yaxis:{labels: { style: { colors: [analyticsMutedText] } }, title:{text:'Month/Week', style: { color: analyticsMutedText }}} ,
     grid:{ borderColor: analyticsGridColor },
     legend: { labels: { colors: analyticsCardText } },
-    tooltip:{y:{formatter: val => `₱${val.toLocaleString()}`}}
+    tooltip:{theme: analyticsTooltipTheme, y:{formatter: val => formatCurrency(val)}}
   }
   isLoading.value = false
 }
@@ -763,6 +775,49 @@ onMounted(updateCharts)
   flex: 1 1 320px;
 }
 
+.custom-range :deep(.dp__theme_light),
+.custom-range :deep(.dp__theme_dark) {
+  --dp-border-radius: 14px;
+}
+
+.custom-range :deep(.dp__input) {
+  min-height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(14, 165, 233, 0.22);
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.06);
+  color: #0f172a;
+  font-weight: 600;
+  padding-left: 42px;
+  padding-right: 36px;
+}
+
+.custom-range :deep(.dp__input::placeholder) {
+  color: #64748b;
+}
+
+.custom-range :deep(.dp__input_icon),
+.custom-range :deep(.dp__clear_icon),
+.custom-range :deep(.dp--clear-btn) {
+  color: #0284c7;
+}
+
+.custom-range :deep(.dp__input_wrap) {
+  position: relative;
+}
+
+.custom-range :deep(.dp__input_icon) {
+  left: 14px;
+}
+
+.custom-range :deep(.dp--clear-btn) {
+  right: 14px;
+}
+
+.custom-range :deep(.dp__clear_icon) {
+  right: 0;
+}
+
 /* Metrics Cards */
 .metrics-cards {
   display: grid;
@@ -802,14 +857,74 @@ onMounted(updateCharts)
   max-width: 100%;
 }
 
+.chart-card :deep(.apexcharts-tooltip),
+.chart-card :deep(.apexcharts-xaxistooltip),
+.chart-card :deep(.apexcharts-yaxistooltip) {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 12px;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.18);
+}
+
+.chart-card :deep(.apexcharts-tooltip),
+.chart-card :deep(.apexcharts-tooltip-title),
+.chart-card :deep(.apexcharts-tooltip-text-y-label),
+.chart-card :deep(.apexcharts-tooltip-text-y-value),
+.chart-card :deep(.apexcharts-tooltip-text-z-label),
+.chart-card :deep(.apexcharts-tooltip-text-z-value),
+.chart-card :deep(.apexcharts-xaxistooltip-text),
+.chart-card :deep(.apexcharts-yaxistooltip-text) {
+  color: #0f172a;
+}
+
 body.dark-mode .chart-card {
   background-color: #1c1c1c;
   border-color: #2e2e2e;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
 }
 
+body.dark-mode .custom-range :deep(.dp__input) {
+  border-color: rgba(56, 189, 248, 0.28);
+  background: linear-gradient(180deg, #16202b 0%, #0f172a 100%);
+  box-shadow: 0 10px 20px rgba(2, 6, 23, 0.32);
+  color: #e2e8f0;
+}
+
+body.dark-mode .custom-range :deep(.dp__input::placeholder) {
+  color: #94a3b8;
+}
+
+body.dark-mode .custom-range :deep(.dp__input_icon),
+body.dark-mode .custom-range :deep(.dp__clear_icon),
+body.dark-mode .custom-range :deep(.dp--clear-btn) {
+  color: #7dd3fc;
+}
+
 body.dark-mode .chart-card h2 {
   color: #f8fafc;
+}
+
+body.dark-mode .chart-card :deep(.apexcharts-tooltip),
+body.dark-mode .chart-card :deep(.apexcharts-xaxistooltip),
+body.dark-mode .chart-card :deep(.apexcharts-yaxistooltip) {
+  background: #0f172a;
+  border-color: rgba(148, 163, 184, 0.24);
+  box-shadow: 0 18px 36px rgba(2, 6, 23, 0.45);
+}
+
+body.dark-mode .chart-card :deep(.apexcharts-tooltip-title) {
+  background: rgba(30, 41, 59, 0.96);
+  border-bottom-color: rgba(148, 163, 184, 0.18);
+}
+
+body.dark-mode .chart-card :deep(.apexcharts-tooltip),
+body.dark-mode .chart-card :deep(.apexcharts-tooltip-title),
+body.dark-mode .chart-card :deep(.apexcharts-tooltip-text-y-label),
+body.dark-mode .chart-card :deep(.apexcharts-tooltip-text-y-value),
+body.dark-mode .chart-card :deep(.apexcharts-tooltip-text-z-label),
+body.dark-mode .chart-card :deep(.apexcharts-tooltip-text-z-value),
+body.dark-mode .chart-card :deep(.apexcharts-xaxistooltip-text),
+body.dark-mode .chart-card :deep(.apexcharts-yaxistooltip-text) {
+  color: #e2e8f0;
 }
 
 /* Loading Overlay */

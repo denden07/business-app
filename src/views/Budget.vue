@@ -6,6 +6,7 @@ import Pagination from '../components/Pagination.vue'
 import IconActionButton from '../components/IconActionButton.vue'
 import Swal from 'sweetalert2'
 import { COMMON_BUDGET_CATEGORIES } from '../store/budget'
+import { formatCurrency } from '../utils/numberFormat'
 
 const store = useStore()
 
@@ -258,10 +259,6 @@ function toggleSort(field) {
 
   sortBy.value = field
   sortOrder.value = field === 'expense_date' ? 'desc' : 'asc'
-}
-
-function formatCurrency(value) {
-  return `₱${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 function formatDateDisplay(value) {

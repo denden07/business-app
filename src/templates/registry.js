@@ -56,6 +56,10 @@ const baseTemplate = {
     expiryWarningDays: 30,
     expiryCriticalDays: 7,
   },
+  formatting: {
+    currencyCode: 'PHP',
+    decimalPlaces: 2,
+  },
   labels: {
     catalog: 'Items',
     catalogEntry: 'Item',

@@ -7,6 +7,7 @@ import Pagination from '../components/Pagination.vue'
 import ItemForm from '../components/ItemForm.vue'
 import IconActionButton from '../components/IconActionButton.vue'
 import Swal from 'sweetalert2'
+import { formatCurrency } from '../utils/numberFormat'
 
 const store = useStore()
 const route = useRoute()
@@ -304,6 +305,8 @@ const itemTypeLabel = (item) => String(item?.item_type || 'item')
   .replace(/\b\w/g, letter => letter.toUpperCase())
 
 const itemTypeClass = (item) => item?.item_type === 'service' ? 'item-type-pill service' : 'item-type-pill product'
+
+const formatItemPrice = (value) => formatCurrency(value)
 </script>
 
 <template>
@@ -403,8 +406,8 @@ const itemTypeClass = (item) => item?.item_type === 'service' ? 'item-type-pill 
               <span :class="itemTypeClass(item)">{{ itemTypeLabel(item) }}</span>
             </td>
             <td v-if="visibleCols.inventory_mode">{{ inventoryModeLabel(item) }}</td>
-            <td v-if="visibleCols.regular_price">PHP {{ item.price1 }}</td>
-            <td v-if="visibleCols.discount_price">PHP {{ item.price2 || 0 }}</td>
+            <td v-if="visibleCols.regular_price">{{ formatItemPrice(item.price1) }}</td>
+            <td v-if="visibleCols.discount_price">{{ formatItemPrice(item.price2 || 0) }}</td>
             <td v-if="visibleCols.stock">
               <div class="stock-cell">
                 <strong>{{ stockLabel(item).primary }}</strong>

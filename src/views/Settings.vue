@@ -19,10 +19,17 @@ import {
 } from '../utils/interactionPreferences'
 import { setOnboardingComplete } from '../utils/onboardingPreferences'
 import {
+  getSupportedCurrencies,
+  normalizeCurrencyCode,
+  normalizeDecimalPlaces,
+} from '../utils/formattingPreferences'
+import {
   getTemplateCatalogEntryLabel,
   getTemplateCatalogLabel,
   getTemplateCustomerSectionLabel,
+  getTemplateCurrencyCode,
   getTemplateDailySalesQuota,
+  getTemplateDecimalPlaces,
   getTemplateExpiryAlertSettings,
   getTemplatePaymentLabel,
   getTemplatePointsMultiplier,
@@ -57,6 +64,8 @@ const loyaltyEnabled = ref(true)
 const requireCustomer = ref(false)
 const pointsMultiplier = ref(1)
 const dailySalesQuota = ref(40000)
+const decimalPlaces = ref(2)
+const currencyCode = ref('PHP')
 const expiryWarningDays = ref(30)
 const expiryCriticalDays = ref(7)
 const allowExpiredSales = ref(false)
@@ -69,6 +78,7 @@ const customerSectionLabel = ref('Sold to')
 const customerActionLabel = ref('Select Customer')
 const paymentCashLabel = ref('Cash')
 const paymentGcashLabel = ref('Online Bank')
+const supportedCurrencies = getSupportedCurrencies()
 
 const settingsTabs = [
   { id: 'general', label: 'General' },
@@ -84,6 +94,8 @@ function applyTemplateProfileForm(template) {
   requireCustomer.value = template?.workflow?.requireCustomer === true || template?.customer?.requireCustomerDetails === true
   pointsMultiplier.value = getTemplatePointsMultiplier(template || {})
   dailySalesQuota.value = getTemplateDailySalesQuota(template || {})
+  decimalPlaces.value = getTemplateDecimalPlaces(template || {})
+  currencyCode.value = getTemplateCurrencyCode(template || {})
   const expirySettings = getTemplateExpiryAlertSettings(template || {})
   expiryWarningDays.value = expirySettings.warningDays
   expiryCriticalDays.value = expirySettings.criticalDays
@@ -126,6 +138,11 @@ function buildTemplateProfileOverrides() {
       showProductChart: canSellProducts.value ? showProductChart.value : false,
       showServiceChart: canSellServices.value ? showServiceChart.value : false,
     },
+    formatting: {
+      ...(activeTemplate.value?.formatting || {}),
+      currencyCode: normalizeCurrencyCode(currencyCode.value),
+      decimalPlaces: normalizeDecimalPlaces(decimalPlaces.value),
+    },
     labels: {
       ...(activeTemplate.value?.labels || {}),
       catalog: catalogLabel.value.trim(),
@@ -142,6 +159,8 @@ function buildTemplateProfileOverrides() {
 async function saveTemplateProfileSettings() {
   const normalizedPointsMultiplier = Number(pointsMultiplier.value)
   const normalizedDailySalesQuota = Number(dailySalesQuota.value)
+  const normalizedDecimalPlaces = Number(decimalPlaces.value)
+  const normalizedCurrency = normalizeCurrencyCode(currencyCode.value)
   const normalizedExpiryWarningDays = Number(expiryWarningDays.value)
   const normalizedExpiryCriticalDays = Number(expiryCriticalDays.value)
 
@@ -161,6 +180,19 @@ async function saveTemplateProfileSettings() {
       text: 'Enter a daily sales quota greater than 0.',
     })
     return
+  }
+
+  if (!Number.isInteger(normalizedDecimalPlaces) || normalizedDecimalPlaces < 0 || normalizedDecimalPlaces > 4) {
+    await Swal.fire({
+      icon: 'warning',
+      title: 'Invalid decimal places',
+      text: 'Choose a whole number of decimal places from 0 to 4.',
+    })
+    return
+  }
+
+  if (normalizedCurrency !== currencyCode.value) {
+    currencyCode.value = normalizedCurrency
   }
 
   if (!Number.isFinite(normalizedExpiryWarningDays) || normalizedExpiryWarningDays <= 0) {
@@ -1010,6 +1042,33 @@ onMounted(async () => {
                     <span class="toggle-slider"></span>
                   </span>
                 </div>
+              </label>
+            </div>
+          </section>
+
+          <section class="template-settings-section">
+            <div class="template-section-header">
+              <div>
+                <h3>Number &amp; Currency</h3>
+                <p class="muted">Shared formatting used by the app-level currency and decimal helpers.</p>
+              </div>
+            </div>
+
+            <div class="template-settings-grid">
+              <label class="template-setting-field">
+                <span>Currency</span>
+                <select v-model="currencyCode" class="input">
+                  <option v-for="currency in supportedCurrencies" :key="currency.code" :value="currency.code">
+                    {{ currency.label }} ({{ currency.code }})
+                  </option>
+                </select>
+                <small>Philippine Peso stays first, followed by other supported currencies you can switch to later.</small>
+              </label>
+
+              <label class="template-setting-field">
+                <span>Decimal places</span>
+                <input v-model.number="decimalPlaces" class="input" type="number" min="0" max="4" step="1" />
+                <small>Applied by the shared number and currency formatters used across updated platform surfaces.</small>
               </label>
             </div>
           </section>

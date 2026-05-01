@@ -18,6 +18,7 @@ import {
   normalizeSalePaymentStatus,
 } from '../utils/saleStatus'
 import { getSaleOptionUnitQuantity } from '../utils/itemSaleOptions'
+import { formatCurrency } from '../utils/numberFormat'
 
 const buildDiscountNote = ({
   pointsRedeemed = 0,
@@ -28,7 +29,7 @@ const buildDiscountNote = ({
   const noteParts = []
 
   if (pointsRedeemed > 0 && pointsDiscount > 0) {
-    noteParts.push(`Redeemed points discount: ${pointsRedeemed} point${pointsRedeemed === 1 ? '' : 's'} x ${pointsMultiplier} = P${Number(pointsDiscount).toFixed(2)}`)
+    noteParts.push(`Redeemed points discount: ${pointsRedeemed} point${pointsRedeemed === 1 ? '' : 's'} x ${pointsMultiplier} = ${formatCurrency(pointsDiscount)}`)
   }
 
   const trimmedSpecialNote = String(specialDiscountNote || '').trim()
@@ -269,7 +270,7 @@ async saveSale({ commit }, payload) {
         type: 'redeem',
         related_sale_id: saleId,
         points: -pointsToDeduct,
-        description: `Redeemed ${pointsToDeduct} points × ${normalizedPointsMultiplier} = ${normalizedPointsDiscount.toFixed(2)}`
+        description: `Redeemed ${pointsToDeduct} points × ${normalizedPointsMultiplier} = ${formatCurrency(normalizedPointsDiscount)}`
       })
     }
 
@@ -323,7 +324,7 @@ async saveSale({ commit }, payload) {
 
       const outstandingBalance = getSaleOutstandingBalance(sale)
       if (normalizedAmount > outstandingBalance) {
-        throw new Error(`Settlement amount cannot exceed ₱${outstandingBalance.toFixed(2)}.`)
+        throw new Error(`Settlement amount cannot exceed ${formatCurrency(outstandingBalance)}.`)
       }
 
       const nextAmountPaid = getSaleAmountPaid(sale) + normalizedAmount

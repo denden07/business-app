@@ -21,6 +21,7 @@ import {
   defaultInteractionSettings,
   loadInteractionSettings,
 } from '../utils/interactionPreferences'
+import { formatCurrency } from '../utils/numberFormat'
 
 const store = useStore()
 const router = useRouter()
@@ -297,7 +298,7 @@ const buildCheckoutSummaryHtml = () => {
     ? `
       <div style="display: flex; justify-content: space-between; padding: 4px 0;">
         <span>${professionalFeeLabel.value}:</span>
-        <span>₱${professionalFee.value.toFixed(2)}</span>
+        <span>${formatCurrency(professionalFee.value)}</span>
       </div>
     `
     : ''
@@ -306,7 +307,7 @@ const buildCheckoutSummaryHtml = () => {
     ? `
       <div style="display: flex; justify-content: space-between; padding: 2px 0 2px 16px; font-size: 13px; color: #718096;">
         <span>• Points:</span>
-        <span>-₱${pointsUsed.value.toFixed(2)}</span>
+        <span>-${formatCurrency(pointsUsed.value)}</span>
       </div>
     `
     : ''
@@ -315,7 +316,7 @@ const buildCheckoutSummaryHtml = () => {
     ? `
       <div style="display: flex; justify-content: space-between; padding: 2px 0 2px 16px; font-size: 13px; color: #718096;">
         <span>• Special:</span>
-        <span>-₱${specialDiscount.value.toFixed(2)}</span>
+        <span>-${formatCurrency(specialDiscount.value)}</span>
       </div>
       ${specialDiscountNote.value ? `
         <div style="padding: 6px 0 2px 16px; font-size: 13px; color: #718096; text-align: left;">
@@ -353,8 +354,8 @@ const buildCheckoutSummaryHtml = () => {
             <tr style="border-bottom: 1px solid #eee;">
               <td style="padding: 8px;">${item.name}<div style="margin-top: 2px; font-size: 12px; color: #64748b;">${getCartLineMeta(item)}</div></td>
               <td style="padding: 8px; text-align: center;">${getCartLineQuantityLabel(item)}</td>
-              <td style="padding: 8px; text-align: right;">₱${item.price.toFixed(2)}</td>
-              <td style="padding: 8px; text-align: right;">₱${(item.price * item.qty).toFixed(2)}</td>
+              <td style="padding: 8px; text-align: right;">${formatCurrency(item.price)}</td>
+              <td style="padding: 8px; text-align: right;">${formatCurrency(item.price * item.qty)}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -365,13 +366,13 @@ const buildCheckoutSummaryHtml = () => {
       ${customerBlock}
       <div style="display: flex; justify-content: space-between; padding: 4px 0;">
         <span>Subtotal:</span>
-        <span>₱${subTotal.value.toFixed(2)}</span>
+        <span>${formatCurrency(subTotal.value)}</span>
       </div>
       ${professionalFeeBlock}
       ${pointsDiscount.value > 0 ? `
         <div style="display: flex; justify-content: space-between; padding: 4px 0; color: #e53e3e;">
           <span>Discount:</span>
-          <span>-₱${pointsDiscount.value.toFixed(2)}</span>
+          <span>-${formatCurrency(pointsDiscount.value)}</span>
         </div>
         ${pointsBreakdown}
         ${specialDiscountBreakdown}
@@ -382,16 +383,16 @@ const buildCheckoutSummaryHtml = () => {
       </div>
       <div style="display: flex; justify-content: space-between; padding: 4px 0;">
         <span>Money Given:</span>
-        <span>₱${moneyGiven.value.toFixed(2)}</span>
+        <span>${formatCurrency(moneyGiven.value)}</span>
       </div>
       <div style="display: flex; justify-content: space-between; padding: 4px 0;">
         <span>Amount Paid:</span>
-        <span>₱${amountPaid.value.toFixed(2)}</span>
+        <span>${formatCurrency(amountPaid.value)}</span>
       </div>
       <hr style="margin: 8px 0; border: none; border-top: 1px solid #ddd;" />
       <div style="display: flex; justify-content: space-between; padding: 8px 0; font-size: 18px; font-weight: bold; color: #2d3748;">
         <span>Grand Total:</span>
-        <span style="color: green;">₱${grandTotal.value.toFixed(2)}</span>
+        <span style="color: green;">${formatCurrency(grandTotal.value)}</span>
       </div>
       <div style="display: flex; justify-content: space-between; padding: 4px 0; font-weight: 600; color: ${isDebtSale.value ? '#b45309' : '#2d3748'};">
         <span>Status:</span>
@@ -400,12 +401,12 @@ const buildCheckoutSummaryHtml = () => {
       ${isDebtSale.value ? `
         <div style="display: flex; justify-content: space-between; padding: 8px 0; font-size: 18px; font-weight: bold; color: #b45309;">
           <span>Balance Due:</span>
-          <span>₱${outstandingBalance.value.toFixed(2)}</span>
+          <span>${formatCurrency(outstandingBalance.value)}</span>
         </div>
       ` : ''}
       <div style="display: flex; justify-content: space-between; padding: 8px 0; font-size: 18px; font-weight: bold; color: #2d3748;">
         <span>Change:</span>
-        <span style="color: red;">₱${change.value.toFixed(2)}</span>
+        <span style="color: red;">${formatCurrency(change.value)}</span>
       </div>
     </div>
   `
@@ -985,7 +986,7 @@ const checkout = async () => {
     const debtFlowResult = await Swal.fire({
       icon: 'warning',
       title: 'Continue as debt sale?',
-      html: `This sale is short by <strong>₱${outstandingBalance.value.toFixed(2)}</strong> and will be recorded as debt under the selected customer.`,
+      html: `This sale is short by <strong>${formatCurrency(outstandingBalance.value)}</strong> and will be recorded as debt under the selected customer.`,
       showCancelButton: true,
       confirmButtonText: 'Continue',
       cancelButtonText: 'Back to Cart',
@@ -1047,7 +1048,7 @@ const checkout = async () => {
       icon: 'success',
       title: isDebtSale.value ? 'Debt Sale Saved' : 'Sale Completed',
       text: isDebtSale.value
-        ? `Sale #${saleId} saved with ₱${outstandingBalance.value.toFixed(2)} balance due`
+        ? `Sale #${saleId} saved with ${formatCurrency(outstandingBalance.value)} balance due`
         : `Sale #${saleId} saved`,
       timer: 1500,
       showConfirmButton: false
@@ -1315,7 +1316,7 @@ const getPriceOptionLabel = (item, optionKey) => {
   const option = getSelectedSaleOption(item, optionKey)
   if (!option) return '—'
   const quantityLabel = getSaleOptionUnitQuantity(option) === 1 ? '' : ` / ${formatSaleOptionQuantity(option)}`
-  return `${option.label} ₱${Number(option.price || 0).toFixed(2)}${quantityLabel}`
+  return `${option.label} ${formatCurrency(Number(option.price || 0))}${quantityLabel}`
 }
 
 
@@ -1430,7 +1431,7 @@ const getPriceOptionLabel = (item, optionKey) => {
               </div>
               <div v-if="shouldShowCartLineMeta(item)" class="catalog-meta">{{ getCartLineQuantityLabel(item) }}</div>
             </td>
-            <td>₱{{ (item.price * item.qty).toFixed(2) }}</td>
+            <td>{{ formatCurrency(item.price * item.qty) }}</td>
             <td>
               <button class="mini danger remove-cart-item-btn" @click="removeItem(item)">✕</button>
             </td>
@@ -1444,7 +1445,7 @@ const getPriceOptionLabel = (item, optionKey) => {
     <div class="cart-totals">
       <div>
         <span>Subtotal</span>
-        <strong>₱{{ subTotal.toFixed(2) }}</strong>
+        <strong>{{ formatCurrency(subTotal) }}</strong>
       </div>
 
       <div>
@@ -1456,17 +1457,17 @@ const getPriceOptionLabel = (item, optionKey) => {
             title="Add special discount"
           >+</button>
         </span>
-        <strong>-₱{{ pointsDiscount }}</strong>
+        <strong>-{{ formatCurrency(pointsDiscount) }}</strong>
       </div>
 
       <div class="grand">
         <span><strong>Grand Total</strong></span>
-        <strong>₱{{ grandTotal.toFixed(2) }}</strong>
+        <strong>{{ formatCurrency(grandTotal) }}</strong>
       </div>
 
       <div class="change">
         <span><strong>Change</strong></span>
-        <strong>₱{{ change.toFixed(2) }}</strong>
+        <strong>{{ formatCurrency(change) }}</strong>
       </div>
     </div>
 
@@ -1611,11 +1612,11 @@ const getPriceOptionLabel = (item, optionKey) => {
     <p>Available: <strong>{{ customerPoints }}</strong></p>
 
     <p>
-      Point value: <strong>₱{{ redeemMultiplier.toFixed(2) }}</strong> each
+      Point value: <strong>{{ formatCurrency(redeemMultiplier) }}</strong> each
     </p>
 
     <p>
-      Discount: <strong>₱{{ redeemMultiplier * customerPoints }}</strong>
+      Discount: <strong>{{ formatCurrency(redeemMultiplier * customerPoints) }}</strong>
     </p>
 
     <div class="modal-actions">
@@ -1631,7 +1632,7 @@ const getPriceOptionLabel = (item, optionKey) => {
     <h3>Special Discount</h3>
     
     <div v-if="pointsUsed > 0" class="special-discount-note special-discount-note-points">
-      <small>Redeemed Points Discount: <strong>₱{{ redeemedPointsDiscount }}</strong></small>
+      <small>Redeemed Points Discount: <strong>{{ formatCurrency(redeemedPointsDiscount) }}</strong></small>
     </div>
 
     <label class="special-discount-label">Additional Discount Amount:</label>
@@ -1655,16 +1656,16 @@ const getPriceOptionLabel = (item, optionKey) => {
     <div v-if="specialDiscountDraft > 0" class="special-discount-note special-discount-note-summary">
       <div class="special-discount-row">
         <span>Points Discount:</span>
-        <strong>₱{{ redeemedPointsDiscount }}</strong>
+        <strong>{{ formatCurrency(redeemedPointsDiscount) }}</strong>
       </div>
       <div class="special-discount-row">
         <span>Special Discount:</span>
-        <strong>₱{{ specialDiscountDraft }}</strong>
+        <strong>{{ formatCurrency(specialDiscountDraft) }}</strong>
       </div>
       <hr class="special-discount-divider" />
       <div class="special-discount-row special-discount-total-row">
         <span><strong>Total Discount:</strong></span>
-        <strong class="special-discount-total-value">₱{{ redeemedPointsDiscount + specialDiscountDraft }}</strong>
+        <strong class="special-discount-total-value">{{ formatCurrency(redeemedPointsDiscount + specialDiscountDraft) }}</strong>
       </div>
     </div>
 

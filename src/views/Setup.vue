@@ -7,6 +7,7 @@ import { configurablePageDefinitions, templatePageSettingByRouteName } from '../
 import { loadResolvedActiveTemplate } from '../utils/templatePreferences'
 import { setOnboardingComplete } from '../utils/onboardingPreferences'
 import { dbPromise } from '../db'
+import { formatCurrency } from '../utils/numberFormat'
 import {
   getTemplateDailySalesQuota,
   getTemplateExpiryAlertSettings,
@@ -585,12 +586,12 @@ onMounted(async () => {
 
           <article>
             <span>Loyalty points value</span>
-            <strong class="review-value">₱{{ Number(customizationSummary.pointsMultiplier || 0).toFixed(2) }} per point</strong>
+            <strong class="review-value">{{ formatCurrency(customizationSummary.pointsMultiplier || 0) }} per point</strong>
           </article>
 
           <article>
             <span>Daily sales quota</span>
-            <strong class="review-value">₱{{ Number(customizationSummary.dailySalesQuota || 0).toLocaleString() }}</strong>
+            <strong class="review-value">{{ formatCurrency(customizationSummary.dailySalesQuota || 0) }}</strong>
           </article>
 
           <article v-if="customizationSummary.catalogMode !== 'services'">

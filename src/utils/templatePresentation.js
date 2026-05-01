@@ -1,4 +1,10 @@
 import { normalizeExpiryAlertSettings } from './expiryAlerts'
+import {
+  DEFAULT_CURRENCY_CODE,
+  DEFAULT_DECIMAL_PLACES,
+  normalizeCurrencyCode,
+  normalizeDecimalPlaces,
+} from './formattingPreferences'
 
 export function isLoyaltyEnabled(template = {}) {
   return template?.customer?.enableLoyalty !== false
@@ -39,6 +45,14 @@ export function getTemplatePointsMultiplier(template = {}) {
 export function getTemplateDailySalesQuota(template = {}) {
   const parsedValue = Number(template?.reporting?.dailySalesQuota)
   return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : 40000
+}
+
+export function getTemplateCurrencyCode(template = {}) {
+  return normalizeCurrencyCode(template?.formatting?.currencyCode || DEFAULT_CURRENCY_CODE)
+}
+
+export function getTemplateDecimalPlaces(template = {}) {
+  return normalizeDecimalPlaces(template?.formatting?.decimalPlaces ?? DEFAULT_DECIMAL_PLACES)
 }
 
 export function getTemplateExpiryAlertSettings(template = {}) {

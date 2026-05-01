@@ -11,6 +11,7 @@ import {
   isCustomerSelectionRequired,
   isLoyaltyEnabled,
 } from '../utils/templatePresentation'
+import { formatCurrency } from '../utils/numberFormat'
 
 const store = useStore()
 
@@ -87,7 +88,7 @@ const paginated = computed(() =>
   }))
 )
 
-const fmtMoney = (value) => `₱${Number(value || 0).toFixed(2)}`
+const fmtMoney = (value) => formatCurrency(value)
 
 
 const pageNumbers = computed(() =>

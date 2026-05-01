@@ -17,6 +17,7 @@ import {
   getCustomSaleOptionKey,
   normalizeSaleOptionRecord,
 } from '../utils/itemSaleOptions'
+import { formatCurrency } from '../utils/numberFormat'
 import { getTemplateExpiryAlertSettings } from '../utils/templatePresentation'
 import { loadResolvedActiveTemplate } from '../utils/templatePreferences'
 
@@ -128,7 +129,7 @@ const formatDateOnly = (value) => {
   return new Date(value).toLocaleDateString()
 }
 
-const toMoney = (value) => `₱${Number(value || 0).toFixed(2)}`
+const toMoney = (value) => formatCurrency(value)
 const getPrice1 = (entry) => Number(entry.price1 ?? entry.new_price1 ?? entry.old_price1 ?? 0)
 const getPrice2 = (entry) => Number(entry.price2 ?? entry.new_price2 ?? entry.old_price2 ?? 0)
 const getStockEntryTimestamp = (entry) => entry?.created_at || entry?.added_date || null

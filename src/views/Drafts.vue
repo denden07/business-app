@@ -13,6 +13,7 @@ import {
   getTemplateProfessionalFeeLabel,
 } from '../utils/templatePresentation'
 import { getSaleOptionUnitQuantity } from '../utils/itemSaleOptions'
+import { formatCurrency } from '../utils/numberFormat'
 
 const store = useStore()
 const router = useRouter()
@@ -235,8 +236,8 @@ const goPage = (page) => {
                   <div class="item-meta">{{ formatDraftLineMeta(item) }}</div>
                 </td>
                 <td>{{ item.qty }}</td>
-                <td>₱{{ Number(item.price || 0).toFixed(2) }}</td>
-                <td>₱{{ (Number(item.price || 0) * Number(item.qty || 0)).toFixed(2) }}</td>
+                <td>{{ formatCurrency(Number(item.price || 0)) }}</td>
+                <td>{{ formatCurrency(Number(item.price || 0) * Number(item.qty || 0)) }}</td>
               </tr>
               <tr v-if="!selectedDraftItems.length">
                 <td colspan="4" class="empty-state-cell">No {{ catalogLabel.toLowerCase() }} saved in this draft.</td>
@@ -246,14 +247,14 @@ const goPage = (page) => {
         </div>
 
         <div class="sale-summary">
-          <div>Subtotal: ₱{{ selectedDraftSubtotal.toFixed(2) }}</div>
-          <div>{{ professionalFeeLabel }}: ₱{{ Number(selectedDraft.professionalFee || 0).toFixed(2) }}</div>
-          <div>Discount: ₱{{ selectedDraftDiscount.toFixed(2) }}</div>
-          <div><strong>Total: ₱{{ selectedDraftGrandTotal.toFixed(2) }}</strong></div>
+          <div>Subtotal: {{ formatCurrency(selectedDraftSubtotal) }}</div>
+          <div>{{ professionalFeeLabel }}: {{ formatCurrency(Number(selectedDraft.professionalFee || 0)) }}</div>
+          <div>Discount: {{ formatCurrency(selectedDraftDiscount) }}</div>
+          <div><strong>Total: {{ formatCurrency(selectedDraftGrandTotal) }}</strong></div>
 
           <hr />
 
-          <div>Money Given: ₱{{ Number(selectedDraft.moneyGiven || 0).toFixed(2) }}</div>
+          <div>Money Given: {{ formatCurrency(Number(selectedDraft.moneyGiven || 0)) }}</div>
         </div>
 
         <div class="modal-actions draft-details-actions">

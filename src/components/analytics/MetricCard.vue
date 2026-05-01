@@ -2,9 +2,7 @@
   <div class="metric-card">
     <div class="metric-title">{{ title }}</div>
 
-    <div class="metric-value">
-      <span v-if="type === 'currency'">₱</span>{{ formattedValue }}
-    </div>
+    <div class="metric-value">{{ formattedValue }}</div>
 
     <div class="metric-period" v-if="periodLabel">
       {{ periodLabel }}
@@ -14,6 +12,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { formatCurrency, formatNumber } from '../../utils/numberFormat'
 
 const props = defineProps({
   title: String,
@@ -32,7 +31,11 @@ const props = defineProps({
 })
 
 const formattedValue = computed(() => {
-  return Number(props.value || 0).toLocaleString()
+  if (props.type === 'currency') {
+    return formatCurrency(props.value)
+  }
+
+  return formatNumber(props.value)
 })
 
 const periodLabel = computed(() => {
@@ -60,6 +63,7 @@ const periodLabel = computed(() => {
   flex-direction: column;
   justify-content: space-between;
   text-align: left;
+  min-width: 0;
 }
 
 .metric-title {
@@ -74,6 +78,13 @@ const periodLabel = computed(() => {
   font-weight: bold;
   line-height: 1.1;
   margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .metric-period {

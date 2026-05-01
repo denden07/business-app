@@ -35,7 +35,7 @@ const redirectTarget = computed(() => {
 
 const sessionExpired = computed(() => route.query.reason === 'expired')
 
-const loginTitle = computed(() => sessionExpired.value ? 'Session Locked' : appName.value)
+const loginTitle = computed(() => sessionExpired.value ? 'Welcome Back' : appName.value)
 
 const loginSubtitle = computed(() => {
   if (!sessionExpired.value) {
@@ -43,10 +43,10 @@ const loginSubtitle = computed(() => {
   }
 
   if (hasSettingsPin.value) {
-    return 'Your session expired. Unlock with your PIN, or switch to your current password.'
+    return 'For security, access was paused. Unlock with your PIN, or switch to your current password.'
   }
 
-  return 'Your session expired. Sign in with your current password to continue.'
+  return 'For security, access was paused. Sign in with your current password to continue.'
 })
 
 const showMethodSwitch = computed(() => sessionExpired.value && hasSettingsPin.value)
@@ -223,7 +223,7 @@ onMounted(async () => {
     <div class="login-shell">
       <section class="login-card">
         <div class="login-copy">
-          <p class="login-eyebrow">{{ sessionExpired ? 'Session Expired' : 'Local Access' }}</p>
+          <p class="login-eyebrow">{{ sessionExpired ? 'Access Paused' : 'Local Access' }}</p>
           <h1>{{ loginTitle }}</h1>
           <p class="muted">{{ loginSubtitle }}</p>
         </div>

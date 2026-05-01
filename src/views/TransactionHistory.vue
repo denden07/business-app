@@ -27,6 +27,7 @@ import {
 } from '../utils/saleStatus'
 import { openDebtSettlementPrompt } from '../utils/debtSettlementPrompt'
 import { getSaleOptionUnitQuantity } from '../utils/itemSaleOptions'
+import { formatCurrency } from '../utils/numberFormat'
 
 const route = useRoute()
 const store = useStore()
@@ -367,7 +368,7 @@ async function settleDebtSale() {
       icon: 'success',
       title: result.remainingBalance > 0 ? 'Partial payment recorded' : 'Debt fully settled',
       text: result.remainingBalance > 0
-        ? `Remaining balance: ₱${result.remainingBalance.toFixed(2)}`
+        ? `Remaining balance: ${formatCurrency(result.remainingBalance)}`
         : 'This sale is now fully paid.',
       timer: 1600,
       showConfirmButton: false,
@@ -641,7 +642,7 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
           <td v-if="visibleCols.pu_id">
             <span class="sale-link" @click.stop="openSaleModal(s.id)">#{{ s.id }}</span>
           </td>
-          <td v-if="visibleCols.pu_total">₱{{ (s.final_total || 0).toFixed(2) }}</td>
+          <td v-if="visibleCols.pu_total">{{ formatCurrency(s.final_total || 0) }}</td>
           <td v-if="visibleCols.pu_status">
             <span
               :class="{
@@ -706,8 +707,8 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
                   <div class="sale-meta">{{ item.sale_option_label || item.price_type || 'Regular' }}</div>
                 </td>
                 <td>{{ formatSaleItemQuantity(item) }}</td>
-                <td>₱{{ item.price_at_sale.toFixed(2) }}</td>
-                <td>₱{{ (item.quantity * item.price_at_sale).toFixed(2) }}</td>
+                <td>{{ formatCurrency(item.price_at_sale) }}</td>
+                <td>{{ formatCurrency(item.quantity * item.price_at_sale) }}</td>
               </tr>
               <tr v-if="!selectedSaleItems.length">
                 <td colspan="4" class="empty-state-cell">No {{ catalogLabel.toLowerCase() }} found for this sale.</td>
@@ -717,17 +718,17 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
         </div>
 
         <div class="sale-summary">
-          <div>Subtotal: ₱{{ Number(selectedSale.total_amount || 0).toFixed(2) }}</div>
-          <div v-if="Number(selectedSale.professional_fee || 0) > 0">{{ professionalFeeLabel }}: ₱{{ Number(selectedSale.professional_fee || 0).toFixed(2) }}</div>
-          <div>Discount: ₱{{ saleDiscountAmount.toFixed(2) }}</div>
-          <div><strong>Total: ₱{{ Number(selectedSale.final_total || 0).toFixed(2) }}</strong></div>
+          <div>Subtotal: {{ formatCurrency(Number(selectedSale.total_amount || 0)) }}</div>
+          <div v-if="Number(selectedSale.professional_fee || 0) > 0">{{ professionalFeeLabel }}: {{ formatCurrency(Number(selectedSale.professional_fee || 0)) }}</div>
+          <div>Discount: {{ formatCurrency(saleDiscountAmount) }}</div>
+          <div><strong>Total: {{ formatCurrency(Number(selectedSale.final_total || 0)) }}</strong></div>
 
           <hr />
 
-          <div>Money Given: ₱{{ Number(selectedSale.money_given || 0).toFixed(2) }}</div>
-          <div>Amount Paid: ₱{{ selectedSaleAmountPaid.toFixed(2) }}</div>
-          <div v-if="selectedSaleOutstandingBalance > 0">Balance Due: ₱{{ selectedSaleOutstandingBalance.toFixed(2) }}</div>
-          <div>Change: ₱{{ Number(selectedSale.change || 0).toFixed(2) }}</div>
+          <div>Money Given: {{ formatCurrency(Number(selectedSale.money_given || 0)) }}</div>
+          <div>Amount Paid: {{ formatCurrency(selectedSaleAmountPaid) }}</div>
+          <div v-if="selectedSaleOutstandingBalance > 0">Balance Due: {{ formatCurrency(selectedSaleOutstandingBalance) }}</div>
+          <div>Change: {{ formatCurrency(Number(selectedSale.change || 0)) }}</div>
           <template v-if="selectedSale.special_discount_note">
             <hr />
             <div class="sale-note-block">
@@ -741,11 +742,11 @@ const currentCustomerName = computed(() => currentCustomer.value?.name || `Custo
           <h3>Settlement History</h3>
           <div v-for="payment in debtPayments" :key="payment.id" class="settlement-row">
             <div>
-              <strong>₱{{ Number(payment.amount || 0).toFixed(2) }}</strong>
+              <strong>{{ formatCurrency(Number(payment.amount || 0)) }}</strong>
               <span class="settlement-meta">{{ formatPaymentMethod(payment.payment_method) }}</span>
             </div>
             <div class="settlement-meta">{{ new Date(payment.paid_at).toLocaleString() }}</div>
-            <div class="settlement-meta">Balance after: ₱{{ Number(payment.balance_after || 0).toFixed(2) }}</div>
+            <div class="settlement-meta">Balance after: {{ formatCurrency(Number(payment.balance_after || 0)) }}</div>
             <div v-if="payment.note" class="settlement-note">{{ payment.note }}</div>
           </div>
         </div>
