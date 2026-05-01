@@ -58,6 +58,8 @@ const showPaymentMethodSelector = computed(() => paymentOptions.value.length > 1
 const paymentMethodLabel = computed(() => paymentOptions.value.find(option => option.value === paymentMethod.value)?.label || paymentOptions.value[0]?.label || 'Cash')
 const defaultPointsMultiplier = computed(() => getTemplatePointsMultiplier(activeTemplate.value))
 const expiryAlertSettings = computed(() => getTemplateExpiryAlertSettings(activeTemplate.value))
+const mobileNumpadQuery = '(max-width: 1023px)'
+const isMobileLayout = ref(false)
 const catalogSearchLabel = computed(() => {
   if (allowProductSales.value && allowServiceSales.value) {
     return 'catalog items or services'
@@ -193,6 +195,7 @@ const resumeDraft = (draft) => {
 
 onMounted(async () => {
   await loadFeedbackSettings()
+  updateMobileLayout()
   const draftId = Number(route.query.draft)
   if (draftId) {
     const draft = await store.dispatch('drafts/getDraftById', draftId)
@@ -200,6 +203,7 @@ onMounted(async () => {
   }
 
   window.addEventListener('interaction-settings-changed', handleInteractionSettingsChanged)
+  window.addEventListener('resize', updateMobileLayout)
 })
 
 // ======================
@@ -235,6 +239,11 @@ const getQtyInputStyle = (value) => {
     width: `${widthCh}ch`,
     minWidth: '3.4rem',
   }
+}
+
+const updateMobileLayout = () => {
+  if (typeof window === 'undefined') return
+  isMobileLayout.value = window.matchMedia(mobileNumpadQuery).matches
 }
 
 const paymentMethod = ref('cash') // default
@@ -1156,6 +1165,7 @@ watch(showSpecialDiscountModal, (open) => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('interaction-settings-changed', handleInteractionSettingsChanged)
+  window.removeEventListener('resize', updateMobileLayout)
 
   if (numpadAudioContext && numpadAudioContext.state !== 'closed') {
     numpadAudioContext.close().catch(() => {})
@@ -1333,7 +1343,7 @@ const getPriceOptionLabel = (item, optionKey) => {
       <div v-if="search && filteredCatalog.length" class="dropdown">
         <div v-for="catalogItem in filteredCatalog" :key="catalogItem.cartKey" class="dropdown-item" @click="addToCart(catalogItem)">
           <div class="dropdown-item-content">
-            <div>
+            <div class="dropdown-item-copy">
               <div class="catalog-name">{{ catalogItem.name }}</div>
               <div class="catalog-meta" v-if="catalogItem.generic_name || catalogItem.description">{{ catalogItem.generic_name || catalogItem.description }}</div>
             </div>
@@ -1375,14 +1385,14 @@ const getPriceOptionLabel = (item, optionKey) => {
         </thead>
         <tbody>
           <tr v-for="item in cart" :key="`${item.cartKey}:${item.priceType}`">
-            <td>
+            <td data-label="Item">
               <div class="cart-item-name">{{ item.name }}</div>
             
             </td>
-            <td>
+            <td data-label="Price">
 <div class="price-toggle">
   <select
-    v-if="usePriceOptionDropdown(item)"
+    v-if="isMobileLayout || usePriceOptionDropdown(item)"
     class="select-field price-option-select"
     :value="item.priceType"
     @change="selectItemPriceType(item, $event.target.value)"
@@ -1406,15 +1416,16 @@ const getPriceOptionLabel = (item, optionKey) => {
 </div>
 
             </td>
-            <td>
+            <td data-label="Qty">
               <div class="qty-wrapper">
                 <button class="qty-step-btn qty-step-btn-decrement" @click="decrementQty(item)">-</button>
                 <input
                   style="font-weight: bold"
                   type="number"
                   :value="item.qty"
-                  readonly
+                  :readonly="!isMobileLayout"
                   @click="setActiveInput(item,'qty')"
+                  @input="setCartItemQty(item, $event.target.value)"
                   :style="getQtyInputStyle(item.qty)"
                   :class="{ 'active-input': focusedField==='qty' && focusedItem===item }"
                 />
@@ -1431,8 +1442,8 @@ const getPriceOptionLabel = (item, optionKey) => {
               </div>
               <div v-if="shouldShowCartLineMeta(item)" class="catalog-meta">{{ getCartLineQuantityLabel(item) }}</div>
             </td>
-            <td>{{ formatCurrency(item.price * item.qty) }}</td>
-            <td>
+            <td data-label="Total">{{ formatCurrency(item.price * item.qty) }}</td>
+            <td class="cart-actions-cell">
               <button class="mini danger remove-cart-item-btn" @click="removeItem(item)">✕</button>
             </td>
           </tr>
@@ -1442,7 +1453,7 @@ const getPriceOptionLabel = (item, optionKey) => {
     </div>
 
     <!-- Totals -->
-    <div class="cart-totals">
+    <div v-if="!isMobileLayout" class="cart-totals">
       <div>
         <span>Subtotal</span>
         <strong>{{ formatCurrency(subTotal) }}</strong>
@@ -1508,31 +1519,71 @@ const getPriceOptionLabel = (item, optionKey) => {
       </div>
     </div>
 
-    <div class="right-panel">
-    <label v-if="showProfessionalFee">
-      {{ professionalFeeLabel }}
-      <input
-        type="number"
-        :value="professionalFee"
-        readonly
-        @click="setActiveInput(null,'professionalFee')"
-        :class="{ 'active-input': focusedField==='professionalFee' }"
-      />
-    </label>
+    <div class="right-panel" :class="{ 'right-panel-mobile': isMobileLayout }">
+    <div v-if="isMobileLayout" class="mobile-checkout-header">
+      <div>
+        <p class="mobile-checkout-kicker">Mobile Checkout</p>
+        <h2>Use your keyboard for payment entry</h2>
+      </div>
+      <p class="mobile-checkout-help">Tap any amount field or item quantity to type directly.</p>
+    </div>
 
-    <label>
-      Money Given
-      <input
-        type="number"
-        :value="moneyGiven"
-        readonly
-        @click="setActiveInput(null,'moneyGiven')"
-        :class="{ 'active-input': focusedField==='moneyGiven' }"
-      />
-    </label>
+    <div class="checkout-inputs" :class="{ 'checkout-inputs-mobile': isMobileLayout }">
+      <label v-if="showProfessionalFee" class="checkout-field" :class="{ 'checkout-field-mobile': isMobileLayout }">
+        <span>{{ professionalFeeLabel }}</span>
+        <input
+          type="number"
+          inputmode="decimal"
+          :value="professionalFee"
+          :readonly="!isMobileLayout"
+          @click="setActiveInput(null,'professionalFee')"
+          @input="professionalFee = Number($event.target.value || 0)"
+          :class="{ 'active-input': focusedField==='professionalFee' }"
+        />
+      </label>
+
+      <label class="checkout-field" :class="{ 'checkout-field-mobile': isMobileLayout }">
+        <span>Money Given</span>
+        <input
+          type="number"
+          inputmode="decimal"
+          :value="moneyGiven"
+          :readonly="!isMobileLayout"
+          @click="setActiveInput(null,'moneyGiven')"
+          @input="moneyGiven = Number($event.target.value || 0)"
+          :class="{ 'active-input': focusedField==='moneyGiven' }"
+        />
+      </label>
+    </div>
+
+    <div v-if="isMobileLayout" class="mobile-cart-totals">
+      <div>
+        <span>Subtotal</span>
+        <strong>{{ formatCurrency(subTotal) }}</strong>
+      </div>
+      <div>
+        <span style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+          <span>Discount</span>
+          <button
+            class="discount-add-btn"
+            @click="openSpecialDiscountModal"
+            title="Add special discount"
+          >+</button>
+        </span>
+        <strong>-{{ formatCurrency(pointsDiscount) }}</strong>
+      </div>
+      <div>
+        <span>Change</span>
+        <strong>{{ formatCurrency(change) }}</strong>
+      </div>
+      <div class="mobile-cart-total-emphasis">
+        <span>Grand Total</span>
+        <strong>{{ formatCurrency(grandTotal) }}</strong>
+      </div>
+    </div>
 
     <!-- Number Pad (reordered: 7-9 top, 1-3 bottom) -->
-    <div class="number-pad">
+    <div v-if="!isMobileLayout" class="number-pad">
       <button class="num-btn" @click="appendNumber(7)">7</button>
       <button class="num-btn" @click="appendNumber(8)">8</button>
       <button class="num-btn" @click="appendNumber(9)">9</button>
@@ -1547,12 +1598,12 @@ const getPriceOptionLabel = (item, optionKey) => {
       <button class="num-btn" @click="backspace">←</button>
     </div>
 
-    <div v-if="showPaymentMethodSelector" class="payment-toggle">
+    <div v-if="showPaymentMethodSelector" class="payment-toggle" :class="{ 'payment-toggle-mobile': isMobileLayout }">
       <button
         v-for="option in paymentOptions"
         :key="option.value"
         class="payment-option-btn"
-        :class="{ active: paymentMethod === option.value }"
+        :class="{ active: paymentMethod === option.value, 'payment-option-btn-mobile': isMobileLayout }"
         @click="selectPaymentMethod(option.value)"
       >
         {{ option.label }}
@@ -1687,11 +1738,18 @@ const getPriceOptionLabel = (item, optionKey) => {
 /* Ensure Home view fills viewport and layouts use flex so no extra space remains */
 .home-view {
   min-height: 100vh;
+  min-height: 100dvh;
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
   padding: 12px 0; /* keep existing spacing from app */
+  overflow-x: hidden;
+}
+
+.home-view h1 {
+  margin-top: 0;
 }
 
 
@@ -1702,6 +1760,7 @@ const getPriceOptionLabel = (item, optionKey) => {
   gap: 14px;
   overflow: hidden;
   align-items: stretch; /* ensure children stretch to full available height */
+  min-height: 0;
 }
 
 .home-view .catalog-panel {
@@ -1743,6 +1802,7 @@ const getPriceOptionLabel = (item, optionKey) => {
   overflow: auto;
   display: flex;
   flex-direction: column;
+  align-self: stretch;
 }
 
 .search-section {
@@ -1779,6 +1839,7 @@ const getPriceOptionLabel = (item, optionKey) => {
   display: flex;
   gap: 6px;
   align-items: center;
+  min-width: 0;
 }
 
 .customer-name {
@@ -1801,6 +1862,7 @@ const getPriceOptionLabel = (item, optionKey) => {
   gap: 6px;
   align-items: center;
   margin-left: auto;
+  flex-wrap: wrap;
 }
 
   /* =========================
@@ -1886,9 +1948,13 @@ const getPriceOptionLabel = (item, optionKey) => {
 /* Scrollable table container with max 5 rows visible */
 .cart-table-container {
   flex: 1 1 auto;
-  overflow-y: auto;
+  overflow: auto;
   padding: 10px;
   min-height: 0;
+}
+
+.cart-table-container table {
+  min-width: 680px;
 }
 
 /* Optional scroll indicator styling */
@@ -1926,7 +1992,6 @@ tbody td {
 }
 tbody tr:nth-child(even) td { background: #f7fafc; }
 tbody tr:hover td { background: #eef8f4; }
-tbody tr:last-child td { border-bottom: none; }
 
 /* Totals below table */
 .cart-totals {
@@ -1988,6 +2053,22 @@ tbody tr:last-child td { border-bottom: none; }
   box-sizing: border-box;
   overflow: hidden;
 }
+.checkout-inputs {
+  display: grid;
+  gap: 10px;
+}
+
+.checkout-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.checkout-field > span {
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .right-panel label {
   display: flex;
   flex-direction: column;
@@ -2025,6 +2106,14 @@ tbody tr:last-child td { border-bottom: none; }
   box-shadow: 0 8px 18px rgba(43,108,176,0.12);
 }
 
+.mobile-checkout-header {
+  display: none;
+}
+
+.mobile-cart-totals {
+  display: none;
+}
+
 /* Smaller screens: ensure active input doesn't push layout too much but still prominent */
 @media (max-width: 480px) {
   /* No height/font-size adjustment for .active-input */
@@ -2039,12 +2128,19 @@ tbody tr:last-child td { border-bottom: none; }
   gap: 6px;
   align-items: stretch;
   justify-items: stretch;
+  width: 100%;
   /* number-pad takes available space after inputs; it should grow but stay scrollable if necessary */
   flex: 1 1 auto;
   min-height: 0;
   max-height: 100%;
   overflow: auto;
   /* grid-auto-rows: minmax(48px, 1fr); */
+}
+
+.number-pad .num-btn {
+  width: 100%;
+  min-width: 0;
+  min-height: 56px;
 }
 /* Larger, full-screen friendly number pad for wide/tall screens */
 @media (min-width: 900px) and (min-height: 700px) {
@@ -2070,11 +2166,15 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .btn.checkout {
   margin-top: 6px;
-  min-height: 2.1rem;
-  max-height: 2.8rem;
-  height: 2.4rem;
+  min-height: 2.8rem;
+  max-height: none;
+  height: auto;
   font-size: 1.05rem;
-  padding: 8px 12px;
+  padding: 10px 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
   transition: height 0.2s, font-size 0.2s;
 }
 
@@ -2399,16 +2499,81 @@ tbody tr:last-child td { border-bottom: none; }
   justify-content: space-between;
   width: 100%;
   box-sizing: border-box;
+  flex-wrap: wrap;
 }
 
 .payment-toggle .payment-option-btn {
+  flex: 1 1 160px;
   min-width: 0;
+  min-height: 34px;
+  padding: 4px 12px;
+  font-size: 0.95rem;
+  line-height: 1.1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 /* Make number pad buttons and payment buttons adapt on narrow screens */
+@media (max-width: 1023px) {
+  .home-view {
+    padding: 10px 8px;
+  }
+
+  .home-view > .pos-layout,
+  .pos-layout {
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .home-view .catalog-panel,
+  .home-view .pos-side-panel {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .home-view .cart-wrapper,
+  .home-view .right-panel {
+    min-height: 0;
+  }
+
+  .home-view .right-panel {
+    width: 100%;
+    min-width: 0;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .customer-section {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .customer-display {
+    flex: 1 1 100%;
+  }
+
+  .redeem-section {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .cart-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .number-pad {
+    grid-auto-rows: minmax(56px, auto);
+    flex: none;
+  }
+}
+
 @media (max-width: 900px) {
   .number-pad { gap: 8px; }
   .right-panel input { min-height: 2rem; max-height: 2.7rem; height: 2.2rem; font-size: 1rem; }
@@ -2423,11 +2588,20 @@ tbody tr:last-child td { border-bottom: none; }
   .btn.checkout { min-height: 1.5rem; max-height: 2rem; height: 1.7rem; font-size: 0.9rem; }
 }
 
-/* Smaller tablets: avoid vertical overflow by reducing element heights and removing numpad scroll */
-@media (min-width: 600px) and (max-width: 1024px) {
-  .right-panel {
-    width: clamp(260px, 28vw, 360px);
-    padding: 10px;
+/* Narrow desktop/tablet stack before switching to full desktop layout */
+@media (min-width: 1024px) and (max-width: 1199px) {
+  .home-view .pos-side-panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .home-view .right-panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 12px;
+    align-self: stretch;
   }
 
   .right-panel input {
@@ -2437,10 +2611,29 @@ tbody tr:last-child td { border-bottom: none; }
 
   /* Make numpad rows a bit tighter and ensure it fits without scrolling */
   .number-pad {
-    /* grid-auto-rows: 44px; */
-    gap: 6px;
-    max-height: calc(100% - 160px);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: auto;
+    gap: 10px;
+    max-height: none;
     overflow: visible;
+    width: 100%;
+  }
+
+  .number-pad .num-btn {
+    min-height: 0;
+    aspect-ratio: 1 / 0.92;
+    font-size: clamp(1rem, 2vw, 1.15rem);
+  }
+
+  .payment-toggle {
+    gap: 8px;
+  }
+
+  .payment-toggle .payment-option-btn {
+    flex: 1 1 120px;
+    min-height: 32px;
+    padding: 4px 10px;
+    font-size: 0.88rem;
   }
 
   .btn.checkout {
@@ -2456,9 +2649,8 @@ tbody tr:last-child td { border-bottom: none; }
   .btn.checkout { min-height: 2.2rem; max-height: 3rem; height: 2.6rem; font-size: 1.15rem; }
 }
 
-  /* High-density landscape devices (e.g. Android 240dpi landscape):
-     increase input prominence and reduce numpad scaling so inputs don't look small */
-  @media (orientation: landscape) and (min-resolution: 2dppx) {
+  /* Keep desktop landscape devices compact without overriding stacked tablet width */
+  @media (min-width: 1025px) and (orientation: landscape) and (min-resolution: 2dppx) {
     .right-panel {
       width: clamp(300px, 22vw, 520px);
     }
@@ -2470,6 +2662,52 @@ tbody tr:last-child td { border-bottom: none; }
     }
 
   }
+
+@media (min-width: 1024px) and (max-height: 820px) {
+  .home-view > .pos-layout {
+    overflow: auto;
+  }
+
+  .home-view .right-panel {
+    gap: 8px;
+  }
+
+  .number-pad {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: auto;
+    gap: 8px;
+    width: 100%;
+    overflow: visible;
+  }
+
+  .number-pad .num-btn {
+    min-height: 0;
+    aspect-ratio: 1 / 0.9;
+    font-size: clamp(0.95rem, 1.6vw, 1.05rem);
+  }
+
+  .payment-toggle {
+    gap: 6px;
+  }
+
+  .payment-toggle .payment-option-btn {
+    flex: 1 1 110px;
+    min-height: 28px;
+    padding: 3px 8px;
+    font-size: 0.82rem;
+  }
+
+  .right-panel input {
+    min-height: 2.1rem;
+    height: 2.3rem;
+    font-size: 1rem;
+  }
+
+  .btn.checkout {
+    min-height: 2.2rem;
+    height: 2.3rem;
+  }
+}
 
 .dropdown-item-content {
   display: flex;
@@ -2589,24 +2827,10 @@ tbody tr:last-child td { border-bottom: none; }
     padding: 8px;
   }
 
-  /* Make main layout stack: cart on top, controls below to be thumb-friendly */
-  .pos-layout {
-    flex-direction: column-reverse;
-    gap: 10px;
-    min-height: 0;
-  }
-
-  .catalog-panel,
-  .pos-side-panel {
-    width: 100%;
-    min-width: 0;
-  }
-
   .catalog-panel { order: 1; }
   .pos-side-panel { order: 2; }
 
   .cart-wrapper { width: 100%; }
-  .right-panel { width: 100%; height: auto; max-height: none; overflow: visible; }
 
   /* Right panel becomes horizontally flexible and wraps its controls */
   .right-panel {
@@ -2632,15 +2856,851 @@ tbody tr:last-child td { border-bottom: none; }
   .cart-totals div { flex-direction: row; justify-content: space-between; align-items: center; }
 }
 
+@media (max-width: 1023px) {
+  .sold-to {
+    width: 100%;
+  }
+
+  .customer-section {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: stretch;
+    align-items: stretch;
+    gap: 10px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+    padding: 12px;
+    border: 1px solid #dbe4ec;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
+  }
+
+  .customer-section label {
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #64748b;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .customer-display {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .customer-display > .btn.select-customer {
+    grid-column: 1 / -1;
+  }
+
+  .customer-name {
+    min-width: 0;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #eff6ff 0%, #ffffff 100%);
+    border: 1px solid #cfe0ff;
+    font-size: 1rem;
+    color: #0f172a;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .btn.select-customer {
+    width: 100%;
+    min-height: 48px;
+    justify-content: center;
+    border-radius: 14px;
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+
+  .customer-display > .mini.danger {
+    margin-left: 0 !important;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    justify-self: end;
+  }
+
+  .redeem-section {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .redeem-section .mini {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 14px;
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+
+  .redeem-section .mini + .mini {
+    margin-top: 0;
+  }
+
+  .right-panel-mobile {
+    gap: 12px;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
+  }
+
+  .mobile-checkout-header {
+    display: grid;
+    gap: 6px;
+    padding: 2px 2px 0;
+  }
+
+  .mobile-checkout-kicker {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #2563eb;
+  }
+
+  .mobile-checkout-header h2 {
+    margin: 0;
+    font-size: 1.05rem;
+    line-height: 1.2;
+    color: #0f172a;
+  }
+
+  .mobile-checkout-help {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: #64748b;
+  }
+
+  .dropdown {
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-width: 100%;
+    max-height: min(52vh, 420px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    box-sizing: border-box;
+    border: 1px solid #dbe4ec;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+    box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
+    padding: 8px;
+  }
+
+  .dropdown-item {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    border: none;
+    border-radius: 14px;
+    padding: 12px;
+    margin-bottom: 8px;
+    background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+    box-shadow: 0 8px 16px rgba(15, 23, 42, 0.05);
+  }
+
+  .dropdown-item:last-child {
+    margin-bottom: 0;
+  }
+
+  .dropdown-item:hover {
+    background: linear-gradient(180deg, #eff6ff 0%, #f8fbff 100%);
+  }
+
+  .dropdown-item-content {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .dropdown-item-copy {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+  }
+
+  .catalog-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .catalog-meta {
+    font-size: 13px;
+    color: #64748b;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+
+  .dropdown-item-action {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #2563eb;
+  }
+
+  .stock-indicator {
+    min-width: 0;
+    width: 100%;
+    max-width: none;
+    text-align: left;
+    padding: 10px 12px;
+    box-sizing: border-box;
+  }
+
+  .stock-indicator-text,
+  .stock-indicator-detail {
+    overflow-wrap: anywhere;
+  }
+
+  .cart-wrapper {
+    border-radius: 18px;
+    border-color: #dbe4ec;
+    box-shadow: 0 18px 34px rgba(15, 23, 42, 0.08);
+  }
+
+  .checkout-inputs-mobile {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .checkout-field-mobile {
+    padding: 10px;
+    border: 1px solid #d7e1ea;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 8px 16px rgba(15, 23, 42, 0.05);
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .checkout-field-mobile > span {
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #64748b;
+  }
+
+  .checkout-field-mobile input {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .mobile-cart-totals {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .mobile-cart-totals div {
+    padding: 10px;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #eef6ff 0%, #ffffff 100%);
+    border: 1px solid #cfe0ff;
+  }
+
+  .mobile-cart-totals span {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #2563eb;
+    margin-bottom: 4px;
+  }
+
+  .mobile-cart-totals strong {
+    font-size: 1.14rem;
+    font-weight: 800;
+    color: #0f172a;
+  }
+
+  .mobile-cart-totals div:nth-child(3) {
+    background: linear-gradient(180deg, #fef2f2 0%, #fff7f7 100%);
+    border-color: #fecaca;
+  }
+
+  .mobile-cart-totals div:nth-child(3) span {
+    color: #b91c1c;
+  }
+
+  .mobile-cart-totals div:nth-child(3) strong {
+    color: #dc2626;
+  }
+
+  .mobile-cart-total-emphasis {
+    background: linear-gradient(180deg, #dcfce7 0%, #f7fff9 100%) !important;
+    border-color: #86efac !important;
+  }
+
+  .mobile-cart-total-emphasis span {
+    color: #15803d;
+  }
+
+  .mobile-cart-total-emphasis strong {
+    font-size: 1.34rem;
+    color: #166534;
+  }
+
+  .payment-toggle-mobile {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .payment-option-btn-mobile {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    line-height: 1.1;
+    padding: 6px 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .right-panel-mobile .btn.checkout {
+    max-height: 3rem;
+    height: 2.5rem;
+  }
+
+  .cart-table-container {
+    padding: 6px;
+    overflow: visible;
+  }
+
+  .cart-table-container table,
+  .cart-table-container thead,
+  .cart-table-container tbody,
+  .cart-table-container tr,
+  .cart-table-container td {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .cart-table-container table {
+    min-width: 0;
+    background: transparent;
+  }
+
+  .cart-table-container thead {
+    display: none;
+  }
+
+  .cart-table-container tbody {
+    display: grid;
+    gap: 12px;
+  }
+
+  .cart-table-container tr {
+    padding: 0;
+    border: 1px solid #dbe4ec;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+    box-shadow: 0 12px 22px rgba(15, 23, 42, 0.07);
+    overflow: hidden;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .cart-table-container tbody tr:nth-child(even) td,
+  .cart-table-container tbody tr:hover td {
+    background: transparent;
+  }
+
+  .cart-table-container td {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 12px;
+    text-align: left;
+    border-bottom: none;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .cart-table-container td:last-child {
+    padding-bottom: 12px;
+  }
+
+  .cart-table-container td::before {
+    content: attr(data-label);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 2px;
+  }
+
+  .cart-table-container td[data-label="Item"] {
+    background: linear-gradient(180deg, rgba(239, 246, 255, 0.92) 0%, rgba(248, 251, 253, 0.96) 100%);
+  }
+
+  .cart-table-container td[data-label="Price"],
+  .cart-table-container td[data-label="Qty"],
+  .cart-table-container td[data-label="Total"] {
+    background: rgba(255, 255, 255, 0.88);
+  }
+
+  .cart-item-name {
+    font-size: 1.24rem;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
+  .cart-table-container td[data-label="Total"] {
+    font-weight: 700;
+    color: #166534;
+    font-size: 1.22rem;
+  }
+
+  .cart-table-container td[data-label="Price"]::before,
+  .cart-table-container td[data-label="Total"]::before {
+    color: #334155;
+  }
+
+  .cart-table-container td[data-label="Price"] .price-option-select {
+    font-size: 1.08rem;
+    font-weight: 700;
+  }
+
+  .cart-table-container td[data-label="Price"] .price-option-select option {
+    font-size: 1rem;
+  }
+
+  .cart-table-container td[data-label="Price"] .price-toggle {
+    display: block;
+    min-width: 0;
+  }
+
+  .cart-table-container td[data-label="Qty"] .qty-wrapper {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .cart-table-container td[data-label="Qty"] .catalog-meta {
+    margin-top: 2px;
+    align-items: stretch;
+  }
+
+  .cart-table-container .price-option-btn,
+  .cart-table-container .price-option-select {
+    border-radius: 14px;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    white-space: normal;
+    text-align: left;
+    box-sizing: border-box;
+  }
+
+  .cart-table-container .price-option-select {
+    min-height: 46px;
+    padding: 10px 14px;
+    border: 1px solid #cbd5e1;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.92), 0 8px 16px rgba(15, 23, 42, 0.06);
+    font-size: 1.12rem;
+    font-weight: 700;
+  }
+
+  .cart-table-container td:first-child {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .cart-table-container td:first-child::before {
+    flex: none;
+  }
+
+  .cart-actions-cell {
+    justify-content: flex-start !important;
+    align-items: flex-end !important;
+    background: transparent !important;
+    padding-bottom: 12px !important;
+  }
+
+  .cart-actions-cell::before {
+    display: none;
+  }
+
+  .price-toggle,
+  .qty-wrapper {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .cart-table-container .qty-wrapper {
+    align-items: center;
+  }
+
+  .cart-table-container .qty-step-btn {
+    width: 46px;
+    min-width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    border: 1px solid #bfdbfe;
+    background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+    color: #1d4ed8;
+    font-size: 1.2rem;
+    font-weight: 800;
+    box-shadow: 0 10px 18px rgba(37, 99, 235, 0.16);
+  }
+
+  .cart-table-container .qty-step-btn-decrement {
+    border-color: #fecaca;
+    background: linear-gradient(180deg, #fef2f2 0%, #fee2e2 100%);
+    color: #b91c1c;
+    box-shadow: 0 10px 18px rgba(220, 38, 38, 0.14);
+  }
+
+  .price-option-select,
+  .price-option-btn {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .qty-wrapper input {
+    width: 64px;
+    min-width: 64px;
+    height: 46px;
+    border-radius: 14px;
+    font-size: 1rem;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 8px 16px rgba(15, 23, 42, 0.06);
+  }
+
+  .remove-cart-item-btn {
+    min-width: 100%;
+    min-height: 46px;
+    border-radius: 14px;
+    border: 1px solid #fecaca;
+    background: linear-gradient(180deg, #fef2f2 0%, #fee2e2 100%);
+    color: #b91c1c;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    box-shadow: 0 10px 18px rgba(220, 38, 38, 0.14);
+    font-size: 0;
+    line-height: 0;
+    position: relative;
+  }
+
+  .remove-cart-item-btn::before {
+    content: 'Remove Item';
+    display: inline-block;
+    margin-left: 0;
+    font-size: 0.98rem;
+    line-height: 1.2;
+    font-weight: 800;
+    color: #991b1b;
+  }
+
+  .cart-table-container .catalog-meta {
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+
+  body.dark-mode .right-panel-mobile {
+    background: linear-gradient(180deg, #2f3a45 0%, #25303a 100%);
+    border-color: #4d5d6d;
+    box-shadow: 0 20px 34px rgba(0, 0, 0, 0.28);
+  }
+
+  body.dark-mode .customer-section {
+    background: linear-gradient(180deg, #34404b 0%, #2c3741 100%);
+    border-color: #526272;
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.24);
+  }
+
+  body.dark-mode .customer-section label {
+    color: #b8c5d3;
+  }
+
+  body.dark-mode .customer-name {
+    background: linear-gradient(180deg, #2b475e 0%, #34404b 100%);
+    border-color: #5b6f82;
+    color: #f8fafc;
+  }
+
+  body.dark-mode .mobile-checkout-kicker {
+    color: #7dd3fc;
+  }
+
+  body.dark-mode .mobile-checkout-header h2 {
+    color: #f8fafc;
+  }
+
+  body.dark-mode .mobile-checkout-help,
+  body.dark-mode .checkout-field-mobile > span,
+  body.dark-mode .cart-table-container td::before,
+  body.dark-mode .catalog-meta,
+  body.dark-mode .dropdown-empty-copy {
+    color: #b8c5d3;
+  }
+
+  body.dark-mode .dropdown-item-action {
+    color: #7dd3fc;
+  }
+
+  body.dark-mode .checkout-field-mobile,
+  body.dark-mode .dropdown,
+  body.dark-mode .cart-wrapper,
+  body.dark-mode .cart-table-container tr {
+    background: linear-gradient(180deg, #34404b 0%, #2c3741 100%);
+    border-color: #526272;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.22);
+  }
+
+  body.dark-mode .dropdown-item {
+    background: linear-gradient(180deg, #3a4652 0%, #313c46 100%);
+  }
+
+  body.dark-mode .dropdown-item:hover {
+    background: linear-gradient(180deg, #455362 0%, #36424e 100%);
+  }
+
+  body.dark-mode .catalog-name,
+  body.dark-mode .cart-item-name,
+  body.dark-mode .mobile-cart-totals strong {
+    color: #f8fafc;
+  }
+
+  body.dark-mode .cart-table-container td[data-label="Item"] {
+    background: linear-gradient(180deg, rgba(43, 71, 94, 0.9) 0%, rgba(52, 64, 75, 0.96) 100%);
+  }
+
+  body.dark-mode .cart-table-container td[data-label="Price"],
+  body.dark-mode .cart-table-container td[data-label="Qty"],
+  body.dark-mode .cart-table-container td[data-label="Total"] {
+    background: rgba(44, 55, 65, 0.92);
+  }
+
+  body.dark-mode .cart-table-container td[data-label="Price"]::before,
+  body.dark-mode .cart-table-container td[data-label="Total"]::before {
+    color: #dbe4ec;
+  }
+
+  body.dark-mode .cart-table-container .price-option-select {
+    border-color: #5b6f82;
+    background: linear-gradient(180deg, #3b4652 0%, #34404b 100%);
+    color: #f8fafc;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 10px 18px rgba(0, 0, 0, 0.18);
+  }
+
+  body.dark-mode .cart-table-container .qty-step-btn {
+    border-color: #3b82f6;
+    background: linear-gradient(180deg, #1e3a5f 0%, #1d4a78 100%);
+    color: #dbeafe;
+    box-shadow: 0 10px 18px rgba(30, 64, 175, 0.24);
+  }
+
+  body.dark-mode .cart-table-container .qty-step-btn-decrement {
+    border-color: #b91c1c;
+    background: linear-gradient(180deg, #5f1f1f 0%, #7f1d1d 100%);
+    color: #fee2e2;
+    box-shadow: 0 10px 18px rgba(127, 29, 29, 0.24);
+  }
+
+  body.dark-mode .cart-table-container .qty-wrapper input {
+    background: linear-gradient(180deg, #3b4652 0%, #34404b 100%);
+    border-color: #5c6b7c;
+    color: #f8fafc;
+    -webkit-text-fill-color: #f8fafc;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 10px 18px rgba(0, 0, 0, 0.18);
+  }
+
+  body.dark-mode .cart-table-container .remove-cart-item-btn {
+    border-color: #ef4444;
+    background: linear-gradient(180deg, #5f1f1f 0%, #7f1d1d 100%);
+    box-shadow: 0 10px 18px rgba(127, 29, 29, 0.24);
+  }
+
+  body.dark-mode .cart-table-container .remove-cart-item-btn::before {
+    color: #ffe4e6;
+  }
+
+  body.dark-mode .mobile-cart-totals div {
+    background: linear-gradient(180deg, #263b4d 0%, #2f3a45 100%);
+    border-color: #45617a;
+  }
+
+  body.dark-mode .mobile-cart-totals span {
+    color: #93c5fd;
+  }
+
+  body.dark-mode .mobile-cart-totals div:nth-child(3) {
+    background: linear-gradient(180deg, #5f1f1f 0%, #3f1c1c 100%);
+    border-color: #b91c1c;
+  }
+
+  body.dark-mode .mobile-cart-totals div:nth-child(3) span {
+    color: #fca5a5;
+  }
+
+  body.dark-mode .mobile-cart-totals div:nth-child(3) strong {
+    color: #fecaca;
+  }
+
+  body.dark-mode .mobile-cart-total-emphasis {
+    background: linear-gradient(180deg, #1d4531 0%, #1d3a2b 100%) !important;
+    border-color: #2f855a !important;
+  }
+
+  body.dark-mode .mobile-cart-total-emphasis span,
+  body.dark-mode .cart-table-container td[data-label="Total"] {
+    color: #86efac;
+  }
+
+  body.dark-mode .mobile-cart-total-emphasis strong {
+    color: #dcfce7;
+  }
+
+  body.dark-mode .stock-indicator.normal-stock {
+    background: rgba(22, 101, 52, 0.24);
+    border-color: rgba(134, 239, 172, 0.3);
+    color: #bbf7d0;
+  }
+
+  body.dark-mode .stock-indicator.low-stock {
+    background: rgba(154, 52, 18, 0.3);
+    border-color: rgba(251, 191, 36, 0.32);
+    color: #fde68a;
+  }
+
+  body.dark-mode .stock-indicator.out-of-stock {
+    background: rgba(127, 29, 29, 0.34);
+    border-color: rgba(248, 113, 113, 0.34);
+    color: #fecaca;
+  }
+}
+
 @media (max-width: 480px) {
   /* Tighten spacing on small phones */
+  .home-view {
+    min-height: 100vh;
+    min-height: 100dvh;
+    height: auto;
+    padding: 6px 4px;
+  }
+
+  .home-view h1 {
+    margin-top: 44px;
+    margin-bottom: 8px;
+    font-size: 1.5rem;
+  }
+
   .input.pos-search-input { height: 40px; font-size: 14px; }
+  .dropdown {
+    top: 42px;
+    max-height: 50vh;
+  }
+  .dropdown-item {
+    padding: 10px;
+  }
+  .dropdown-item-content {
+    gap: 8px;
+  }
+  .catalog-name {
+    font-size: 17px;
+  }
+  .catalog-meta {
+    font-size: 13px;
+  }
+  .stock-indicator {
+    padding: 7px 8px;
+    font-size: 12px;
+  }
+  .customer-section {
+    gap: 8px;
+    padding: 10px;
+  }
+  .customer-section label,
   .customer-name { font-size: 16px; }
+  .btn.select-customer {
+    width: 100%;
+    justify-content: center;
+  }
+  .cart-totals {
+    grid-template-columns: 1fr;
+    text-align: left;
+    gap: 8px 0;
+    padding: 10px 8px;
+  }
+  .cart-totals div {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
   .right-panel input { height: 2.2rem; font-size: 1.05rem; }
+  .right-panel {
+    padding: 10px;
+  }
   .qty-wrapper input { width: 44px; height: 34px; }
-  .number-pad { grid-auto-rows: 48px; }
+  .number-pad {
+    display: none;
+  }
+  .payment-toggle {
+    gap: 8px;
+  }
+  .payment-toggle-mobile .payment-option-btn-mobile {
+    flex: 1 1 0;
+    flex-basis: 0;
+  }
   table th, table td { padding: 6px; }
   .cart-totals strong { font-size: 18px; }
+  .modal {
+    width: min(100%, 100vw - 24px);
+  }
+  .modal-actions {
+    flex-direction: column;
+  }
 }
 
 .cart-item-name {
